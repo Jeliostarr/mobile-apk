@@ -174,10 +174,18 @@ class PlayerManager(
     private fun loadAndPlaySource(url: String, seekPosMs: Long) {
         scope.launch {
             _isReconnecting.value = false
+            val headers = mutableMapOf<String, String>()
+            headers["User-Agent"] = "YoCinema-Android-Player/1.0"
+            val apiKey = repository.tokenManager.getApiKey()
+            if (!apiKey.isNullOrBlank()) {
+                headers["x-api-key"] = apiKey
+            }
+
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setConnectTimeoutMs(60_000)
                 .setReadTimeoutMs(60_000)
                 .setAllowCrossProtocolRedirects(true)
+                .setDefaultRequestProperties(headers)
 
             val uri = Uri.parse(url)
             val mediaItem = MediaItem.fromUri(uri)

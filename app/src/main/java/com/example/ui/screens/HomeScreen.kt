@@ -42,20 +42,241 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Movie
+import com.example.data.model.isNull_orEmpty
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.HomeSkeleton
 import com.example.ui.components.PosterCard
 import com.example.ui.components.ShimmerSkeleton
 import com.example.ui.components.SpotlightCard
+import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.VJChip
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+@Composable
+fun HeroSliderPager(
+    movies: List<Movie>,
+    onMovieClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (movies.isEmpty()) return
+
+    val pagerState = rememberPagerState(pageCount = { movies.size })
+
+    LaunchedEffect(movies) {
+        if (movies.size > 1) {
+            while (true) {
+                delay(4000)
+                val nextPage = (pagerState.currentPage + 1) % movies.size
+                pagerState.animateScrollToPage(nextPage)
+            }
+        }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            pageSpacing = 12.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(210.dp)
+        ) { page ->
+            val movie = movies[page]
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(YoSurface)
+                    .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
+                    .clickable { onMovieClick(movie.id) }
+            ) {
+                // Backdrop / Cover Image
+                SubcomposeAsyncImage(
+                    model = movie.cover ?: movie.poster ?: movie.displayPosterUrl,
+                    contentDescription = movie.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    loading = { YoCinemaLogoPlaceholder() },
+                    error = { YoCinemaLogoPlaceholder() }
+                )
+
+                // Dark Scrim Overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.3f),
+                                    Color.Black.copy(alpha = 0.85f)
+                                )
+                            )
+                        )
+                )
+
+                // Content
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!movie.vjName.isNull_orEmpty()) {
+                            VJBadgeChip(vjName = movie.vjName!!)
+                        }
+                        if (!movie.imdbRating.isNull_orEmpty()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = YoPrimaryAmber,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = movie.imdbRating!!,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        val metaInfo = listOfNotNull(
+                            movie.year?.toString(),
+                            if (movie.duration != null && movie.duration > 0) formatDuration(movie.duration) else null
+                        ).joinToString(" • ")
+                        if (metaInfo.isNotBlank()) {
+                            Text(
+                                text = metaInfo,
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = movie.title,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (!movie.description.isNull_orEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = movie.description!!,
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.85f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onMovieClick(movie.id) },
+                            modifier = Modifier.height(36.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = YoPrimaryAmber,
+                                contentColor = YoBaseBackground
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = { onMovieClick(movie.id) },
+                            modifier = Modifier.height(36.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color.White
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Details", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (movies.size > 1) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(movies.size) { index ->
+                    val isSelected = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .padding(2.dp)
+                            .size(if (isSelected) 8.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(if (isSelected) YoPrimaryAmber else YoBorder)
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun HomeScreen(
@@ -129,15 +350,14 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // Spotlight Card
-                spotlightMovie?.let { movie ->
+                // Sliding Hero Header with latest movies
+                val heroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
+                if (heroList.isNotEmpty()) {
                     item {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            SpotlightCard(
-                                movie = movie,
-                                onClick = { onMovieClick(movie.id) }
-                            )
-                        }
+                        HeroSliderPager(
+                            movies = heroList,
+                            onMovieClick = onMovieClick
+                        )
                     }
                 }
 

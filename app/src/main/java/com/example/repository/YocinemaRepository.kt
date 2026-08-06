@@ -109,6 +109,8 @@ class YocinemaRepository(context: Context) {
         tokenManager.clearApiKey()
     }
 
+    private val memoryMovieCache = java.util.concurrent.ConcurrentHashMap<String, List<Movie>>()
+
     suspend fun getMovies(
         type: String? = null,
         sort: String? = null,
@@ -120,12 +122,27 @@ class YocinemaRepository(context: Context) {
         limit: Int = 20,
         page: Int = 1
     ): List<Movie> {
+        val cacheKey = "${type}_${sort}_${genre}_${vj}_${country}_${year}_${search}_${limit}_$page"
+        val cached = memoryMovieCache[cacheKey]
+        if (cached != null && cached.isNotEmpty()) {
+            return cached
+        }
+
         return try {
             val response = api.getMovies(type, sort, genre, vj, country, year, search, limit, page)
-            if (response.isSuccessful && response.body() != null) {
-                val jsonStr = response.body()!!.string()
-                val movies = ResponseEnvelopeExtractor.extractMovieList(jsonStr)
-                // Cache movies locally
+            var movies = if (response.isSuccessful && response.body() != null) {
+                ResponseEnvelopeExtractor.extractMovieList(response.body()!!.string())
+            } else emptyList()
+
+            if (movies.isEmpty() && search.isNullOrBlank() && genre.isNullOrBlank() && vj.isNullOrBlank()) {
+                val pubResponse = api.getPublicMovies(limit = limit, page = page)
+                if (pubResponse.isSuccessful && pubResponse.body() != null) {
+                    movies = ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
+                }
+            }
+
+            if (movies.isNotEmpty()) {
+                memoryMovieCache[cacheKey] = movies
                 movies.forEach { movie ->
                     if (movie.id.isNotBlank()) {
                         movieCacheDao.cacheMovie(
@@ -141,6 +158,17 @@ class YocinemaRepository(context: Context) {
                 loadCachedMoviesFallback()
             }
         } catch (e: Exception) {
+            val pubResponse = try {
+                api.getPublicMovies(limit = limit, page = page)
+            } catch (ex: Exception) { null }
+
+            if (pubResponse?.isSuccessful == true && pubResponse.body() != null) {
+                val pubMovies = ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
+                if (pubMovies.isNotEmpty()) {
+                    memoryMovieCache[cacheKey] = pubMovies
+                    return pubMovies
+                }
+            }
             loadCachedMoviesFallback()
         }
     }
@@ -242,8 +270,24 @@ class YocinemaRepository(context: Context) {
     suspend fun getCastDetail(castId: String): CastDetail? {
         return try {
             val response = api.getCastDetail(castId)
-            if (response.isSuccessful) response.body() else null
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val genericAdapter = moshi.adapter(Any::class.java)
+                val jsonObj = genericAdapter.fromJson(jsonStr)
+                if (jsonObj is Map<*, *>) {
+                    if (jsonObj.containsKey("name") || jsonObj.containsKey("filmography")) {
+                        return moshi.adapter(CastDetail::class.java).fromJson(jsonStr)
+                    }
+                    val dataObj = jsonObj["data"]
+                    if (dataObj is Map<*, *>) {
+                        val dataJson = genericAdapter.toJson(dataObj)
+                        return moshi.adapter(CastDetail::class.java).fromJson(dataJson)
+                    }
+                }
+            }
+            null
         } catch (e: Exception) {
+            e.printStackTrace()
             null
         }
     }

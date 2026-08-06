@@ -69,6 +69,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Movie
 import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
@@ -204,6 +207,26 @@ fun PlayerScreen(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    // Poster Thumbnail Overlay when video isn't playing yet
+                    if (!isPlaying && movie != null) {
+                        SubcomposeAsyncImage(
+                            model = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl,
+                            contentDescription = movie?.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            loading = { YoCinemaLogoPlaceholder() },
+                            error = { YoCinemaLogoPlaceholder() }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.35f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ModernLoader(size = 36.dp)
+                        }
+                    }
 
                     // Reconnecting / Loading Indicator Overlay
                     if (isReconnecting) {

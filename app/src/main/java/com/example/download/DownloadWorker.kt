@@ -63,6 +63,10 @@ class DownloadWorker(
             .build()
 
         val requestBuilder = Request.Builder().url(downloadUrl)
+        val apiKey = repository.tokenManager.getApiKey()
+        if (!apiKey.isNullOrBlank()) {
+            requestBuilder.header("x-api-key", apiKey)
+        }
         if (existingBytes > 0) {
             requestBuilder.header("Range", "bytes=$existingBytes-")
         }

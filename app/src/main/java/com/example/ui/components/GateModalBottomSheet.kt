@@ -19,9 +19,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +39,7 @@ import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
+import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
@@ -41,9 +48,11 @@ import com.example.ui.theme.YoTextPrimary
 fun GateModalBottomSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
-    onEnterKeyClicked: () -> Unit
+    onEnterKeyClicked: () -> Unit,
+    onSaveKey: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    var inputKey by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -64,7 +73,7 @@ fun GateModalBottomSheet(
                 modifier = Modifier.size(48.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "API Key Required",
@@ -76,37 +85,81 @@ fun GateModalBottomSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Sign in with your YOCINEMA API key to watch full movies & series, access high-speed downloads, search, and manage your watchlist.",
-                fontSize = 14.sp,
+                text = "Enter or paste your YOCINEMA API key to unlock full video playback, high-speed downloads, search & media details.",
+                fontSize = 13.sp,
                 color = YoTextMuted,
                 textAlign = TextAlign.Center,
-                lineHeight = 20.sp
+                lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = {
-                    onDismiss()
-                    onEnterKeyClicked()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = YoPrimaryAmber,
-                    contentColor = YoBaseBackground
+            OutlinedTextField(
+                value = inputKey,
+                onValueChange = { inputKey = it },
+                placeholder = { Text("Paste your API key here...", fontSize = 13.sp, color = YoTextMuted) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YoPrimaryAmber,
+                    unfocusedBorderColor = YoBorder,
+                    focusedContainerColor = YoSurfaceVariant,
+                    unfocusedContainerColor = YoSurfaceVariant,
+                    focusedTextColor = YoTextPrimary,
+                    unfocusedTextColor = YoTextPrimary
                 )
-            ) {
-                Text(
-                    text = "Enter API Key",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (inputKey.isNotBlank() && onSaveKey != null) {
+                Button(
+                    onClick = {
+                        onSaveKey(inputKey.trim())
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YoPrimaryAmber,
+                        contentColor = YoBaseBackground
+                    )
+                ) {
+                    Text(
+                        text = "Save Key & Continue",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+            } else {
+                Button(
+                    onClick = {
+                        onDismiss()
+                        onEnterKeyClicked()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YoPrimaryAmber,
+                        contentColor = YoBaseBackground
+                    )
+                ) {
+                    Text(
+                        text = "Go to Key / Login Screen",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedButton(
                 onClick = {
@@ -115,7 +168,7 @@ fun GateModalBottomSheet(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                 colors = ButtonDefaults.outlinedButtonColors(
@@ -123,9 +176,9 @@ fun GateModalBottomSheet(
                 )
             ) {
                 Text(
-                    text = "Get a Key",
+                    text = "Get a Key Online",
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp
+                    fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.padding(start = 8.dp))
                 Icon(

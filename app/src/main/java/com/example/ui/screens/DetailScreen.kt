@@ -128,7 +128,13 @@ fun DetailScreen(
             movie = m
             if (m != null) {
                 if (m.isSeries) {
-                    episodesList = repository.getMovieEpisodes(movieId)
+                    val rawEps = repository.getMovieEpisodes(movieId)
+                    val allEps = if (rawEps.isNotEmpty()) rawEps else m.episodes.orEmpty()
+                    episodesList = allEps.sortedWith(compareBy({ it.sNum ?: 1 }, { it.eNum ?: 1 }))
+                    val seasons = episodesList.mapNotNull { it.sNum }.distinct().sorted()
+                    if (seasons.isNotEmpty()) {
+                        selectedSeasonNumber = seasons.first()
+                    }
                 }
                 relatedMovies = repository.getRelatedMovies(movieId)
             }
@@ -438,6 +444,34 @@ fun DetailScreen(
                                 color = YoTextPrimary,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
+
+                            val availableSeasons = episodesList.mapNotNull { it.sNum }.distinct().sorted()
+                            if (availableSeasons.size > 1) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(availableSeasons) { seasonNum ->
+                                        val isSelected = seasonNum == selectedSeasonNumber
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(20.dp))
+                                                .background(if (isSelected) YoPrimaryAmber else YoSurface)
+                                                .border(1.dp, if (isSelected) YoPrimaryAmber else YoBorder, RoundedCornerShape(20.dp))
+                                                .clickable { selectedSeasonNumber = seasonNum }
+                                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = "Season $seasonNum",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) YoBaseBackground else YoTextPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(12.dp))
 

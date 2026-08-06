@@ -35,6 +35,12 @@ interface YocinemaApi {
         @Query("page") page: Int? = 1
     ): Response<ResponseBody>
 
+    @GET("api/v1/movies/public")
+    suspend fun getPublicMovies(
+        @Query("limit") limit: Int? = 15,
+        @Query("page") page: Int? = 1
+    ): Response<ResponseBody>
+
     @GET("api/v1/movies/{id}")
     suspend fun getMovieDetail(
         @Path("id") movieId: String
@@ -57,7 +63,7 @@ interface YocinemaApi {
     @GET("api/v1/movies/cast/{castId}")
     suspend fun getCastDetail(
         @Path("castId") castId: String
-    ): Response<CastDetail>
+    ): Response<ResponseBody>
 
     @Headers("Content-Type: application/json")
     @POST("api/v1/movies/{id}/report")

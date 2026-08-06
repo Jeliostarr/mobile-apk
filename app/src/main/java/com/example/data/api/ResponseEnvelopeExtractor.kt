@@ -38,6 +38,15 @@ object ResponseEnvelopeExtractor {
                         val listType = Types.newParameterizedType(List::class.java, Movie::class.java)
                         return moshi.adapter<List<Movie>>(listType).fromJson(moviesJson) ?: emptyList()
                     }
+                    val innerData = data["data"]
+                    if (innerData is Map<*, *>) {
+                        val innerMovies = innerData["movies"]
+                        if (innerMovies is List<*>) {
+                            val innerMoviesJson = moshi.adapter(Any::class.java).toJson(innerMovies)
+                            val listType = Types.newParameterizedType(List::class.java, Movie::class.java)
+                            return moshi.adapter<List<Movie>>(listType).fromJson(innerMoviesJson) ?: emptyList()
+                        }
+                    }
                 }
 
                 // Check movies directly at root

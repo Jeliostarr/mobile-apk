@@ -46,6 +46,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
 import com.example.repository.YocinemaRepository
@@ -322,11 +324,13 @@ fun SearchResultRow(
                 .clip(RoundedCornerShape(10.dp))
                 .background(YoSurfaceVariant)
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = movie.displayPosterUrl,
                 contentDescription = movie.title,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                loading = { YoCinemaLogoPlaceholder() },
+                error = { YoCinemaLogoPlaceholder() }
             )
         }
 

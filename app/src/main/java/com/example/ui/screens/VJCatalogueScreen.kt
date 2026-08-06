@@ -145,7 +145,7 @@ fun VJCatalogueScreen(
                     PosterCard(
                         movie = movie,
                         onClick = { onMovieClick(movie.id) },
-                        widthDp = 100
+                        widthDp = null
                     )
                 }
             }

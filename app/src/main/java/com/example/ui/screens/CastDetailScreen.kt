@@ -43,6 +43,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.CastDetail
 import com.example.data.model.FilmographyItem
 import com.example.repository.YocinemaRepository
@@ -135,11 +137,13 @@ fun CastDetailScreen(
                                 .clip(CircleShape)
                                 .background(YoSurfaceVariant)
                         ) {
-                            AsyncImage(
+                            SubcomposeAsyncImage(
                                 model = c.photo,
                                 contentDescription = c.name,
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                                contentScale = ContentScale.Crop,
+                                loading = { YoCinemaLogoPlaceholder() },
+                                error = { YoCinemaLogoPlaceholder() }
                             )
                         }
 
@@ -246,11 +250,13 @@ fun FilmographyRow(
                 .clip(RoundedCornerShape(8.dp))
                 .background(YoSurfaceVariant)
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = item.poster,
                 contentDescription = item.title,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                loading = { YoCinemaLogoPlaceholder() },
+                error = { YoCinemaLogoPlaceholder() }
             )
         }
 

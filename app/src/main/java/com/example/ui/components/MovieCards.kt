@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.BASE_URL
 import com.example.data.model.CastMember
 import com.example.data.model.Episode
@@ -43,6 +44,47 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+
+@Composable
+fun YoCinemaLogoPlaceholder(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(YoSurfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(YoPrimaryAmber)
+                    .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = YoBaseBackground,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "YOCINEMA",
+                fontWeight = FontWeight.Black,
+                fontSize = 9.sp,
+                letterSpacing = 1.sp,
+                color = YoPrimaryAmber
+            )
+        }
+    }
+}
 
 @Composable
 fun SpotlightCard(
@@ -70,11 +112,13 @@ fun SpotlightCard(
                     .clip(RoundedCornerShape(14.dp))
                     .background(YoSurfaceVariant)
             ) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = movie.displayPosterUrl,
                     contentDescription = movie.title,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    loading = { YoCinemaLogoPlaceholder() },
+                    error = { YoCinemaLogoPlaceholder() }
                 )
             }
 
@@ -132,26 +176,33 @@ fun PosterCard(
     movie: Movie,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    widthDp: Int = 130
+    widthDp: Int? = 130
 ) {
+    val containerModifier = if (widthDp != null) {
+        modifier.width(widthDp.dp)
+    } else {
+        modifier.fillMaxWidth()
+    }
+
     Column(
-        modifier = modifier
-            .width(widthDp.dp)
+        modifier = containerModifier
             .clickable { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .width(widthDp.dp)
+                .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(YoSurfaceVariant)
                 .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = movie.displayPosterUrl,
                 contentDescription = movie.title,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                loading = { YoCinemaLogoPlaceholder() },
+                error = { YoCinemaLogoPlaceholder() }
             )
 
             if (!movie.vjName.isNull_orBlank()) {

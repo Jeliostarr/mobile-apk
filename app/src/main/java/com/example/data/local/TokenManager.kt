@@ -42,8 +42,23 @@ class TokenManager(context: Context) {
         _apiKeyFlow.value = null
     }
 
+    fun getVjHistory(): List<String> {
+        val historyStr = prefs.getString(KEY_VJ_HISTORY, null) ?: return emptyList()
+        return historyStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    fun saveVjHistory(vjName: String) {
+        if (vjName.isBlank()) return
+        val current = getVjHistory().toMutableList()
+        current.remove(vjName.trim())
+        current.add(0, vjName.trim())
+        val updated = current.take(10).joinToString(",")
+        prefs.edit().putString(KEY_VJ_HISTORY, updated).apply()
+    }
+
     companion object {
         private const val KEY_API_KEY = "api_key"
+        private const val KEY_VJ_HISTORY = "vj_history"
 
         private fun String?.isNull_orBlank(): Boolean {
             return this == null || this.trim().isEmpty()
