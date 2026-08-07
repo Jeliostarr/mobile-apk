@@ -44,16 +44,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Movie
+import com.example.data.model.formatDuration
 import com.example.data.model.isNull_orEmpty
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.HomeSkeleton
@@ -172,7 +175,7 @@ fun HeroSliderPager(
                             }
                         }
                         val metaInfo = listOfNotNull(
-                            movie.year?.toString(),
+                            movie.releaseDate?.take(4),
                             if (movie.duration != null && movie.duration > 0) formatDuration(movie.duration) else null
                         ).joinToString(" • ")
                         if (metaInfo.isNotBlank()) {
