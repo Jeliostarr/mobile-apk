@@ -14,15 +14,17 @@ fun cleanMediaUrl(url: String?): String? {
 
 fun String?.isNull_orEmpty(): Boolean = this == null || this.trim().isEmpty()
 
-fun formatDuration(seconds: Int?): String {
-    if (seconds == null || seconds <= 0) return ""
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
+fun formatDuration(durationVal: Int?): String {
+    if (durationVal == null || durationVal <= 0) return ""
+    // If > 300, treat as seconds; otherwise treat as minutes
+    val totalMinutes = if (durationVal > 300) durationVal / 60 else durationVal
+    val hours = totalMinutes / 60
+    val mins = totalMinutes % 60
     return when {
-        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+        hours > 0 && mins > 0 -> "${hours}h ${mins}m"
         hours > 0 -> "${hours}h"
-        minutes > 0 -> "${minutes} Mins"
-        else -> "${seconds}s"
+        mins > 0 -> "${mins}m"
+        else -> ""
     }
 }
 
@@ -33,8 +35,39 @@ fun formatEpisodeDuration(minutes: Int?): String {
     return when {
         hours > 0 && mins > 0 -> "${hours}h ${mins}m"
         hours > 0 -> "${hours}h"
-        else -> "${mins} Mins"
+        mins > 0 -> "${mins}m"
+        else -> ""
     }
+}
+
+fun formatDateOrYear(dateStr: String?): String {
+    if (dateStr.isNullOrBlank()) return ""
+    val trimmed = dateStr.trim()
+    if (trimmed.length >= 10 && trimmed[4] == '-' && trimmed[7] == '-') {
+        try {
+            val parts = trimmed.take(10).split("-")
+            if (parts.size == 3) {
+                val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                val monthIdx = parts[1].toIntOrNull()?.minus(1)
+                if (monthIdx in 0..11) {
+                    return "${parts[2]} ${monthNames[monthIdx!!]} ${parts[0]}"
+                }
+            }
+        } catch (e: Exception) {
+            // fallback
+        }
+    }
+    val yearRegex = Regex("^(\\d{4})")
+    val match = yearRegex.find(trimmed)
+    return match?.groupValues?.get(1) ?: trimmed
+}
+
+fun extractYearOnly(dateStr: String?): String {
+    if (dateStr.isNullOrBlank()) return ""
+    val trimmed = dateStr.trim()
+    val yearRegex = Regex("^(\\d{4})")
+    val match = yearRegex.find(trimmed)
+    return match?.groupValues?.get(1) ?: trimmed.take(4)
 }
 
 fun getPublicCoverUrl(movieId: String): String {

@@ -175,7 +175,7 @@ fun HeroSliderPager(
                             }
                         }
                         val metaInfo = listOfNotNull(
-                            movie.releaseDate?.take(4),
+                            com.example.data.model.extractYearOnly(movie.releaseDate),
                             if (movie.duration != null && movie.duration > 0) formatDuration(movie.duration) else null
                         ).joinToString(" • ")
                         if (metaInfo.isNotBlank()) {

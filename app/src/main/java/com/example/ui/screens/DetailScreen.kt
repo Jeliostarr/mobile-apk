@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -108,6 +109,7 @@ fun DetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showGateSheet by remember { mutableStateOf(false) }
+    var showTrailerModal by remember { mutableStateOf(false) }
     var showDownloadStartedDialog by remember { mutableStateOf(false) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var selectedSeasonNumber by remember { mutableStateOf(1) }
@@ -412,17 +414,7 @@ fun DetailScreen(
                         if (!m.trailerUrl.isNull_orEmpty()) {
                             Spacer(modifier = Modifier.height(10.dp))
                             OutlinedButton(
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(m.trailerUrl)
-                                        )
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                },
+                                onClick = { showTrailerModal = true },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(44.dp),
@@ -640,6 +632,100 @@ fun DetailScreen(
                 },
                 containerColor = YoSurface
             )
+        }
+
+        if (showTrailerModal && !movie?.trailerUrl.isNullOrBlank()) {
+            InAppTrailerModal(
+                trailerUrl = movie!!.trailerUrl!!,
+                onDismiss = { showTrailerModal = false }
+            )
+        }
+    }
+}
+
+fun extractYouTubeId(url: String): String? {
+    return try {
+        if (url.contains("youtu.be/")) {
+            url.substringAfter("youtu.be/").substringBefore("?").substringBefore("&")
+        } else if (url.contains("youtube.com/watch")) {
+            android.net.Uri.parse(url).getQueryParameter("v")
+        } else if (url.contains("youtube.com/embed/")) {
+            url.substringAfter("youtube.com/embed/").substringBefore("?").substringBefore("&")
+        } else null
+    } catch (e: Exception) {
+        null
+    }
+}
+
+@Composable
+fun InAppTrailerModal(
+    trailerUrl: String,
+    onDismiss: () -> Unit
+) {
+    val ytId = extractYouTubeId(trailerUrl)
+    val embedUrl = if (ytId != null) {
+        "https://www.youtube.com/embed/$ytId?autoplay=1&controls=1"
+    } else {
+        trailerUrl
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.95f))
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Official Trailer",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(Color.Black)
+                ) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { ctx ->
+                            android.webkit.WebView(ctx).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.mediaPlaybackRequiresUserGesture = false
+                                webChromeClient = android.webkit.WebChromeClient()
+                                webViewClient = android.webkit.WebViewClient()
+                                loadUrl(embedUrl)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         }
     }
 }

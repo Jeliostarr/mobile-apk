@@ -197,31 +197,39 @@ class PlayerManager(
     private fun loadAndPlaySource(url: String, seekPosMs: Long) {
         scope.launch {
             _isReconnecting.value = false
-            val headers = mutableMapOf<String, String>()
-            headers["User-Agent"] = "YoCinema-Android-Player/1.0"
-            val apiKey = repository.tokenManager.getApiKey()
-            if (!apiKey.isNullOrBlank()) {
-                headers["X-API-Key"] = apiKey
-                headers["x-api-key"] = apiKey
-            }
-
-            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setConnectTimeoutMs(60_000)
-                .setReadTimeoutMs(60_000)
-                .setAllowCrossProtocolRedirects(true)
-                .setDefaultRequestProperties(headers)
-
             val uri = Uri.parse(url)
-            val mediaItem = MediaItem.fromUri(uri)
+            val isLocalFile = url.startsWith("/") || url.startsWith("file://") || uri.scheme == null || uri.scheme == "file" || java.io.File(url).exists()
 
-            val mediaSource: MediaSource = try {
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpDataSourceFactory)
-                    .createMediaSource(mediaItem)
-            } catch (e: Exception) {
-                if (url.contains(".m3u8", ignoreCase = true)) {
-                    HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
-                } else {
-                    ProgressiveMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
+            val mediaSource: MediaSource = if (isLocalFile) {
+                val fileUri = if (url.startsWith("/")) Uri.fromFile(java.io.File(url)) else uri
+                val localItem = MediaItem.fromUri(fileUri)
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
+                    .createMediaSource(localItem)
+            } else {
+                val headers = mutableMapOf<String, String>()
+                headers["User-Agent"] = "YoCinema-Android-Player/1.0"
+                val apiKey = repository.tokenManager.getApiKey()
+                if (!apiKey.isNullOrBlank()) {
+                    headers["X-API-Key"] = apiKey
+                    headers["x-api-key"] = apiKey
+                }
+
+                val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                    .setConnectTimeoutMs(60_000)
+                    .setReadTimeoutMs(60_000)
+                    .setAllowCrossProtocolRedirects(true)
+                    .setDefaultRequestProperties(headers)
+
+                val mediaItem = MediaItem.fromUri(uri)
+                try {
+                    androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpDataSourceFactory)
+                        .createMediaSource(mediaItem)
+                } catch (e: Exception) {
+                    if (url.contains(".m3u8", ignoreCase = true)) {
+                        HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
+                    } else {
+                        ProgressiveMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
+                    }
                 }
             }
 

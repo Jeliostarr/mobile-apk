@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -75,11 +76,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import com.example.download.DownloadWorker
 import androidx.compose.material3.ButtonDefaults
 import com.example.ui.components.PosterCard
+import com.example.ui.components.ReportDialog
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
@@ -121,6 +130,7 @@ fun PlayerScreen(
     var isFullscreen by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
     val isPlaying by playerManager.isPlaying.collectAsState()
@@ -221,7 +231,7 @@ fun PlayerScreen(
                 }
             )
         } else {
-            // Portrait View: Video at top + PERSISTENT controls BELOW video
+            // Portrait View: 16:9 Video Box with IN-PLAYER OVERLAY CONTROLS + Clean Feed Below
             Column(modifier = Modifier.fillMaxSize()) {
                 // Video Player Container (Fixed 16:9 Aspect Ratio)
                 Box(
@@ -229,12 +239,13 @@ fun PlayerScreen(
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
                         .background(Color.Black)
+                        .clickable { isControlsVisible = !isControlsVisible }
                 ) {
                     AndroidView(
                         factory = { ctx ->
                             PlayerView(ctx).apply {
                                 player = playerManager.exoPlayer
-                                useController = false // Custom Controls Below
+                                useController = false // Custom overlay controls inside player
                             }
                         },
                         modifier = Modifier.fillMaxSize()
@@ -275,7 +286,7 @@ fun PlayerScreen(
                                 Text(
                                     text = "Playback Error",
                                     color = Color.White,
-                                    fontSize = 16.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -285,7 +296,7 @@ fun PlayerScreen(
                                     fontSize = 12.sp,
                                     maxLines = 2
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Button(
                                     onClick = {
                                         if (movie != null) {
@@ -314,220 +325,202 @@ fun PlayerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                ModernLoader(size = 40.dp)
-                                Spacer(modifier = Modifier.height(10.dp))
+                                ModernLoader(size = 36.dp)
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "Reconnecting stream...",
                                     color = YoPrimaryAmber,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     }
 
-                    // Top Left Back Button
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = YoTextPrimary
-                        )
-                    }
-
-                    // Top Right Fullscreen Button
-                    IconButton(
-                        onClick = {
-                            isFullscreen = true
-                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                        },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fullscreen,
-                            contentDescription = "Fullscreen",
-                            tint = YoTextPrimary
-                        )
-                    }
-                }
-
-                // PERSISTENT CONTROLS DIRECTLY BELOW THE VIDEO
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(YoSurface)
-                        .padding(16.dp)
-                ) {
-                    // Movie Title + VJ Badge
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = movie?.title ?: "Loading...",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = YoTextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            if (activeSeasonNum != null && activeEpNum != null) {
-                                Text(
-                                    text = "Season $activeSeasonNum · Episode $activeEpNum",
-                                    fontSize = 12.sp,
-                                    color = YoPrimaryAmber
-                                )
-                            }
-                        }
-
-                        if (!movie?.vjName.isNullOrBlank()) {
-                            VJBadgeChip(vjName = movie!!.vjName!!)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Seek Slider & Time Display
-                    Column {
-                        Slider(
-                            value = currentPosMs.toFloat(),
-                            onValueChange = { playerManager.exoPlayer.seekTo(it.toLong()) },
-                            valueRange = 0f..(durationMs.coerceAtLeast(1L).toFloat()),
-                            colors = SliderDefaults.colors(
-                                thumbColor = YoPrimaryAmber,
-                                activeTrackColor = YoPrimaryAmber,
-                                inactiveTrackColor = YoBorder
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = formatMs(currentPosMs),
-                                fontSize = 12.sp,
-                                color = YoTextMuted
-                            )
-                            Text(
-                                text = formatMs(durationMs),
-                                fontSize = 12.sp,
-                                color = YoTextMuted
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Primary Playback Buttons (±10s, Play/Pause)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                val newPos = (currentPosMs - 10000L).coerceAtLeast(0L)
-                                playerManager.exoPlayer.seekTo(newPos)
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FastRewind,
-                                contentDescription = "-10s",
-                                tint = YoTextPrimary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(20.dp))
-
+                    // IN-PLAYER OVERLAY CONTROLS
+                    if (isControlsVisible || !isPlaying) {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(YoPrimaryAmber)
-                                .clickable {
-                                    if (isPlaying) playerManager.exoPlayer.pause()
-                                    else playerManager.exoPlayer.play()
-                                },
-                            contentAlignment = Alignment.Center
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.7f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.85f)
+                                        )
+                                    )
+                                )
+                                .padding(10.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause",
-                                tint = YoBaseBackground,
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
+                            // Top Bar inside Player
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.TopCenter),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                IconButton(
+                                    onClick = onBackClick,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
 
-                        Spacer(modifier = Modifier.width(20.dp))
+                                Text(
+                                    text = movie?.title ?: "",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 12.dp)
+                                )
 
-                        IconButton(
-                            onClick = {
-                                val newPos = (currentPosMs + 10000L).coerceAtMost(durationMs)
-                                playerManager.exoPlayer.seekTo(newPos)
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FastForward,
-                                contentDescription = "+10s",
-                                tint = YoTextPrimary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Secondary Action Row (PiP, Subtitles, Fullscreen)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    activity?.enterPictureInPictureMode()
+                                IconButton(
+                                    onClick = {
+                                        isFullscreen = true
+                                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Fullscreen,
+                                        contentDescription = "Fullscreen",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                             }
-                        ) {
-                            Icon(imageVector = Icons.Default.PictureInPicture, contentDescription = "PiP", tint = YoTextMuted)
-                        }
 
-                        IconButton(onClick = { /* Subtitles */ }) {
-                            Icon(imageVector = Icons.Default.ClosedCaption, contentDescription = "Subtitles", tint = YoTextMuted)
-                        }
+                            // Center Play/Pause / Seek Overlay
+                            Row(
+                                modifier = Modifier.align(Alignment.Center),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        val newPos = (currentPosMs - 10000L).coerceAtLeast(0L)
+                                        playerManager.exoPlayer.seekTo(newPos)
+                                    },
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.4f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FastRewind,
+                                        contentDescription = "-10s",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
 
-                        IconButton(
-                            onClick = {
-                                isFullscreen = true
-                                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clip(CircleShape)
+                                        .background(YoPrimaryAmber)
+                                        .clickable {
+                                            if (isPlaying) playerManager.exoPlayer.pause()
+                                            else playerManager.exoPlayer.play()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Play/Pause",
+                                        tint = YoBaseBackground,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        val newPos = (currentPosMs + 10000L).coerceAtMost(durationMs)
+                                        playerManager.exoPlayer.seekTo(newPos)
+                                    },
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.4f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FastForward,
+                                        contentDescription = "+10s",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
-                        ) {
-                            Icon(imageVector = Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = YoPrimaryAmber)
+
+                            // Bottom Bar inside Player (Progress bar + time)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
+                            ) {
+                                Slider(
+                                    value = currentPosMs.toFloat(),
+                                    onValueChange = { playerManager.exoPlayer.seekTo(it.toLong()) },
+                                    valueRange = 0f..(durationMs.coerceAtLeast(1L).toFloat()),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = YoPrimaryAmber,
+                                        activeTrackColor = YoPrimaryAmber,
+                                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(24.dp)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${formatMs(currentPosMs)} / ${formatMs(durationMs)}",
+                                        fontSize = 11.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
+                                    )
+
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        IconButton(
+                                            onClick = { activity?.enterPictureInPictureMode() },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PictureInPicture,
+                                                contentDescription = "PiP",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // SCROLLABLE WATCH PAGE DETAILS + RELATED MOVIES
+                // SCROLLABLE FEED DIRECTLY BELOW THE VIDEO PLAYER
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -537,73 +530,176 @@ fun PlayerScreen(
                 ) {
                     val m = movie
                     if (m != null) {
-                        // Movie Details Section
                         item {
                             Column {
-                                // Metadata row (Rating, release date, duration, genre)
+                                // Title & VJ Badge
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = m.title,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = YoTextPrimary
+                                        )
+                                        if (activeSeasonNum != null && activeEpNum != null) {
+                                            Text(
+                                                text = "Season $activeSeasonNum · Episode $activeEpNum",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = YoPrimaryAmber
+                                            )
+                                        }
+                                    }
+
+                                    if (!m.vjName.isNullOrBlank()) {
+                                        VJBadgeChip(vjName = m.vjName!!)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Metadata Badges (Rating, Release Year, Formatted Duration, Genre)
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     if (!m.imdbRating.isNullOrBlank()) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(YoSurface)
+                                                .border(1.dp, YoBorder, RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
                                             Icon(
                                                 imageVector = Icons.Default.Star,
                                                 contentDescription = null,
                                                 tint = YoPrimaryAmber,
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
                                                 text = m.imdbRating!!,
-                                                fontSize = 13.sp,
+                                                fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = YoTextPrimary
                                             )
                                         }
                                     }
 
-                                    if (!m.releaseDate.isNullOrBlank()) {
-                                        Text(text = m.releaseDate!!, fontSize = 13.sp, color = YoTextMuted)
+                                    val yearStr = com.example.data.model.extractYearOnly(m.releaseDate)
+                                    if (yearStr.isNotBlank()) {
+                                        Text(
+                                            text = yearStr,
+                                            fontSize = 12.sp,
+                                            color = YoTextMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
 
                                     val durationStr = formatDuration(m.duration)
                                     if (durationStr.isNotBlank()) {
-                                        Text(text = durationStr, fontSize = 13.sp, color = YoTextMuted)
+                                        Text(
+                                            text = "• $durationStr",
+                                            fontSize = 12.sp,
+                                            color = YoTextMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
 
                                     if (!m.genre.isNullOrBlank()) {
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
+                                                .clip(RoundedCornerShape(6.dp))
                                                 .background(YoSurfaceVariant)
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
                                         ) {
                                             Text(
                                                 text = m.genre!!,
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium,
+                                                fontWeight = FontWeight.Bold,
                                                 color = YoPrimaryAmber
                                             )
                                         }
                                     }
                                 }
 
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Quick Action Bar (Download, Favorite, Report)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            val downloadId = "${m.id}_${if (activeSeasonNum != null && activeEpNum != null) "S${activeSeasonNum}E${activeEpNum}" else "movie"}"
+                                            val data = workDataOf(
+                                                DownloadWorker.KEY_DOWNLOAD_ID to downloadId,
+                                                DownloadWorker.KEY_MOVIE_ID to m.id,
+                                                DownloadWorker.KEY_TITLE to m.title,
+                                                DownloadWorker.KEY_SEASON_NUM to (activeSeasonNum ?: -1),
+                                                DownloadWorker.KEY_EP_NUM to (activeEpNum ?: -1)
+                                            )
+                                            val request = OneTimeWorkRequestBuilder<DownloadWorker>()
+                                                .setInputData(data)
+                                                .build()
+                                            WorkManager.getInstance(context).enqueue(request)
+                                        },
+                                        modifier = Modifier.weight(1f).height(42.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = YoSurface,
+                                            contentColor = YoPrimaryAmber
+                                        ),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Download, contentDescription = "Download", modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { showReportDialog = true },
+                                        modifier = Modifier.height(42.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextMuted)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Flag, contentDescription = "Report", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+
+                                // Synopsis Description
                                 if (!m.description.isNullOrEmpty()) {
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(14.dp))
                                     Text(
                                         text = m.description!!,
                                         fontSize = 13.sp,
                                         color = YoTextMuted,
+                                        lineHeight = 18.sp,
                                         maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
                                         overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.clickable { isSynopsisExpanded = !isSynopsisExpanded }
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (isSynopsisExpanded) "SHOW LESS" else "MORE...",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = YoPrimaryAmber,
                                         modifier = Modifier.clickable { isSynopsisExpanded = !isSynopsisExpanded }
                                     )
                                 }
                             }
                         }
 
-                        // Related Movies Section
+                        // Related Movies Feed Section
                         if (relatedMovies.isNotEmpty()) {
                             item {
                                 Column {
@@ -634,6 +730,15 @@ fun PlayerScreen(
                     }
                 }
             }
+        }
+
+        if (showReportDialog && movie != null) {
+            ReportDialog(
+                onDismiss = { showReportDialog = false },
+                onSubmitReport = { _ ->
+                    showReportDialog = false
+                }
+            )
         }
     }
 }

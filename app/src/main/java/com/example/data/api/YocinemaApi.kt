@@ -58,7 +58,7 @@ interface YocinemaApi {
     ): Response<ResponseBody>
 
     @GET("api/v1/movies/facets")
-    suspend fun getFacets(): Response<FacetsResponse>
+    suspend fun getFacets(): Response<ResponseBody>
 
     @GET("api/v1/movies/cast/{castId}")
     suspend fun getCastDetail(

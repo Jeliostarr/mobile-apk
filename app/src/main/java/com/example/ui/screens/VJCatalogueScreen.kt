@@ -54,7 +54,7 @@ fun VJCatalogueScreen(
     onBackClick: () -> Unit,
     onMovieClick: (String) -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Movies, 1: Series
+    var selectedTab by remember { mutableStateOf(0) } // 0: All, 1: Movies, 2: Series
     var movieList by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -63,8 +63,18 @@ fun VJCatalogueScreen(
     LaunchedEffect(vjName, selectedTab) {
         scope.launch {
             isLoading = true
-            val typeParam = if (selectedTab == 0) "movie" else "series"
-            movieList = repository.getMovies(vj = vjName, type = typeParam, limit = 36)
+            val typeParam = when (selectedTab) {
+                1 -> "movie"
+                2 -> "series"
+                else -> null
+            }
+            var res = repository.getMovies(vj = vjName, type = typeParam, limit = 48)
+            if (res.isEmpty() && typeParam == null) {
+                // Client side fallback search if backend vj param needs matching
+                val allMovies = repository.getMovies(limit = 60)
+                res = allMovies.filter { it.vjName?.contains(vjName, ignoreCase = true) == true }
+            }
+            movieList = res
             isLoading = false
         }
     }
@@ -109,11 +119,16 @@ fun VJCatalogueScreen(
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Movies", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                text = { Text("All", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
+                text = { Text("Movies", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            )
+            Tab(
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
                 text = { Text("Series", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             )
         }
@@ -128,7 +143,7 @@ fun VJCatalogueScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No ${if (selectedTab == 0) "movies" else "series"} found translated by VJ $vjName",
+                    text = "No content found translated by VJ $vjName",
                     fontSize = 14.sp,
                     color = YoTextMuted
                 )

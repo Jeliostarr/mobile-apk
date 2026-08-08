@@ -271,8 +271,23 @@ class YocinemaRepository(context: Context) {
     suspend fun getFacets(): FacetsResponse {
         return try {
             val response = api.getFacets()
-            if (response.isSuccessful) response.body() ?: FacetsResponse() else FacetsResponse()
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val genericAdapter = moshi.adapter(Any::class.java)
+                val jsonObj = genericAdapter.fromJson(jsonStr)
+                if (jsonObj is Map<*, *>) {
+                    val dataObj = jsonObj["data"]
+                    if (dataObj is Map<*, *>) {
+                        val dataJson = genericAdapter.toJson(dataObj)
+                        return moshi.adapter(FacetsResponse::class.java).fromJson(dataJson) ?: FacetsResponse()
+                    } else if (jsonObj.containsKey("genres") || jsonObj.containsKey("vjs")) {
+                        return moshi.adapter(FacetsResponse::class.java).fromJson(jsonStr) ?: FacetsResponse()
+                    }
+                }
+            }
+            FacetsResponse()
         } catch (e: Exception) {
+            e.printStackTrace()
             FacetsResponse()
         }
     }

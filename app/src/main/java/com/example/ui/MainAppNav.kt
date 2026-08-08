@@ -35,7 +35,12 @@ import com.example.ui.theme.YoBaseBackground
 
 sealed class Screen {
     object Home : Screen()
-    object Explore : Screen()
+    data class Explore(
+        val title: String? = null,
+        val sort: String? = null,
+        val type: String? = null,
+        val genre: String? = null
+    ) : Screen()
     object Downloads : Screen()
     object Account : Screen()
     object Login : Screen()
@@ -57,8 +62,9 @@ fun MainAppNav() {
     val context = LocalContext.current
     val repository = remember { YocinemaRepository(context) }
 
-    val screenBackStack = remember { mutableStateListOf<Screen>(Screen.Home) }
-    val currentScreen = screenBackStack.lastOrNull() ?: Screen.Home
+    val initialScreen = if (repository.isLoggedIn()) Screen.Home else Screen.Login
+    val screenBackStack = remember { mutableStateListOf<Screen>(initialScreen) }
+    val currentScreen = screenBackStack.lastOrNull() ?: initialScreen
     var currentTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
 
     fun navigateTo(screen: Screen) {
@@ -98,7 +104,7 @@ fun MainAppNav() {
                         currentTab = tab
                         val targetScreen = when (tab) {
                             BottomTab.Home -> Screen.Home
-                            BottomTab.Explore -> Screen.Explore
+                            BottomTab.Explore -> Screen.Explore()
                             BottomTab.Downloads -> Screen.Downloads
                             BottomTab.Account -> Screen.Account
                         }
@@ -142,7 +148,7 @@ fun MainAppNav() {
                             onViewAllVJsClick = { navigateTo(Screen.VJList) },
                             onVJClick = { vjName -> navigateTo(Screen.VJCatalogue(vjName)) },
                             onViewAllCategoryClick = { title, sort, type, genre ->
-                                navigateTo(Screen.Explore)
+                                navigateTo(Screen.Explore(title = title, sort = sort, type = type, genre = genre))
                             }
                         )
                     }
@@ -150,6 +156,10 @@ fun MainAppNav() {
                     is Screen.Explore -> {
                         ExploreScreen(
                             repository = repository,
+                            initialCategoryTitle = screen.title,
+                            initialSort = screen.sort,
+                            initialType = screen.type,
+                            initialGenre = screen.genre,
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) }
                         )
                     }
@@ -183,8 +193,14 @@ fun MainAppNav() {
                     is Screen.Login -> {
                         LoginScreen(
                             repository = repository,
-                            onBackClick = { navigateBack() },
-                            onLoginSuccess = { navigateBack() }
+                            onBackClick = {
+                                if (repository.isLoggedIn()) navigateBack()
+                            },
+                            onLoginSuccess = {
+                                screenBackStack.clear()
+                                screenBackStack.add(Screen.Home)
+                                currentTab = BottomTab.Home
+                            }
                         )
                     }
 
