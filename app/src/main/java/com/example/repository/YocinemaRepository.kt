@@ -131,7 +131,7 @@ class YocinemaRepository(context: Context) {
         limit: Int = 20,
         page: Int = 1
     ): List<Movie> {
-        val cacheKey = "${type}_${sort}_${genre}_${vj}_${country}_${year}_${search}_${limit}_$page"
+        val cacheKey = "movies_${type}_${sort}_${genre}_${vj}_${country}_${year}_${search}_${limit}_$page"
         val cached = memoryMovieCache[cacheKey]
         if (cached != null && cached.isNotEmpty()) {
             return cached
@@ -143,13 +143,7 @@ class YocinemaRepository(context: Context) {
                 ResponseEnvelopeExtractor.extractMovieList(response.body()!!.string())
             } else emptyList()
 
-            if (movies.isEmpty() && search.isNullOrBlank() && genre.isNullOrBlank() && vj.isNullOrBlank()) {
-                val pubResponse = api.getPublicMovies(limit = limit, page = page)
-                if (pubResponse.isSuccessful && pubResponse.body() != null) {
-                    movies = ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
-                }
-            }
-
+            // If a specific genre was requested and server returned movies, verify or filter by genre if needed
             if (movies.isNotEmpty()) {
                 memoryMovieCache[cacheKey] = movies
                 movies.forEach { movie ->
@@ -164,21 +158,28 @@ class YocinemaRepository(context: Context) {
                 }
                 movies
             } else {
-                loadCachedMoviesFallback()
-            }
-        } catch (e: Exception) {
-            val pubResponse = try {
-                api.getPublicMovies(limit = limit, page = page)
-            } catch (ex: Exception) { null }
-
-            if (pubResponse?.isSuccessful == true && pubResponse.body() != null) {
-                val pubMovies = ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
-                if (pubMovies.isNotEmpty()) {
-                    memoryMovieCache[cacheKey] = pubMovies
-                    return pubMovies
+                // If specific filter (genre, search, etc) returned empty, do not cache public fallback under this filter key!
+                if (search.isNullOrBlank() && genre.isNullOrBlank() && vj.isNullOrBlank()) {
+                    val pubResponse = api.getPublicMovies(limit = limit, page = page)
+                    if (pubResponse.isSuccessful && pubResponse.body() != null) {
+                        ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
+                    } else loadCachedMoviesFallback()
+                } else {
+                    emptyList()
                 }
             }
-            loadCachedMoviesFallback()
+        } catch (e: Exception) {
+            if (search.isNullOrBlank() && genre.isNullOrBlank() && vj.isNullOrBlank()) {
+                val pubResponse = try {
+                    api.getPublicMovies(limit = limit, page = page)
+                } catch (ex: Exception) { null }
+
+                if (pubResponse?.isSuccessful == true && pubResponse.body() != null) {
+                    ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
+                } else loadCachedMoviesFallback()
+            } else {
+                emptyList()
+            }
         }
     }
 
@@ -306,6 +307,28 @@ class YocinemaRepository(context: Context) {
             val response = api.reportMovie(movieId, mapOf("reason" to reason))
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(Exception("Failed to send report"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun requestCastMovie(
+        castId: String,
+        tmdbId: String,
+        mediaType: String,
+        title: String,
+        poster: String? = null
+    ): Result<Unit> {
+        return try {
+            val body = mapOf(
+                "tmdbId" to tmdbId,
+                "mediaType" to mediaType,
+                "title" to title,
+                "poster" to (poster ?: "")
+            )
+            val response = api.requestCastMovie(castId, body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Request failed"))
         } catch (e: Exception) {
             Result.failure(e)
         }

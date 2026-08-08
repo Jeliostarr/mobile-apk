@@ -71,8 +71,18 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.SubcomposeAsyncImage
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import com.example.ui.components.PosterCard
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Movie
+import com.example.data.model.formatDuration
 import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
@@ -102,31 +112,53 @@ fun PlayerScreen(
     val scope = rememberCoroutineScope()
     val activity = context as? Activity
 
+    var activeMovieId by remember { mutableStateOf(movieId) }
+    var activeSeasonNum by remember { mutableStateOf(seasonNum) }
+    var activeEpNum by remember { mutableStateOf(epNum) }
     var movie by remember { mutableStateOf<Movie?>(null) }
+    var relatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var mediaUrl by remember { mutableStateOf("") }
     var isFullscreen by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
+    var isSynopsisExpanded by remember { mutableStateOf(false) }
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
     val isPlaying by playerManager.isPlaying.collectAsState()
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
     val isReconnecting by playerManager.isReconnecting.collectAsState()
+    val playerError by playerManager.playerError.collectAsState()
 
     var gestureOverlayText by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
+    LaunchedEffect(activeMovieId, activeSeasonNum, activeEpNum, localFilePath) {
         if (!localFilePath.isNull_orBlank()) {
-            movie = Movie(id = movieId, title = "Offline Download")
+            movie = Movie(id = activeMovieId, title = "Offline Download")
             mediaUrl = localFilePath!!
-            playerManager.playMedia(movieId, localFilePath!!, seasonNum, epNum, initialPosMs)
+            playerManager.playMedia(activeMovieId, localFilePath!!, activeSeasonNum, activeEpNum, initialPosMs)
         } else {
-            val m = repository.getMovieDetail(movieId)
+            // Check if downloaded in DB first
+            val downloadId = if (activeSeasonNum != null && activeEpNum != null) "${activeMovieId}_S${activeSeasonNum}E${activeEpNum}" else activeMovieId
+            val downloadedEntity = repository.downloadDao.getDownloadById(downloadId)
+            if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedEntity.localFilePath.isNotBlank()) {
+                val file = java.io.File(downloadedEntity.localFilePath)
+                if (file.exists()) {
+                    val m = repository.getMovieDetail(activeMovieId)
+                    movie = m ?: Movie(id = activeMovieId, title = downloadedEntity.title)
+                    mediaUrl = downloadedEntity.localFilePath
+                    relatedMovies = repository.getRelatedMovies(activeMovieId)
+                    playerManager.playMedia(activeMovieId, downloadedEntity.localFilePath, activeSeasonNum, activeEpNum, initialPosMs)
+                    return@LaunchedEffect
+                }
+            }
+
+            val m = repository.getMovieDetail(activeMovieId)
             movie = m
             if (m != null) {
-                val url = repository.getPlayUrl(m, seasonNum, epNum)
+                val url = repository.getPlayUrl(m, activeSeasonNum, activeEpNum)
                 mediaUrl = url
-                playerManager.playMedia(movieId, url, seasonNum, epNum, initialPosMs)
+                relatedMovies = repository.getRelatedMovies(activeMovieId)
+                playerManager.playMedia(activeMovieId, url, activeSeasonNum, activeEpNum, initialPosMs)
             }
         }
     }
@@ -228,8 +260,53 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Reconnecting / Loading Indicator Overlay
-                    if (isReconnecting) {
+                    // Player Error / Reconnecting Overlay
+                    if (playerError != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.85f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Playback Error",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = playerError ?: "Failed to load stream.",
+                                    color = YoTextMuted,
+                                    fontSize = 12.sp,
+                                    maxLines = 2
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        if (movie != null) {
+                                            scope.launch {
+                                                val url = repository.getPlayUrl(movie!!, activeSeasonNum, activeEpNum)
+                                                playerManager.playMedia(activeMovieId, url, activeSeasonNum, activeEpNum, currentPosMs)
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = YoPrimaryAmber,
+                                        contentColor = YoBaseBackground
+                                    )
+                                ) {
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Retry", modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Retry Stream", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    } else if (isReconnecting) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -285,7 +362,7 @@ fun PlayerScreen(
                     }
                 }
 
-                // PERSISTENT CONTROLS DIRECTLY BELOW THE VIDEO (Never Overlaying!)
+                // PERSISTENT CONTROLS DIRECTLY BELOW THE VIDEO
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -308,21 +385,21 @@ fun PlayerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
 
-                            if (seasonNum != null && epNum != null) {
+                            if (activeSeasonNum != null && activeEpNum != null) {
                                 Text(
-                                    text = "Season $seasonNum · Episode $epNum",
+                                    text = "Season $activeSeasonNum · Episode $activeEpNum",
                                     fontSize = 12.sp,
                                     color = YoPrimaryAmber
                                 )
                             }
                         }
 
-                        if (!movie?.vjName.isNull_orBlank()) {
+                        if (!movie?.vjName.isNullOrBlank()) {
                             VJBadgeChip(vjName = movie!!.vjName!!)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Seek Slider & Time Display
                     Column {
@@ -355,7 +432,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Primary Playback Buttons (±10s, Play/Pause)
                     Row(
@@ -382,7 +459,7 @@ fun PlayerScreen(
 
                         Box(
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(52.dp)
                                 .clip(CircleShape)
                                 .background(YoPrimaryAmber)
                                 .clickable {
@@ -395,7 +472,7 @@ fun PlayerScreen(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play/Pause",
                                 tint = YoBaseBackground,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(30.dp)
                             )
                         }
 
@@ -417,7 +494,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Secondary Action Row (PiP, Subtitles, Fullscreen)
                     Row(
@@ -435,7 +512,7 @@ fun PlayerScreen(
                             Icon(imageVector = Icons.Default.PictureInPicture, contentDescription = "PiP", tint = YoTextMuted)
                         }
 
-                        IconButton(onClick = { /* Toggle Subtitles */ }) {
+                        IconButton(onClick = { /* Subtitles */ }) {
                             Icon(imageVector = Icons.Default.ClosedCaption, contentDescription = "Subtitles", tint = YoTextMuted)
                         }
 
@@ -446,6 +523,113 @@ fun PlayerScreen(
                             }
                         ) {
                             Icon(imageVector = Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = YoPrimaryAmber)
+                        }
+                    }
+                }
+
+                // SCROLLABLE WATCH PAGE DETAILS + RELATED MOVIES
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    val m = movie
+                    if (m != null) {
+                        // Movie Details Section
+                        item {
+                            Column {
+                                // Metadata row (Rating, release date, duration, genre)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    if (!m.imdbRating.isNullOrBlank()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Star,
+                                                contentDescription = null,
+                                                tint = YoPrimaryAmber,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = m.imdbRating!!,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = YoTextPrimary
+                                            )
+                                        }
+                                    }
+
+                                    if (!m.releaseDate.isNullOrBlank()) {
+                                        Text(text = m.releaseDate!!, fontSize = 13.sp, color = YoTextMuted)
+                                    }
+
+                                    val durationStr = formatDuration(m.duration)
+                                    if (durationStr.isNotBlank()) {
+                                        Text(text = durationStr, fontSize = 13.sp, color = YoTextMuted)
+                                    }
+
+                                    if (!m.genre.isNullOrBlank()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(YoSurfaceVariant)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = m.genre!!,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = YoPrimaryAmber
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (!m.description.isNullOrEmpty()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = m.description!!,
+                                        fontSize = 13.sp,
+                                        color = YoTextMuted,
+                                        maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.clickable { isSynopsisExpanded = !isSynopsisExpanded }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Related Movies Section
+                        if (relatedMovies.isNotEmpty()) {
+                            item {
+                                Column {
+                                    Text(
+                                        text = "You Might Also Like",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = YoTextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        items(relatedMovies) { rel ->
+                                            PosterCard(
+                                                movie = rel,
+                                                onClick = {
+                                                    activeMovieId = rel.id
+                                                    activeSeasonNum = null
+                                                    activeEpNum = null
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

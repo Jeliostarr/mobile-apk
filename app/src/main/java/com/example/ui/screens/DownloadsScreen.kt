@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -112,9 +113,32 @@ fun DownloadsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(activeDownloads, key = { it.downloadId }) { item ->
+                        val context = androidx.compose.ui.platform.LocalContext.current
                         ActiveDownloadRow(
                             download = item,
+                            onPause = {
+                                androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
+                                scope.launch {
+                                    repository.downloadDao.updateProgress(item.downloadId, item.downloadedBytes, item.totalBytes, 0, "PAUSED")
+                                }
+                            },
+                            onResume = {
+                                scope.launch {
+                                    val m = repository.getMovieDetail(item.movieId) ?: com.example.data.model.Movie(id = item.movieId, title = item.title)
+                                    var sNum: Int? = null
+                                    var eNum: Int? = null
+                                    if (item.episodeId != null && item.episodeId.startsWith("S")) {
+                                        val parts = item.episodeId.split("E")
+                                        if (parts.size == 2) {
+                                            sNum = parts[0].removePrefix("S").toIntOrNull()
+                                            eNum = parts[1].toIntOrNull()
+                                        }
+                                    }
+                                    startDownloadWorker(context, m, sNum, eNum)
+                                }
+                            },
                             onDelete = {
+                                androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
                                 scope.launch { repository.deleteDownload(item.downloadId) }
                             }
                         )
@@ -147,6 +171,8 @@ fun DownloadsScreen(
 @Composable
 fun ActiveDownloadRow(
     download: DownloadEntity,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onDelete: () -> Unit
 ) {
     val progress = if (download.totalBytes > 0) {
@@ -156,6 +182,7 @@ fun ActiveDownloadRow(
     val formattedDownloaded = formatBytes(download.downloadedBytes)
     val formattedTotal = if (download.totalBytes > 0) formatBytes(download.totalBytes) else "..."
     val formattedSpeed = formatSpeed(download.speedBytesPerSec)
+    val isDownloading = download.status == "DOWNLOADING"
 
     Row(
         modifier = Modifier
@@ -201,7 +228,7 @@ fun ActiveDownloadRow(
                 )
 
                 Text(
-                    text = if (download.status == "DOWNLOADING") formattedSpeed else download.status,
+                    text = if (isDownloading) formattedSpeed else download.status,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = YoPrimaryAmber
@@ -209,14 +236,34 @@ fun ActiveDownloadRow(
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(8.dp))
 
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Cancel",
-                tint = YoDestructive
-            )
+        Row {
+            if (isDownloading) {
+                IconButton(onClick = onPause) {
+                    Icon(
+                        imageVector = Icons.Default.Pause,
+                        contentDescription = "Pause",
+                        tint = YoPrimaryAmber
+                    )
+                }
+            } else {
+                IconButton(onClick = onResume) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
+                        contentDescription = "Resume",
+                        tint = YoPrimaryAmber
+                    )
+                }
+            }
+
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Cancel",
+                    tint = YoDestructive
+                )
+            }
         }
     }
 }

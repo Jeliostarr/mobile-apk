@@ -33,7 +33,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -211,7 +213,9 @@ fun CastDetailScreen(
                 val filmography = c.filmography.orEmpty()
                 items(filmography) { item ->
                     FilmographyRow(
+                        castId = castId,
                         item = item,
+                        repository = repository,
                         onMovieClick = onMovieClick
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -223,11 +227,16 @@ fun CastDetailScreen(
 
 @Composable
 fun FilmographyRow(
+    castId: String,
     item: FilmographyItem,
+    repository: YocinemaRepository,
     onMovieClick: (String) -> Unit
 ) {
     val versionMovieId = item.versions?.firstOrNull()?.movieId
     val isAvailable = item.onYocinema || !versionMovieId.isNull_orBlank()
+    var isRequested by remember { mutableStateOf(false) }
+    var isRequesting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Row(
         modifier = Modifier
@@ -280,7 +289,7 @@ fun FilmographyRow(
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             if (isAvailable) {
                 Box(
@@ -297,11 +306,56 @@ fun FilmographyRow(
                     )
                 }
             } else {
-                Text(
-                    text = "Not on YOCINEMA",
-                    fontSize = 11.sp,
-                    color = YoTextMuted
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isRequested) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(YoPrimaryAmber.copy(alpha = 0.2f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "REQUEST SENT",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YoPrimaryAmber
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(YoPrimaryAmber)
+                                .clickable(enabled = !isRequesting) {
+                                    isRequesting = true
+                                    scope.launch {
+                                        val tmdbId = item.tmdbId ?: item.id ?: ""
+                                        val mediaType = item.mediaType ?: "movie"
+                                        repository.requestCastMovie(
+                                            castId = castId,
+                                            tmdbId = tmdbId,
+                                            mediaType = mediaType,
+                                            title = item.title,
+                                            poster = item.poster
+                                        )
+                                        isRequesting = false
+                                        isRequested = true
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (isRequesting) "Sending..." else "Request Title",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YoBaseBackground
+                            )
+                        }
+                    }
+                }
             }
         }
     }

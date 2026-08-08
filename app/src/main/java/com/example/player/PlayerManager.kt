@@ -35,6 +35,9 @@ class PlayerManager(
     private val _isReconnecting = MutableStateFlow(false)
     val isReconnecting: StateFlow<Boolean> = _isReconnecting
 
+    private val _playerError = MutableStateFlow<String?>(null)
+    val playerError: StateFlow<String?> = _playerError
+
     private val _currentPositionMs = MutableStateFlow(0L)
     val currentPositionMs: StateFlow<Long> = _currentPositionMs
 
@@ -68,6 +71,7 @@ class PlayerManager(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
                     _isReconnecting.value = false
+                    _playerError.value = null
                     _durationMs.value = exoPlayer.duration.coerceAtLeast(0L)
                 } else if (playbackState == Player.STATE_BUFFERING) {
                     // Check stall
@@ -76,7 +80,7 @@ class PlayerManager(
 
             override fun onPlayerError(error: PlaybackException) {
                 error.printStackTrace()
-                // Re-mint stream token and attempt auto-reconnect
+                _playerError.value = "Playback error: ${error.message ?: "Stream network error"}"
                 attemptReconnect()
             }
         })

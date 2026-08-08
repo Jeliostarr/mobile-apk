@@ -66,6 +66,13 @@ interface YocinemaApi {
     ): Response<ResponseBody>
 
     @Headers("Content-Type: application/json")
+    @POST("api/v1/movies/cast/{castId}/request")
+    suspend fun requestCastMovie(
+        @Path("castId") castId: String,
+        @Body body: Map<String, String>
+    ): Response<ResponseBody>
+
+    @Headers("Content-Type: application/json")
     @POST("api/v1/movies/{id}/report")
     suspend fun reportMovie(
         @Path("id") movieId: String,

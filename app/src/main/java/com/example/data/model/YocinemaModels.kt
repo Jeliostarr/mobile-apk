@@ -183,6 +183,9 @@ data class CastDetail(
 
 @JsonClass(generateAdapter = true)
 data class FilmographyItem(
+    val id: String? = null,
+    val tmdbId: String? = null,
+    val mediaType: String? = null,
     val title: String = "",
     val character: String? = null,
     val releaseDate: String? = null,

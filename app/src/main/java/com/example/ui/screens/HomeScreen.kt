@@ -312,8 +312,14 @@ fun HomeScreen(
                 val pop = repository.getMovies(sort = "popular", limit = 15)
                 val lat = repository.getMovies(sort = "latest", limit = 15)
                 val ser = repository.getMovies(type = "series", limit = 15)
-                val act = repository.getMovies(genre = "Action", limit = 15)
-                val com = repository.getMovies(genre = "Comedy", limit = 15)
+                val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
+                
+                val act = repository.getMovies(genre = "Action", limit = 15).ifEmpty {
+                    allMoviesPool.filter { it.genre?.contains("Action", ignoreCase = true) == true }
+                }
+                val com = repository.getMovies(genre = "Comedy", limit = 15).ifEmpty {
+                    allMoviesPool.filter { it.genre?.contains("Comedy", ignoreCase = true) == true }
+                }
                 val facets = repository.getFacets()
 
                 popularMovies = pop

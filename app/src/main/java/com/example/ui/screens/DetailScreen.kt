@@ -108,6 +108,7 @@ fun DetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showGateSheet by remember { mutableStateOf(false) }
+    var showDownloadStartedDialog by remember { mutableStateOf(false) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var selectedSeasonNumber by remember { mutableStateOf(1) }
 
@@ -386,6 +387,7 @@ fun DetailScreen(
                                 onClick = {
                                     checkAuthAndExecute {
                                         startDownloadWorker(context, m, null, null)
+                                        showDownloadStartedDialog = true
                                     }
                                 },
                                 modifier = Modifier
@@ -404,6 +406,39 @@ fun DetailScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            }
+                        }
+
+                        if (!m.trailerUrl.isNull_orEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(m.trailerUrl)
+                                        )
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, YoPrimaryAmber),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = YoPrimaryAmber
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Watch Trailer", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
 
@@ -586,6 +621,24 @@ fun DetailScreen(
                 sheetState = gateSheetState,
                 onDismiss = { showGateSheet = false },
                 onEnterKeyClicked = onEnterApiKeyRequested
+            )
+        }
+
+        // Download Started Dialog
+        if (showDownloadStartedDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showDownloadStartedDialog = false },
+                title = { Text("Download Started", fontWeight = FontWeight.Bold, color = YoTextPrimary) },
+                text = { Text("Your download for \"${movie?.title}\" has started in the background.", color = YoTextMuted) },
+                confirmButton = {
+                    androidx.compose.material3.Button(
+                        onClick = { showDownloadStartedDialog = false },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = YoPrimaryAmber, contentColor = YoBaseBackground)
+                    ) {
+                        Text("OK", fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = YoSurface
             )
         }
     }
