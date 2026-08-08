@@ -15,7 +15,7 @@ fun cleanMediaUrl(url: String?): String? {
 fun String?.isNull_orEmpty(): Boolean = this == null || this.trim().isEmpty()
 
 fun formatDuration(seconds: Int?): String {
-    if (seconds == null || seconds <= 0) return "N/A"
+    if (seconds == null || seconds <= 0) return ""
     val hours = seconds / 3600
     val minutes = (seconds % 3600) / 60
     return when {
@@ -23,6 +23,17 @@ fun formatDuration(seconds: Int?): String {
         hours > 0 -> "${hours}h"
         minutes > 0 -> "${minutes} Mins"
         else -> "${seconds}s"
+    }
+}
+
+fun formatEpisodeDuration(minutes: Int?): String {
+    if (minutes == null || minutes <= 0) return ""
+    val hours = minutes / 60
+    val mins = minutes % 60
+    return when {
+        hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+        hours > 0 -> "${hours}h"
+        else -> "${mins} Mins"
     }
 }
 
@@ -184,4 +195,10 @@ data class FilmographyItem(
 data class VersionItem(
     val movieId: String = "",
     val vjName: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ViewProgressRequest(
+    val viewerId: String,
+    val watchedSeconds: Long
 )

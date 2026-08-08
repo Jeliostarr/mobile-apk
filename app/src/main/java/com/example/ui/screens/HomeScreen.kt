@@ -293,37 +293,43 @@ fun HomeScreen(
     onVJClick: (String) -> Unit,
     onViewAllCategoryClick: (title: String, sort: String?, type: String?, genre: String?) -> Unit
 ) {
-    var isLoading by remember { mutableStateOf(true) }
-    var spotlightMovie by remember { mutableStateOf<Movie?>(null) }
-    var popularMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
-    var latestMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
-    var seriesList by remember { mutableStateOf<List<Movie>>(emptyList()) }
-    var actionMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
-    var vjsList by remember { mutableStateOf<List<String>>(emptyList()) }
+    var popularMovies by remember { mutableStateOf(repository.cachedPopularMovies) }
+    var latestMovies by remember { mutableStateOf(repository.cachedLatestMovies) }
+    var seriesList by remember { mutableStateOf(repository.cachedSeriesList) }
+    var actionMovies by remember { mutableStateOf(repository.cachedActionMovies) }
+    var comedyMovies by remember { mutableStateOf(repository.cachedComedyMovies) }
+    var vjsList by remember { mutableStateOf(repository.cachedVjsList) }
+    var isLoading by remember { mutableStateOf(popularMovies.isEmpty() && latestMovies.isEmpty()) }
 
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         scope.launch {
-            isLoading = true
+            if (popularMovies.isEmpty()) {
+                isLoading = true
+            }
             try {
                 val pop = repository.getMovies(sort = "popular", limit = 15)
                 val lat = repository.getMovies(sort = "latest", limit = 15)
                 val ser = repository.getMovies(type = "series", limit = 15)
                 val act = repository.getMovies(genre = "Action", limit = 15)
+                val com = repository.getMovies(genre = "Comedy", limit = 15)
                 val facets = repository.getFacets()
 
                 popularMovies = pop
                 latestMovies = lat
                 seriesList = ser
                 actionMovies = act
+                comedyMovies = com
                 vjsList = facets.vjs ?: listOf("Soul", "Chambers", "Lenon", "Junior", "Emmy", "Kin", "Ulio")
 
-                if (pop.isNotEmpty()) {
-                    spotlightMovie = pop.first()
-                } else if (lat.isNotEmpty()) {
-                    spotlightMovie = lat.first()
-                }
+                repository.cachedPopularMovies = pop
+                repository.cachedLatestMovies = lat
+                repository.cachedSeriesList = ser
+                repository.cachedActionMovies = act
+                repository.cachedComedyMovies = com
+                repository.cachedVjsList = vjsList
+                repository.cachedFacets = facets
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -430,6 +436,18 @@ fun HomeScreen(
                             movies = actionMovies,
                             onMovieClick = onMovieClick,
                             onViewAllClick = { onViewAllCategoryClick("Action", null, null, "Action") }
+                        )
+                    }
+                }
+
+                // Comedy Movies Rail
+                if (comedyMovies.isNotEmpty()) {
+                    item {
+                        MovieRailSection(
+                            title = "Comedy Hits",
+                            movies = comedyMovies,
+                            onMovieClick = onMovieClick,
+                            onViewAllClick = { onViewAllCategoryClick("Comedy", null, null, "Comedy") }
                         )
                     }
                 }
@@ -552,6 +570,10 @@ fun MovieRailSection(
     onMovieClick: (String) -> Unit,
     onViewAllClick: () -> Unit
 ) {
+    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    // Calculate width for exactly 3 poster cards across the screen width (32dp horizontal padding + 28dp total spacing between 3 items)
+    val cardWidthDp = ((screenWidthDp - 32 - 28) / 3).coerceAtLeast(100)
+
     Column {
         RailHeader(title = title, onViewAllClick = onViewAllClick)
         Spacer(modifier = Modifier.height(10.dp))
@@ -562,7 +584,8 @@ fun MovieRailSection(
             items(movies) { movie ->
                 PosterCard(
                     movie = movie,
-                    onClick = { onMovieClick(movie.id) }
+                    onClick = { onMovieClick(movie.id) },
+                    widthDp = cardWidthDp
                 )
             }
         }

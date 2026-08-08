@@ -59,6 +59,15 @@ class YocinemaRepository(context: Context) {
 
     val streamTokenManager = StreamTokenManager(api)
 
+    // In-memory cache for Home screen sections (Stale-While-Revalidate)
+    var cachedPopularMovies: List<Movie> = emptyList()
+    var cachedLatestMovies: List<Movie> = emptyList()
+    var cachedSeriesList: List<Movie> = emptyList()
+    var cachedActionMovies: List<Movie> = emptyList()
+    var cachedComedyMovies: List<Movie> = emptyList()
+    var cachedVjsList: List<String> = emptyList()
+    var cachedFacets: FacetsResponse? = null
+
     val isLoggedInFlow: Flow<Boolean> = tokenManager.apiKeyFlow.map { !it.isNullOrBlank() }
 
     fun isLoggedIn(): Boolean = !tokenManager.getApiKey().isNullOrBlank()
@@ -385,5 +394,14 @@ class YocinemaRepository(context: Context) {
 
     suspend fun deleteDownload(downloadId: String) {
         downloadDao.deleteDownload(downloadId)
+    }
+
+    suspend fun reportViewProgress(movieId: String, viewerId: String, watchedSeconds: Long): Boolean {
+        return try {
+            val response = api.postViewProgress(movieId, com.example.data.model.ViewProgressRequest(viewerId, watchedSeconds))
+            response.isSuccessful
+        } catch (e: Exception) {
+            false
+        }
     }
 }

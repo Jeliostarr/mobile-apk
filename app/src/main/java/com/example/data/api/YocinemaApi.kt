@@ -72,6 +72,13 @@ interface YocinemaApi {
         @Body body: Map<String, String>
     ): Response<ResponseBody>
 
+    @Headers("Content-Type: application/json")
+    @POST("api/v1/movies/{id}/view-progress")
+    suspend fun postViewProgress(
+        @Path("id") movieId: String,
+        @Body body: com.example.data.model.ViewProgressRequest
+    ): Response<ResponseBody>
+
     @POST("api/v1/movies/{id}/stream-token")
     suspend fun mintStreamToken(
         @Path("id") movieId: String

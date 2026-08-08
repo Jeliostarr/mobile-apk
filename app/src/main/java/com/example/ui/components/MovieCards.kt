@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -237,6 +238,40 @@ fun PosterCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
+
+        if (!movie.imdbRating.isNull_orBlank() || (movie.duration != null && movie.duration > 0)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (!movie.imdbRating.isNull_orBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = YoPrimaryAmber,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = movie.imdbRating!!,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = YoTextPrimary
+                        )
+                    }
+                }
+                if (movie.duration != null && movie.duration > 0) {
+                    Text(
+                        text = com.example.data.model.formatDuration(movie.duration),
+                        fontSize = 10.sp,
+                        color = YoTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -317,11 +352,13 @@ fun EpisodeCard(
                 .background(YoSurfaceVariant)
                 .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = episode.getDisplayStill(movieId),
                 contentDescription = episode.title,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                loading = { YoCinemaLogoPlaceholder() },
+                error = { YoCinemaLogoPlaceholder() }
             )
 
             // Duration Pill top right
@@ -335,7 +372,7 @@ fun EpisodeCard(
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = formatDuration(episode.duration),
+                        text = com.example.data.model.formatEpisodeDuration(episode.duration),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = YoTextPrimary
@@ -409,11 +446,13 @@ fun CastAvatarCard(
                 .background(YoSurfaceVariant)
                 .border(2.dp, YoBorder, CircleShape)
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = avatarUrl,
                 contentDescription = cast.name,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                loading = { YoCinemaLogoPlaceholder() },
+                error = { YoCinemaLogoPlaceholder() }
             )
         }
 

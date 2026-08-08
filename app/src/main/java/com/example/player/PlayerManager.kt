@@ -127,9 +127,28 @@ class PlayerManager(
         }
     }
 
+    private var progressPingJob: Job? = null
+
+    private fun startProgressPing() {
+        progressPingJob?.cancel()
+        progressPingJob = scope.launch(Dispatchers.IO) {
+            while (true) {
+                delay(30_000)
+                if (exoPlayer.isPlaying && currentMovieId.isNotBlank()) {
+                    val viewerId = repository.tokenManager.getOrCreateViewerId()
+                    val seconds = exoPlayer.currentPosition / 1000
+                    if (seconds > 0) {
+                        repository.reportViewProgress(currentMovieId, viewerId, seconds)
+                    }
+                }
+            }
+        }
+    }
+
     private fun stopPositionUpdates() {
         posJob?.cancel()
         stallCheckJob?.cancel()
+        progressPingJob?.cancel()
     }
 
     private fun saveHistoryPosition(pos: Long, dur: Long) {
@@ -178,6 +197,7 @@ class PlayerManager(
             headers["User-Agent"] = "YoCinema-Android-Player/1.0"
             val apiKey = repository.tokenManager.getApiKey()
             if (!apiKey.isNullOrBlank()) {
+                headers["X-API-Key"] = apiKey
                 headers["x-api-key"] = apiKey
             }
 
@@ -190,15 +210,15 @@ class PlayerManager(
             val uri = Uri.parse(url)
             val mediaItem = MediaItem.fromUri(uri)
 
-            // Try HLS source first if m3u8 or unknown extension, fallback to Progressive
-            val mediaSource: MediaSource = if (url.contains(".m3u8", ignoreCase = true) || !url.contains(".mp4", ignoreCase = true)) {
-                try {
+            val mediaSource: MediaSource = try {
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpDataSourceFactory)
+                    .createMediaSource(mediaItem)
+            } catch (e: Exception) {
+                if (url.contains(".m3u8", ignoreCase = true)) {
                     HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
-                } catch (e: Exception) {
+                } else {
                     ProgressiveMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
                 }
-            } else {
-                ProgressiveMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
             }
 
             exoPlayer.setMediaSource(mediaSource)
@@ -207,6 +227,7 @@ class PlayerManager(
                 exoPlayer.seekTo(seekPosMs)
             }
             exoPlayer.playWhenReady = true
+            startProgressPing()
         }
     }
 

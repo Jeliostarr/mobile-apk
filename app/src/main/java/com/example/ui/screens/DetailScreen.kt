@@ -64,6 +64,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.CastMember
 import com.example.data.model.Episode
 import com.example.data.model.Movie
@@ -168,11 +169,13 @@ fun DetailScreen(
                             .fillMaxWidth()
                             .height(280.dp)
                     ) {
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = m.cover ?: m.poster ?: m.displayPosterUrl,
                             contentDescription = m.title,
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Crop,
+                            loading = { com.example.ui.components.YoCinemaLogoPlaceholder() },
+                            error = { com.example.ui.components.YoCinemaLogoPlaceholder() }
                         )
 
                         // Top Scrim

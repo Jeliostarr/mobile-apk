@@ -56,9 +56,19 @@ class TokenManager(context: Context) {
         prefs.edit().putString(KEY_VJ_HISTORY, updated).apply()
     }
 
+    fun getOrCreateViewerId(): String {
+        var id = prefs.getString(KEY_VIEWER_ID, null)
+        if (id.isNull_orBlank()) {
+            id = java.util.UUID.randomUUID().toString()
+            prefs.edit().putString(KEY_VIEWER_ID, id).apply()
+        }
+        return id!!
+    }
+
     companion object {
         private const val KEY_API_KEY = "api_key"
         private const val KEY_VJ_HISTORY = "vj_history"
+        private const val KEY_VIEWER_ID = "viewer_id"
 
         private fun String?.isNull_orBlank(): Boolean {
             return this == null || this.trim().isEmpty()

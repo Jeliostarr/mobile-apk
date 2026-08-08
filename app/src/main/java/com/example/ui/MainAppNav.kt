@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,8 +57,23 @@ fun MainAppNav() {
     val context = LocalContext.current
     val repository = remember { YocinemaRepository(context) }
 
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+    val screenBackStack = remember { mutableStateListOf<Screen>(Screen.Home) }
+    val currentScreen = screenBackStack.lastOrNull() ?: Screen.Home
     var currentTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
+
+    fun navigateTo(screen: Screen) {
+        screenBackStack.add(screen)
+    }
+
+    fun navigateBack() {
+        if (screenBackStack.size > 1) {
+            screenBackStack.removeAt(screenBackStack.lastIndex)
+        }
+    }
+
+    BackHandler(enabled = screenBackStack.size > 1) {
+        navigateBack()
+    }
 
     val showBottomNav = when (currentScreen) {
         is Screen.Home, is Screen.Explore, is Screen.Downloads, is Screen.Account -> true
@@ -79,11 +96,15 @@ fun MainAppNav() {
                     currentRoute = currentRoute,
                     onTabSelected = { tab ->
                         currentTab = tab
-                        currentScreen = when (tab) {
+                        val targetScreen = when (tab) {
                             BottomTab.Home -> Screen.Home
                             BottomTab.Explore -> Screen.Explore
                             BottomTab.Downloads -> Screen.Downloads
                             BottomTab.Account -> Screen.Account
+                        }
+                        if (currentScreen != targetScreen) {
+                            screenBackStack.clear()
+                            screenBackStack.add(targetScreen)
                         }
                     }
                 )
@@ -104,24 +125,24 @@ fun MainAppNav() {
                     is Screen.Home -> {
                         HomeScreen(
                             repository = repository,
-                            onMovieClick = { movieId -> currentScreen = Screen.Detail(movieId) },
-                            onSearchClick = { currentScreen = Screen.Search() },
+                            onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
+                            onSearchClick = { navigateTo(Screen.Search()) },
                             onWatchlistClick = {
                                 currentTab = BottomTab.Account
-                                currentScreen = Screen.Account
+                                navigateTo(Screen.Account)
                             },
                             onDownloadsClick = {
                                 currentTab = BottomTab.Downloads
-                                currentScreen = Screen.Downloads
+                                navigateTo(Screen.Downloads)
                             },
                             onAccountClick = {
                                 currentTab = BottomTab.Account
-                                currentScreen = Screen.Account
+                                navigateTo(Screen.Account)
                             },
-                            onViewAllVJsClick = { currentScreen = Screen.VJList },
-                            onVJClick = { vjName -> currentScreen = Screen.VJCatalogue(vjName) },
+                            onViewAllVJsClick = { navigateTo(Screen.VJList) },
+                            onVJClick = { vjName -> navigateTo(Screen.VJCatalogue(vjName)) },
                             onViewAllCategoryClick = { title, sort, type, genre ->
-                                currentScreen = Screen.Explore
+                                navigateTo(Screen.Explore)
                             }
                         )
                     }
@@ -129,7 +150,7 @@ fun MainAppNav() {
                     is Screen.Explore -> {
                         ExploreScreen(
                             repository = repository,
-                            onMovieClick = { movieId -> currentScreen = Screen.Detail(movieId) }
+                            onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) }
                         )
                     }
 
@@ -137,7 +158,7 @@ fun MainAppNav() {
                         DownloadsScreen(
                             repository = repository,
                             onPlayOfflineFile = { movieId, filePath ->
-                                currentScreen = Screen.Player(movieId = movieId, localFilePath = filePath)
+                                navigateTo(Screen.Player(movieId = movieId, localFilePath = filePath))
                             }
                         )
                     }
@@ -145,13 +166,15 @@ fun MainAppNav() {
                     is Screen.Account -> {
                         AccountScreen(
                             repository = repository,
-                            onLoginClick = { currentScreen = Screen.Login },
-                            onMovieClick = { movieId -> currentScreen = Screen.Detail(movieId) },
+                            onLoginClick = { navigateTo(Screen.Login) },
+                            onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
                             onPlayHistoryClick = { movieId, seasonNum, epNum, posMs ->
-                                currentScreen = Screen.Player(
-                                    movieId = movieId,
-                                    seasonNum = seasonNum,
-                                    epNum = epNum
+                                navigateTo(
+                                    Screen.Player(
+                                        movieId = movieId,
+                                        seasonNum = seasonNum,
+                                        epNum = epNum
+                                    )
                                 )
                             }
                         )
@@ -160,16 +183,16 @@ fun MainAppNav() {
                     is Screen.Login -> {
                         LoginScreen(
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.Account },
-                            onLoginSuccess = { currentScreen = Screen.Account }
+                            onBackClick = { navigateBack() },
+                            onLoginSuccess = { navigateBack() }
                         )
                     }
 
                     is Screen.Search -> {
                         SearchScreen(
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.Home },
-                            onMovieClick = { movieId -> currentScreen = Screen.Detail(movieId) }
+                            onBackClick = { navigateBack() },
+                            onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) }
                         )
                     }
 
@@ -177,17 +200,19 @@ fun MainAppNav() {
                         DetailScreen(
                             movieId = screen.movieId,
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.Home },
+                            onBackClick = { navigateBack() },
                             onPlayClick = { movieId, seasonNum, epNum ->
-                                currentScreen = Screen.Player(
-                                    movieId = movieId,
-                                    seasonNum = seasonNum,
-                                    epNum = epNum
+                                navigateTo(
+                                    Screen.Player(
+                                        movieId = movieId,
+                                        seasonNum = seasonNum,
+                                        epNum = epNum
+                                    )
                                 )
                             },
-                            onCastClick = { castId -> currentScreen = Screen.CastDetail(castId) },
-                            onRelatedMovieClick = { id -> currentScreen = Screen.Detail(id) },
-                            onEnterApiKeyRequested = { currentScreen = Screen.Login }
+                            onCastClick = { castId -> navigateTo(Screen.CastDetail(castId)) },
+                            onRelatedMovieClick = { id -> navigateTo(Screen.Detail(id)) },
+                            onEnterApiKeyRequested = { navigateTo(Screen.Login) }
                         )
                     }
 
@@ -198,15 +223,15 @@ fun MainAppNav() {
                             epNum = screen.epNum,
                             localFilePath = screen.localFilePath,
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.Home }
+                            onBackClick = { navigateBack() }
                         )
                     }
 
                     is Screen.VJList -> {
                         VJListScreen(
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.Home },
-                            onVJClick = { vjName -> currentScreen = Screen.VJCatalogue(vjName) }
+                            onBackClick = { navigateBack() },
+                            onVJClick = { vjName -> navigateTo(Screen.VJCatalogue(vjName)) }
                         )
                     }
 
@@ -214,8 +239,8 @@ fun MainAppNav() {
                         VJCatalogueScreen(
                             vjName = screen.vjName,
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.VJList },
-                            onMovieClick = { movieId -> currentScreen = Screen.Detail(movieId) }
+                            onBackClick = { navigateBack() },
+                            onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) }
                         )
                     }
 
@@ -223,8 +248,8 @@ fun MainAppNav() {
                         CastDetailScreen(
                             castId = screen.castId,
                             repository = repository,
-                            onBackClick = { currentScreen = Screen.Home },
-                            onMovieClick = { movieId -> currentScreen = Screen.Detail(movieId) }
+                            onBackClick = { navigateBack() },
+                            onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) }
                         )
                     }
                 }
