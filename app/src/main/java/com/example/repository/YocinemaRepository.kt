@@ -406,23 +406,30 @@ class YocinemaRepository(context: Context) {
         positionMs: Long,
         durationMs: Long
     ) {
-        val id = "${movieId}_${episodeId ?: "movie"}"
-        historyDao.saveHistory(
-            HistoryEntity(
-                id = id,
-                movieId = movieId,
-                episodeId = episodeId,
-                title = title,
-                poster = poster,
-                vjName = vjName,
-                seasonNumber = seasonNum,
-                episodeNumber = epNum,
-                episodeTitle = epTitle,
-                positionMs = positionMs,
-                durationMs = durationMs,
-                updatedAt = System.currentTimeMillis()
+        // This runs on every playback tick, so a transient DB hiccup here
+        // (e.g. a write colliding with another in-flight one) must never be
+        // allowed to propagate — it would take down the whole app mid-play.
+        try {
+            val id = "${movieId}_${episodeId ?: "movie"}"
+            historyDao.saveHistory(
+                HistoryEntity(
+                    id = id,
+                    movieId = movieId,
+                    episodeId = episodeId,
+                    title = title,
+                    poster = poster,
+                    vjName = vjName,
+                    seasonNumber = seasonNum,
+                    episodeNumber = epNum,
+                    episodeTitle = epTitle,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    updatedAt = System.currentTimeMillis()
+                )
             )
-        )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // Downloads
