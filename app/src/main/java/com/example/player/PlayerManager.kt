@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.example.data.model.Movie
 import com.example.repository.YocinemaRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,10 @@ class PlayerManager(
     private var currentSeasonNum: Int? = null
     private var currentEpNum: Int? = null
     private var currentMediaUrl: String = ""
+    // Cached once per playMedia() call instead of refetched on every history
+    // tick — avoids hammering the repository/network every second.
+    private var currentMovieForHistory: Movie? = null
+    private var lastHistorySaveAt: Long = 0L
 
     private var lastRecordedPos: Long = 0L
     private var stallCheckJob: Job? = null
@@ -91,15 +96,25 @@ class PlayerManager(
         posJob?.cancel()
         posJob = scope.launch {
             while (true) {
-                val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
-                val dur = exoPlayer.duration.coerceAtLeast(0L)
-                _currentPositionMs.value = pos
-                _durationMs.value = dur
-                lastRecordedPos = pos
+                try {
+                    val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                    val dur = exoPlayer.duration.coerceAtLeast(0L)
+                    _currentPositionMs.value = pos
+                    _durationMs.value = dur
+                    lastRecordedPos = pos
 
-                // Save to history every 5s
-                if (currentMovieId.isNotBlank() && dur > 0) {
-                    saveHistoryPosition(pos, dur)
+                    // Save to history every 5s — throttled by elapsed time, not
+                    // by tick count, so this stays accurate regardless of the
+                    // update interval below.
+                    val now = System.currentTimeMillis()
+                    if (currentMovieId.isNotBlank() && dur > 0 && now - lastHistorySaveAt >= 5000) {
+                        lastHistorySaveAt = now
+                        saveHistoryPosition(pos, dur)
+                    }
+                } catch (e: Exception) {
+                    // A single bad tick (e.g. player mid-teardown) should never
+                    // kill this loop or the app — just skip and try again.
+                    e.printStackTrace()
                 }
                 delay(1000)
             }
@@ -112,20 +127,24 @@ class PlayerManager(
             var stallSeconds = 0
             while (true) {
                 delay(1000)
-                if (exoPlayer.isPlaying) {
-                    val pos = exoPlayer.currentPosition
-                    if (pos == lastPos && pos > 0) {
-                        stallSeconds++
-                        if (stallSeconds >= 25) {
+                try {
+                    if (exoPlayer.isPlaying) {
+                        val pos = exoPlayer.currentPosition
+                        if (pos == lastPos && pos > 0) {
+                            stallSeconds++
+                            if (stallSeconds >= 25) {
+                                stallSeconds = 0
+                                attemptReconnect()
+                            }
+                        } else {
+                            lastPos = pos
                             stallSeconds = 0
-                            attemptReconnect()
                         }
                     } else {
-                        lastPos = pos
                         stallSeconds = 0
                     }
-                } else {
-                    stallSeconds = 0
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -138,12 +157,16 @@ class PlayerManager(
         progressPingJob = scope.launch(Dispatchers.IO) {
             while (true) {
                 delay(30_000)
-                if (exoPlayer.isPlaying && currentMovieId.isNotBlank()) {
-                    val viewerId = repository.tokenManager.getOrCreateViewerId()
-                    val seconds = exoPlayer.currentPosition / 1000
-                    if (seconds > 0) {
-                        repository.reportViewProgress(currentMovieId, viewerId, seconds)
+                try {
+                    if (exoPlayer.isPlaying && currentMovieId.isNotBlank()) {
+                        val viewerId = repository.tokenManager.getOrCreateViewerId()
+                        val seconds = exoPlayer.currentPosition / 1000
+                        if (seconds > 0) {
+                            repository.reportViewProgress(currentMovieId, viewerId, seconds)
+                        }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -157,23 +180,36 @@ class PlayerManager(
 
     private fun saveHistoryPosition(pos: Long, dur: Long) {
         scope.launch(Dispatchers.IO) {
-            val movie = repository.getMovieDetail(currentMovieId) ?: return@launch
-            val epTitle = if (currentSeasonNum != null && currentEpNum != null) {
-                movie.episodes?.find { it.sNum == currentSeasonNum && it.eNum == currentEpNum }?.title
-            } else null
+            try {
+                // Fetch once per playback session and reuse — not once a
+                // second. repository.getMovieDetail() already falls back to
+                // cache on failure, but calling it on every tick was both
+                // wasteful and, combined with an unguarded DB write further
+                // down, the actual cause of the app crashing a few seconds
+                // into playback (an exception here had nothing to catch it).
+                val movie = currentMovieForHistory
+                    ?: repository.getMovieDetail(currentMovieId)?.also { currentMovieForHistory = it }
+                    ?: return@launch
+                val epTitle = if (currentSeasonNum != null && currentEpNum != null) {
+                    movie.episodes?.find { it.sNum == currentSeasonNum && it.eNum == currentEpNum }?.title
+                } else null
 
-            repository.saveHistory(
-                movieId = currentMovieId,
-                episodeId = currentEpisodeId,
-                title = movie.title,
-                poster = movie.displayPosterUrl,
-                vjName = movie.vjName,
-                seasonNum = currentSeasonNum,
-                epNum = currentEpNum,
-                epTitle = epTitle,
-                positionMs = pos,
-                durationMs = dur
-            )
+                repository.saveHistory(
+                    movieId = currentMovieId,
+                    episodeId = currentEpisodeId,
+                    title = movie.title,
+                    poster = movie.displayPosterUrl,
+                    vjName = movie.vjName,
+                    seasonNum = currentSeasonNum,
+                    epNum = currentEpNum,
+                    epTitle = epTitle,
+                    positionMs = pos,
+                    durationMs = dur
+                )
+            } catch (e: Exception) {
+                // Never let a history-save failure take down playback.
+                e.printStackTrace()
+            }
         }
     }
 
@@ -188,6 +224,10 @@ class PlayerManager(
         currentSeasonNum = seasonNum
         currentEpNum = epNum
         currentEpisodeId = if (seasonNum != null && epNum != null) "S${seasonNum}E${epNum}" else null
+        // New title/episode — the cached movie (if any) belonged to whatever
+        // was playing before and must not leak into this session's history.
+        currentMovieForHistory = null
+        lastHistorySaveAt = 0L
         currentMediaUrl = mediaUrl
         lastRecordedPos = initialPositionMs
 
@@ -196,50 +236,58 @@ class PlayerManager(
 
     private fun loadAndPlaySource(url: String, seekPosMs: Long) {
         scope.launch {
-            _isReconnecting.value = false
-            val uri = Uri.parse(url)
-            val isLocalFile = url.startsWith("/") || url.startsWith("file://") || uri.scheme == null || uri.scheme == "file" || java.io.File(url).exists()
+            try {
+                _isReconnecting.value = false
+                val uri = Uri.parse(url)
+                val isLocalFile = url.startsWith("/") || url.startsWith("file://") || uri.scheme == null || uri.scheme == "file" || java.io.File(url).exists()
 
-            val mediaSource: MediaSource = if (isLocalFile) {
-                val fileUri = if (url.startsWith("/")) Uri.fromFile(java.io.File(url)) else uri
-                val localItem = MediaItem.fromUri(fileUri)
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
-                    .createMediaSource(localItem)
-            } else {
-                val headers = mutableMapOf<String, String>()
-                headers["User-Agent"] = "YoCinema-Android-Player/1.0"
-                val apiKey = repository.tokenManager.getApiKey()
-                if (!apiKey.isNullOrBlank()) {
-                    headers["X-API-Key"] = apiKey
-                    headers["x-api-key"] = apiKey
-                }
+                val mediaSource: MediaSource = if (isLocalFile) {
+                    val fileUri = if (url.startsWith("/")) Uri.fromFile(java.io.File(url)) else uri
+                    val localItem = MediaItem.fromUri(fileUri)
+                    androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
+                        .createMediaSource(localItem)
+                } else {
+                    val headers = mutableMapOf<String, String>()
+                    headers["User-Agent"] = "YoCinema-Android-Player/1.0"
+                    val apiKey = repository.tokenManager.getApiKey()
+                    if (!apiKey.isNullOrBlank()) {
+                        headers["X-API-Key"] = apiKey
+                        headers["x-api-key"] = apiKey
+                    }
 
-                val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                    .setConnectTimeoutMs(60_000)
-                    .setReadTimeoutMs(60_000)
-                    .setAllowCrossProtocolRedirects(true)
-                    .setDefaultRequestProperties(headers)
+                    val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                        .setConnectTimeoutMs(60_000)
+                        .setReadTimeoutMs(60_000)
+                        .setAllowCrossProtocolRedirects(true)
+                        .setDefaultRequestProperties(headers)
 
-                val mediaItem = MediaItem.fromUri(uri)
-                try {
-                    androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpDataSourceFactory)
-                        .createMediaSource(mediaItem)
-                } catch (e: Exception) {
-                    if (url.contains(".m3u8", ignoreCase = true)) {
-                        HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
-                    } else {
-                        ProgressiveMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
+                    val mediaItem = MediaItem.fromUri(uri)
+                    try {
+                        androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpDataSourceFactory)
+                            .createMediaSource(mediaItem)
+                    } catch (e: Exception) {
+                        if (url.contains(".m3u8", ignoreCase = true)) {
+                            HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
+                        } else {
+                            ProgressiveMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
+                        }
                     }
                 }
-            }
 
-            exoPlayer.setMediaSource(mediaSource)
-            exoPlayer.prepare()
-            if (seekPosMs > 0) {
-                exoPlayer.seekTo(seekPosMs)
+                exoPlayer.setMediaSource(mediaSource)
+                exoPlayer.prepare()
+                if (seekPosMs > 0) {
+                    exoPlayer.seekTo(seekPosMs)
+                }
+                exoPlayer.playWhenReady = true
+                startProgressPing()
+            } catch (e: Exception) {
+                // A bad URL, a missing/corrupt local file, or a data-source
+                // failure here would otherwise crash the whole app instead
+                // of just failing this one playback attempt.
+                e.printStackTrace()
+                _playerError.value = "Couldn't start playback: ${e.message ?: "unknown error"}"
             }
-            exoPlayer.playWhenReady = true
-            startProgressPing()
         }
     }
 
@@ -247,17 +295,26 @@ class PlayerManager(
         if (_isReconnecting.value) return
         _isReconnecting.value = true
         scope.launch(Dispatchers.IO) {
-            repository.streamTokenManager.invalidateToken(currentMovieId)
-            val movie = repository.getMovieDetail(currentMovieId)
-            if (movie != null) {
-                val freshUrl = repository.getPlayUrl(movie, currentSeasonNum, currentEpNum)
-                currentMediaUrl = freshUrl
-                withContext(Dispatchers.Main) {
-                    loadAndPlaySource(freshUrl, lastRecordedPos)
+            try {
+                repository.streamTokenManager.invalidateToken(currentMovieId)
+                val movie = repository.getMovieDetail(currentMovieId)
+                if (movie != null) {
+                    val freshUrl = repository.getPlayUrl(movie, currentSeasonNum, currentEpNum)
+                    currentMediaUrl = freshUrl
+                    withContext(Dispatchers.Main) {
+                        loadAndPlaySource(freshUrl, lastRecordedPos)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        _isReconnecting.value = false
+                        _playerError.value = "Couldn't reconnect — check your connection and try again."
+                    }
                 }
-            } else {
+            } catch (e: Exception) {
+                e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     _isReconnecting.value = false
+                    _playerError.value = "Couldn't reconnect — check your connection and try again."
                 }
             }
         }
