@@ -109,7 +109,7 @@ fun DetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showGateSheet by remember { mutableStateOf(false) }
-    var showTrailerModal by remember { mutableStateOf(false) }
+    var trailerExpanded by remember { mutableStateOf(false) }
     var showDownloadStartedDialog by remember { mutableStateOf(false) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var selectedSeasonNumber by remember { mutableStateOf(1) }
@@ -427,26 +427,13 @@ fun DetailScreen(
                         }
 
                         if (!m.trailerUrl.isNull_orEmpty()) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = { showTrailerModal = true },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, YoPrimaryAmber),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = YoPrimaryAmber
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Watch Trailer", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
+                            Spacer(modifier = Modifier.height(18.dp))
+                            InlineTrailerSection(
+                                trailerUrl = m.trailerUrl!!,
+                                movieTitle = m.title,
+                                expanded = trailerExpanded,
+                                onToggle = { trailerExpanded = !trailerExpanded }
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(20.dp))
@@ -645,12 +632,6 @@ fun DetailScreen(
             )
         }
 
-        if (showTrailerModal && !movie?.trailerUrl.isNullOrBlank()) {
-            InAppTrailerModal(
-                trailerUrl = movie!!.trailerUrl!!,
-                onDismiss = { showTrailerModal = false }
-            )
-        }
     }
 }
 
@@ -669,140 +650,151 @@ fun extractYouTubeId(url: String): String? {
 }
 
 @Composable
-fun InAppTrailerModal(
+fun InlineTrailerSection(
     trailerUrl: String,
-    onDismiss: () -> Unit
+    movieTitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
 ) {
-    val ytId = extractYouTubeId(trailerUrl)
-    var isLoading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
-    var loadFailed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val ytId = remember(trailerUrl) { extractYouTubeId(trailerUrl) }
 
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    Column {
+        Text(
+            text = "Trailer",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = YoTextPrimary
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Thumbnail rail — tapping the card reveals the inline player below
+        // it, right here in the flow, instead of jumping to a modal/popup.
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.95f))
+                .width(180.dp)
+                .aspectRatio(16f / 9f)
+                .shadow(elevation = 4.dp, shape = RoundedCornerShape(12.dp), clip = false)
+                .clip(RoundedCornerShape(12.dp))
+                .background(YoSurfaceVariant)
+                .then(
+                    if (expanded) Modifier.border(2.dp, YoPrimaryAmber, RoundedCornerShape(12.dp)) else Modifier
+                )
+                .clickable { onToggle() }
         ) {
-            Column(
+            SubcomposeAsyncImage(
+                model = if (ytId != null) "https://img.youtube.com/vi/$ytId/hqdefault.jpg" else null,
+                contentDescription = "$movieTitle trailer",
                 modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                contentScale = ContentScale.Crop,
+                loading = { com.example.ui.components.YoCinemaLogoPlaceholder() },
+                error = { com.example.ui.components.YoCinemaLogoPlaceholder() }
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Official Trailer",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color.White
-                        )
-                    }
-                }
-
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .background(Color.Black),
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (expanded) YoPrimaryAmber else Color.Black.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (ytId == null || loadFailed) {
-                        // Never leave a dead black box — give a clear way
-                        // forward instead of a silent, confusing failure.
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            Text(
-                                text = "Couldn't play the trailer here.",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            androidx.compose.material3.OutlinedButton(
-                                onClick = {
-                                    try {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
-                                    } catch (e: Exception) { }
-                                }
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = if (expanded) YoBaseBackground else Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(12.dp))
+            InlineYouTubePlayer(trailerUrl = trailerUrl, ytId = ytId)
+        }
+    }
+}
+
+@Composable
+fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
+    var isLoading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (ytId == null || loadFailed) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                Text("Couldn't play the trailer here.", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(10.dp))
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl))) } catch (e: Exception) { }
+                    }
+                ) {
+                    Text("Watch on YouTube", color = Color.White, fontSize = 13.sp)
+                }
+            }
+        } else {
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx ->
+                    android.webkit.WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        webChromeClient = android.webkit.WebChromeClient()
+                        webViewClient = object : android.webkit.WebViewClient() {
+                            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                isLoading = false
+                            }
+                            override fun onReceivedError(
+                                view: android.webkit.WebView?,
+                                request: android.webkit.WebResourceRequest?,
+                                error: android.webkit.WebResourceError?
                             ) {
-                                Text("Watch on YouTube", color = Color.White)
+                                if (request?.isForMainFrame != false) {
+                                    isLoading = false
+                                    loadFailed = true
+                                }
                             }
                         }
-                    } else {
-                        androidx.compose.ui.viewinterop.AndroidView(
-                            factory = { ctx ->
-                                android.webkit.WebView(ctx).apply {
-                                    settings.javaScriptEnabled = true
-                                    settings.domStorageEnabled = true
-                                    settings.mediaPlaybackRequiresUserGesture = false
-                                    settings.loadWithOverviewMode = true
-                                    settings.useWideViewPort = true
-                                    setBackgroundColor(android.graphics.Color.BLACK)
-                                    webChromeClient = android.webkit.WebChromeClient()
-                                    webViewClient = object : android.webkit.WebViewClient() {
-                                        override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
-                                            isLoading = false
-                                        }
-                                        override fun onReceivedError(
-                                            view: android.webkit.WebView?,
-                                            request: android.webkit.WebResourceRequest?,
-                                            error: android.webkit.WebResourceError?
-                                        ) {
-                                            if (request?.isForMainFrame != false) {
-                                                isLoading = false
-                                                loadFailed = true
-                                            }
-                                        }
-                                    }
-                                    // Navigating a WebView directly to
-                                    // youtube.com/embed/... as a top-level page
-                                    // is the actual reason trailers were silently
-                                    // failing to play — YouTube's embed player
-                                    // expects to be loaded inside an iframe on a
-                                    // real page with a real origin, not opened
-                                    // directly as the page itself. Wrapping it in
-                                    // a minimal local HTML page with a real
-                                    // youtube.com base URL is what makes this
-                                    // work reliably across devices.
-                                    val html = """
-                                        <html><head>
-                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                        <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;}
-                                        iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}</style>
-                                        </head><body>
-                                        <iframe src="https://www.youtube.com/embed/$ytId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1"
-                                        allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
-                                        </body></html>
-                                    """.trimIndent()
-                                    loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
-                                }
-                            },
-                            update = { /* no-op: content is fixed per dialog instance */ },
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        if (isLoading) {
-                            androidx.compose.material3.CircularProgressIndicator(color = YoPrimaryAmber)
-                        }
+                        // Navigating a WebView directly to youtube.com/embed/...
+                        // as a top-level page is why trailers were silently
+                        // failing to play before — YouTube's embed player
+                        // expects to be loaded inside an iframe on a real page
+                        // with a real origin. Wrapping it in a minimal local
+                        // HTML page with a real youtube.com base URL is what
+                        // makes this work reliably.
+                        val html = """
+                            <html><head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;}
+                            iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}</style>
+                            </head><body>
+                            <iframe src="https://www.youtube.com/embed/$ytId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1"
+                            allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+                            </body></html>
+                        """.trimIndent()
+                        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
                     }
-                }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            if (isLoading) {
+                androidx.compose.material3.CircularProgressIndicator(color = YoPrimaryAmber)
             }
         }
     }
