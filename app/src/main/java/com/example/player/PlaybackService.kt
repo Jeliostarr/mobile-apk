@@ -2,58 +2,38 @@ package com.example.player
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.example.MainActivity
 
+/**
+ * Hosts the lock-screen / notification media session. This service
+ * deliberately never creates its own ExoPlayer — a separate player here
+ * that's never fed any media is exactly what makes lock-screen controls
+ * either do nothing or show a blank "Not Playing" state. Instead,
+ * [PlayerManager] builds a MediaSession around the ONE real player that's
+ * actually running and registers it here via [setActiveSession], so
+ * whatever the system shows (notification, lock screen, Bluetooth, Android
+ * Auto) is always driven by the real, currently-playing video.
+ */
 @UnstableApi
 class PlaybackService : MediaSessionService() {
-
-    private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-
-        val player = ExoPlayer.Builder(this)
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(pendingIntent)
-            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return mediaSession
+        return activeSession
     }
 
     override fun onDestroy() {
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
-        }
+        // Don't touch activeSession here — PlayerManager owns that
+        // lifecycle and releases it explicitly when playback truly ends.
+        // The OS can recreate this service independently of that.
         super.onDestroy()
     }
 
@@ -74,5 +54,16 @@ class PlaybackService : MediaSessionService() {
     companion object {
         const val CHANNEL_ID = "yocinema_playback_channel"
         const val NOTIFICATION_ID = 1001
+
+        @Volatile
+        private var activeSession: MediaSession? = null
+
+        /**
+         * Called by PlayerManager to register (or clear, with null) the
+         * session wrapping the app's real playing ExoPlayer instance.
+         */
+        fun setActiveSession(session: MediaSession?) {
+            activeSession = session
+        }
     }
 }

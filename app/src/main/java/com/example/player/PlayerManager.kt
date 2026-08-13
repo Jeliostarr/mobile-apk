@@ -1,9 +1,12 @@
 package com.example.player
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -12,6 +15,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.session.MediaSession
 import com.example.data.model.Movie
 import com.example.repository.YocinemaRepository
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +61,9 @@ class PlayerManager(
     // tick — avoids hammering the repository/network every second.
     private var currentMovieForHistory: Movie? = null
     private var lastHistorySaveAt: Long = 0L
+    private var currentTitle: String? = null
+    private var currentPosterUrl: String? = null
+    private var mediaSession: MediaSession? = null
 
     private var lastRecordedPos: Long = 0L
     private var stallCheckJob: Job? = null
@@ -218,7 +225,9 @@ class PlayerManager(
         mediaUrl: String,
         seasonNum: Int? = null,
         epNum: Int? = null,
-        initialPositionMs: Long = 0L
+        initialPositionMs: Long = 0L,
+        title: String? = null,
+        posterUrl: String? = null
     ) {
         currentMovieId = movieId
         currentSeasonNum = seasonNum
@@ -229,9 +238,49 @@ class PlayerManager(
         currentMovieForHistory = null
         lastHistorySaveAt = 0L
         currentMediaUrl = mediaUrl
+        currentTitle = title
+        currentPosterUrl = posterUrl
         lastRecordedPos = initialPositionMs
 
+        ensureMediaSession()
         loadAndPlaySource(mediaUrl, initialPositionMs)
+    }
+
+    /**
+     * Builds a MediaSession around this manager's real, playing ExoPlayer
+     * and registers it with PlaybackService — this is what makes lock-screen
+     * and notification controls reflect the actual video that's actually
+     * playing, instead of a second, disconnected player.
+     */
+    private fun ensureMediaSession() {
+        if (mediaSession != null) return
+        try {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val pendingIntent = launchIntent?.let {
+                PendingIntent.getActivity(
+                    context, 0, it,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            }
+            val builder = MediaSession.Builder(context, exoPlayer)
+            if (pendingIntent != null) builder.setSessionActivity(pendingIntent)
+            val session = builder.build()
+            mediaSession = session
+            com.example.player.PlaybackService.setActiveSession(session)
+            context.startService(Intent(context, com.example.player.PlaybackService::class.java))
+        } catch (e: Exception) {
+            // Lock-screen controls are a nice-to-have, not something that
+            // should ever be able to break in-app playback if it fails.
+            e.printStackTrace()
+        }
+    }
+
+    private fun buildMetadata(): MediaMetadata {
+        val builder = MediaMetadata.Builder()
+            .setTitle(currentTitle ?: "YOCINEMA")
+            .setArtist("YOCINEMA")
+        currentPosterUrl?.let { builder.setArtworkUri(Uri.parse(it)) }
+        return builder.build()
     }
 
     private fun loadAndPlaySource(url: String, seekPosMs: Long) {
@@ -240,10 +289,11 @@ class PlayerManager(
                 _isReconnecting.value = false
                 val uri = Uri.parse(url)
                 val isLocalFile = url.startsWith("/") || url.startsWith("file://") || uri.scheme == null || uri.scheme == "file" || java.io.File(url).exists()
+                val metadata = buildMetadata()
 
                 val mediaSource: MediaSource = if (isLocalFile) {
                     val fileUri = if (url.startsWith("/")) Uri.fromFile(java.io.File(url)) else uri
-                    val localItem = MediaItem.fromUri(fileUri)
+                    val localItem = MediaItem.Builder().setUri(fileUri).setMediaMetadata(metadata).build()
                     androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
                         .createMediaSource(localItem)
                 } else {
@@ -261,7 +311,10 @@ class PlayerManager(
                         .setAllowCrossProtocolRedirects(true)
                         .setDefaultRequestProperties(headers)
 
-                    val mediaItem = MediaItem.fromUri(uri)
+                    // Lock-screen/notification art and title come from this
+                    // metadata via the MediaSession — without it, PlaybackService
+                    // has a real, working session but nothing to actually show.
+                    val mediaItem = MediaItem.Builder().setUri(uri).setMediaMetadata(metadata).build()
                     try {
                         androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpDataSourceFactory)
                             .createMediaSource(mediaItem)
@@ -322,6 +375,16 @@ class PlayerManager(
 
     fun release() {
         stopPositionUpdates()
+        mediaSession?.let { session ->
+            com.example.player.PlaybackService.setActiveSession(null)
+            session.release()
+        }
+        mediaSession = null
         exoPlayer.release()
+        try {
+            context.stopService(Intent(context, com.example.player.PlaybackService::class.java))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
