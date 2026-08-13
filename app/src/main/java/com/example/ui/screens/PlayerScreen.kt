@@ -75,6 +75,8 @@ import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 
+private const val TAG = "PlayerScreen"
+
 private fun formatTime(ms: Long): String {
     if (ms <= 0) return "00:00"
     val totalSeconds = ms / 1000
@@ -83,8 +85,6 @@ private fun formatTime(ms: Long): String {
     val s = totalSeconds % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
-
-private const val TAG = "PlayerScreen"
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -101,8 +101,7 @@ fun PlayerScreen(
     val scope = rememberCoroutineScope()
     val activity = context as? Activity
 
-    val playerManager = remember { PlayerManager(context, repository, scope) }
-
+    // ========== STATE ==========
     var movie by remember { mutableStateOf<Movie?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
@@ -112,80 +111,132 @@ fun PlayerScreen(
     var showSpeedMenu by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
-    val isPlaying by playerManager.isPlaying.collectAsState()
-    val isBuffering by playerManager.isBuffering.collectAsState()
-    val isReconnecting by playerManager.isReconnecting.collectAsState()
-    val playerError by playerManager.playerError.collectAsState()
-    val currentPosMs by playerManager.currentPositionMs.collectAsState()
-    val durationMs by playerManager.durationMs.collectAsState()
+    // PlayerManager – wrap in try/catch in case the constructor itself fails
+    val playerManager = try {
+        remember { PlayerManager(context, repository, scope) }
+    } catch (e: Throwable) {
+        Log.e(TAG, "Failed to create PlayerManager", e)
+        loadError = "Player initialization failed: ${e.message}"
+        null
+    }
 
-    // Landscape, immersive, screen-always-on
+    // Collect flows only if playerManager is not null
+    val isPlaying = playerManager?.isPlaying?.collectAsState()?.value ?: false
+    val isBuffering = playerManager?.isBuffering?.collectAsState()?.value ?: false
+    val isReconnecting = playerManager?.isReconnecting?.collectAsState()?.value ?: false
+    val playerError = playerManager?.playerError?.collectAsState()?.value
+    val currentPosMs = playerManager?.currentPositionMs?.collectAsState()?.value ?: 0L
+    val durationMs = playerManager?.durationMs?.collectAsState()?.value ?: 0L
+
+    // ========== LIFECYCLE (orientation + immersive) ==========
     DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        try {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } catch (e: Throwable) {
+            Log.e(TAG, "DisposableEffect (setup) failed", e)
+            loadError = "Orientation setup failed: ${e.message}"
+        }
         onDispose {
-            playerManager.release()
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            activity?.window?.let { win ->
-                WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
+            try {
+                playerManager?.release()
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                activity?.window?.let { win ->
+                    WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "DisposableEffect (dispose) failed", e)
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        val win = activity?.window ?: return@LaunchedEffect
-        val controller = WindowInsetsControllerCompat(win, win.decorView)
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
+        try {
+            val win = activity?.window ?: return@LaunchedEffect
+            val controller = WindowInsetsControllerCompat(win, win.decorView)
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to hide system bars", e)
+        }
     }
 
-    // ---------------------- FIX: wrap in try/catch ----------------------
+    // ========== LOAD MOVIE AND START PLAYBACK ==========
     LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
         loadError = null
         try {
+            // 1) Check API key first
+            val apiKey = repository.tokenManager.getApiKey()
+            if (apiKey.isNullOrBlank()) {
+                loadError = "❌ API key missing. Please enter a valid API key in settings."
+                Log.e(TAG, "API key is null or empty")
+                return@LaunchedEffect
+            }
+
+            // 2) Offline file or local download?
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
-                playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
-            } else {
-                val downloadId = if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
-                val downloadedEntity = repository.downloadDao.getDownloadById(downloadId)
-                val downloadedFile = downloadedEntity?.localFilePath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
-
-                if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedFile?.exists() == true) {
-                    val m = repository.getMovieDetail(movieId)
-                    movie = m ?: Movie(id = movieId, title = downloadedEntity.title)
-                    playerManager.playMedia(
-                        movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
-                        title = movie?.title ?: downloadedEntity.title,
-                        posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
-                    )
-                } else {
-                    val m = repository.getMovieDetail(movieId)
-                    movie = m
-                    if (m != null) {
-                        val url = repository.getPlayUrl(m, seasonNum, epNum)
-                        // Optional: validate the URL is not empty
-                        if (url.isBlank()) {
-                            throw IllegalArgumentException("Play URL is empty")
-                        }
-                        playerManager.playMedia(
-                            movieId, url, seasonNum, epNum, initialPosMs,
-                            title = m.title,
-                            posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
-                        )
-                    } else {
-                        loadError = "Could not load movie details. Please check your connection."
-                    }
-                }
+                playerManager?.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
+                return@LaunchedEffect
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start playback", e)
-            loadError = "Failed to start playback: ${e.message ?: "unknown error"}"
+
+            val downloadId = if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
+            val downloadedEntity = repository.downloadDao.getDownloadById(downloadId)
+            val downloadedFile = downloadedEntity?.localFilePath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+
+            if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedFile?.exists() == true) {
+                Log.d(TAG, "Playing from local file: ${downloadedEntity.localFilePath}")
+                val m = repository.getMovieDetail(movieId)
+                movie = m ?: Movie(id = movieId, title = downloadedEntity.title)
+                playerManager?.playMedia(
+                    movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
+                    title = movie?.title ?: downloadedEntity.title,
+                    posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
+                )
+                return@LaunchedEffect
+            }
+
+            // 3) Online stream – fetch movie detail
+            Log.d(TAG, "Fetching movie detail for $movieId")
+            val m = repository.getMovieDetail(movieId)
+            if (m == null) {
+                loadError = "Movie not found. Please check your connection or try again."
+                Log.e(TAG, "getMovieDetail returned null")
+                return@LaunchedEffect
+            }
+            movie = m
+
+            // 4) Get play URL
+            Log.d(TAG, "Getting play URL for ${m.title}")
+            val url = try {
+                repository.getPlayUrl(m, seasonNum, epNum)
+            } catch (e: Throwable) {
+                Log.e(TAG, "getPlayUrl threw", e)
+                throw e // rethrow to be caught by outer catch
+            }
+            if (url.isBlank()) {
+                loadError = "Play URL is empty. The video may be unavailable."
+                Log.e(TAG, "Play URL is blank")
+                return@LaunchedEffect
+            }
+            Log.d(TAG, "Play URL: $url")
+
+            // 5) Start playback
+            playerManager?.playMedia(
+                movieId, url, seasonNum, epNum, initialPosMs,
+                title = m.title,
+                posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
+            )
+
+        } catch (e: Throwable) {
+            Log.e(TAG, "FATAL error in LaunchedEffect", e)
+            loadError = "Critical error: ${e.message ?: "unknown"}\n\nCheck logs for details."
+            // Do NOT rethrow – we handle it gracefully.
         }
     }
-    // ----------------------------------------------------------------
 
+    // ========== AUTO‑HIDE CONTROLS ==========
     LaunchedEffect(isControlsVisible, isPlaying) {
         if (isControlsVisible && isPlaying) {
             delay(3500)
@@ -199,6 +250,7 @@ fun PlayerScreen(
         if (seasonNum != null && epNum != null) "S$seasonNum · E$epNum" else null
     ).joinToString(" · ").ifBlank { null }
 
+    // ========== UI ==========
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -207,48 +259,63 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = playerManager.exoPlayer
-                    useController = false
-                    this.resizeMode = resizeMode
-                }
-            },
-            update = { it.resizeMode = resizeMode },
-            modifier = Modifier.fillMaxSize()
-        )
+        // ----- Video view (only if no load error and player is ready) -----
+        if (loadError == null && playerManager != null) {
+            try {
+                AndroidView(
+                    factory = { ctx ->
+                        try {
+                            PlayerView(ctx).apply {
+                                player = playerManager.exoPlayer
+                                useController = false
+                                this.resizeMode = resizeMode
+                            }
+                        } catch (e: Throwable) {
+                            Log.e(TAG, "Error creating PlayerView", e)
+                            loadError = "Failed to create video surface: ${e.message}"
+                            // Return a dummy view to avoid crash? Better to let error overlay show.
+                            // We'll return a simple Box as placeholder.
+                            android.widget.FrameLayout(ctx).apply {
+                                setBackgroundColor(android.graphics.Color.BLACK)
+                            }
+                        }
+                    },
+                    update = { view ->
+                        if (view is PlayerView) {
+                            view.resizeMode = resizeMode
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } catch (e: Throwable) {
+                Log.e(TAG, "AndroidView composition failed", e)
+                loadError = "Video surface composition error: ${e.message}"
+            }
+        }
 
-        // Error overlay (local load error)
+        // ----- LOAD ERROR OVERLAY (top priority) -----
         if (loadError != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
+                    .background(Color.Black.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(32.dp)
                 ) {
-                    Text("Error", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("⚠️ Error", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         loadError!!,
                         color = YoTextMuted,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     Button(
-                        onClick = {
-                            // Optionally retry: reset error and re-trigger effect? For simplicity, go back.
-                            // If you want retry, you can set loadError = null and then call the loading logic again.
-                            // But since LaunchedEffect won't rerun with same keys, you'd need a reload trigger.
-                            // Better to use a retry flag, but for now we just go back.
-                            onBackClick()
-                        },
+                        onClick = { onBackClick() },
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryAmber,
                             contentColor = com.example.ui.theme.YoBaseBackground
@@ -260,8 +327,8 @@ fun PlayerScreen(
             }
         }
 
-        // Player error from PlayerManager
-        if (playerError != null && !isReconnecting && loadError == null) {
+        // ----- Player Manager Error (if no load error) -----
+        if (loadError == null && playerError != null && !isReconnecting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -273,14 +340,14 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(playerError ?: "Failed to load stream.", color = YoTextMuted, fontSize = 12.sp, maxLines = 2)
                     Spacer(modifier = Modifier.height(14.dp))
-                    Button(onClick = { playerManager.attemptReconnect() }) {
+                    Button(onClick = { playerManager?.attemptReconnect() }) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Retry")
                     }
                 }
             }
-        } else if (isReconnecting && loadError == null) {
+        } else if (loadError == null && isReconnecting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -295,8 +362,8 @@ fun PlayerScreen(
             }
         }
 
-        // Controls overlay (only if no error)
-        if (loadError == null) {
+        // ----- Controls (only if no load error) -----
+        if (loadError == null && playerManager != null) {
             AnimatedVisibility(
                 visible = isControlsVisible,
                 enter = fadeIn(),
