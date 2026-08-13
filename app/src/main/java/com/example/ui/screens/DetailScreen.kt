@@ -612,13 +612,9 @@ fun DetailScreen(
         // Report Dialog
         if (showReportDialog) {
             ReportDialog(
-                onDismiss = { showReportDialog = false },
-                onSubmitReport = { reason ->
-                    showReportDialog = false
-                    scope.launch {
-                        repository.reportMovie(movieId, reason)
-                    }
-                }
+                movieId = movieId,
+                movieTitle = movie?.title ?: "Unknown Movie",
+                onDismiss = { showReportDialog = false }
             )
         }
 
