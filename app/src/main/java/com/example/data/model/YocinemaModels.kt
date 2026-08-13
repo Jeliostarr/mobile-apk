@@ -81,6 +81,11 @@ data class Movie(
     val description: String? = null,
     val poster: String? = null,
     val cover: String? = null,
+    /** Wide landscape banner image — distinct from [cover]/[poster], which are
+     * tall. Use this (never cover/poster) for any wide hero/backdrop area;
+     * stretching a poster into a landscape box crops it into an unrecognizable
+     * sliver. */
+    val heroImage: String? = null,
     val stills: String? = null,
     val genre: String? = null,
     val vjName: String? = null,
