@@ -94,7 +94,6 @@ fun PlayerScreen(
     seasonNum: Int?,
     epNum: Int?,
     localFilePath: String? = null,
-    directStreamUrl: String? = null,  // for trailers or direct video playback
     initialPosMs: Long = 0L,
     repository: YocinemaRepository,
     onBackClick: () -> Unit
@@ -141,10 +140,9 @@ fun PlayerScreen(
     }
 
     // Load movie and start playback
-    LaunchedEffect(movieId, seasonNum, epNum, localFilePath, directStreamUrl) {
+    LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
         loadError = null
         try {
-            // 1) Check API key
             val apiKey = repository.tokenManager.getApiKey()
             if (apiKey.isNullOrBlank()) {
                 loadError = "❌ API key missing. Please enter a valid key in settings."
@@ -152,19 +150,6 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
-            // 2) Direct stream (e.g., trailer)
-            if (!directStreamUrl.isNullOrBlank()) {
-                // Use a dummy movie for title/poster
-                movie = Movie(id = movieId, title = "Trailer")
-                playerManager.playMedia(
-                    movieId, directStreamUrl, seasonNum, epNum, initialPosMs,
-                    title = movie?.title ?: "Trailer",
-                    posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
-                )
-                return@LaunchedEffect
-            }
-
-            // 3) Offline / downloaded file
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
                 playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
@@ -187,7 +172,6 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
-            // 4) Online stream
             Log.d(TAG, "Fetching movie detail for $movieId")
             val m = repository.getMovieDetail(movieId)
             if (m == null) {
@@ -238,7 +222,7 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view
+        // Video view – no setUseTextureView
         if (loadError == null) {
             AndroidView(
                 factory = { ctx ->
@@ -247,8 +231,6 @@ fun PlayerScreen(
                             player = playerManager.exoPlayer
                             useController = false
                             this.resizeMode = resizeMode
-                            // Use TextureView for better PiP behaviour (doesn't destroy surface)
-                            setUseTextureView(true)
                         }
                     } catch (e: Throwable) {
                         Log.e(TAG, "Error creating PlayerView", e)
