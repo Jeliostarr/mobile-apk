@@ -27,7 +27,6 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication"
             android:configChanges="orientation|screenSize|keyboardHidden|layoutDirection|density"
-            android:screenOrientation="sensorLandscape"
             android:supportsPictureInPicture="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
