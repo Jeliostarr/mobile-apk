@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import android.app.Activity
-import android.content.pm.ActivityInfo
 import android.util.Log
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
