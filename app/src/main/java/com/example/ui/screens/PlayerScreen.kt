@@ -57,7 +57,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,8 +68,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import com.example.data.model.Movie
 import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
@@ -97,6 +94,7 @@ fun PlayerScreen(
     seasonNum: Int?,
     epNum: Int?,
     localFilePath: String? = null,
+    directStreamUrl: String? = null,  // for trailers or direct video playback
     initialPosMs: Long = 0L,
     repository: YocinemaRepository,
     onBackClick: () -> Unit
@@ -104,7 +102,6 @@ fun PlayerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val activity = context as? Activity
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
 
@@ -124,7 +121,7 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // Keep screen on (orientation forced by manifest)
+    // Keep screen on (orientation is forced by manifest)
     DisposableEffect(Unit) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
@@ -136,7 +133,6 @@ fun PlayerScreen(
         }
     }
 
-    // Hide system bars
     LaunchedEffect(Unit) {
         val win = activity?.window ?: return@LaunchedEffect
         val controller = WindowInsetsControllerCompat(win, win.decorView)
@@ -144,33 +140,11 @@ fun PlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    // Lifecycle observer to handle PiP – keep playing when activity is paused but in PiP
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_PAUSE -> {
-                    // If we are in PiP mode, we want to continue playing
-                    if (activity?.isInPictureInPictureMode == true) {
-                        playerManager.exoPlayer.playWhenReady = true
-                    }
-                }
-                Lifecycle.Event.ON_RESUME -> {
-                    // When returning to full screen, ensure playing state is as expected
-                    // (user may have paused manually – we don't force play here)
-                }
-                else -> { /* ignore */ }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    // Load movie and start playback (with error handling)
-    LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
+    // Load movie and start playback
+    LaunchedEffect(movieId, seasonNum, epNum, localFilePath, directStreamUrl) {
         loadError = null
         try {
+            // 1) Check API key
             val apiKey = repository.tokenManager.getApiKey()
             if (apiKey.isNullOrBlank()) {
                 loadError = "❌ API key missing. Please enter a valid key in settings."
@@ -178,6 +152,19 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
+            // 2) Direct stream (e.g., trailer)
+            if (!directStreamUrl.isNullOrBlank()) {
+                // Use a dummy movie for title/poster
+                movie = Movie(id = movieId, title = "Trailer")
+                playerManager.playMedia(
+                    movieId, directStreamUrl, seasonNum, epNum, initialPosMs,
+                    title = movie?.title ?: "Trailer",
+                    posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
+                )
+                return@LaunchedEffect
+            }
+
+            // 3) Offline / downloaded file
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
                 playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
@@ -200,6 +187,7 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
+            // 4) Online stream
             Log.d(TAG, "Fetching movie detail for $movieId")
             val m = repository.getMovieDetail(movieId)
             if (m == null) {
@@ -259,7 +247,7 @@ fun PlayerScreen(
                             player = playerManager.exoPlayer
                             useController = false
                             this.resizeMode = resizeMode
-                            // Use TextureView for better PiP support
+                            // Use TextureView for better PiP behaviour (doesn't destroy surface)
                             setUseTextureView(true)
                         }
                     } catch (e: Throwable) {
@@ -357,7 +345,7 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Top scrim + bar (unchanged)
+                    // Top scrim + bar
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -410,7 +398,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Center controls
+                    // Center transport controls
                     Row(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalArrangement = Arrangement.spacedBy(36.dp),
@@ -544,11 +532,8 @@ private fun SpinningLoader(color: Color = YoPrimaryAmber, size: androidx.compose
 private fun Activity.enterPictureInPictureModeSafely() {
     try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            // Check if PiP is supported
             if (packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
                 enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
-            } else {
-                // Fallback: do nothing or show a toast
             }
         }
     } catch (e: Exception) {
