@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,6 +73,9 @@ import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -108,14 +112,18 @@ fun HeroSliderPager(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(20.dp), clip = false)
                     .clip(RoundedCornerShape(20.dp))
                     .background(YoSurface)
                     .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
                     .clickable { onMovieClick(movie.id) }
             ) {
-                // Backdrop / Cover Image
+                // Backdrop Image — heroImage is the proper wide banner shot;
+                // cover/poster are tall and only used as a last-resort
+                // fallback, since stretching them across this wide pager
+                // crops them into an unrecognizable sliver.
                 SubcomposeAsyncImage(
-                    model = movie.cover ?: movie.poster ?: movie.displayPosterUrl,
+                    model = movie.heroImage ?: movie.cover ?: movie.poster ?: movie.displayPosterUrl,
                     contentDescription = movie.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -296,8 +304,9 @@ fun HomeScreen(
     var popularMovies by remember { mutableStateOf(repository.cachedPopularMovies) }
     var latestMovies by remember { mutableStateOf(repository.cachedLatestMovies) }
     var seriesList by remember { mutableStateOf(repository.cachedSeriesList) }
-    var actionMovies by remember { mutableStateOf(repository.cachedActionMovies) }
-    var comedyMovies by remember { mutableStateOf(repository.cachedComedyMovies) }
+    // Keyed by genre name, in catalog order — a rail for every genre the
+    // API actually has, not just two hardcoded ones.
+    var genreMovies by remember { mutableStateOf(repository.cachedGenreMovies) }
     var vjsList by remember { mutableStateOf(repository.cachedVjsList) }
     var isLoading by remember { mutableStateOf(popularMovies.isEmpty() && latestMovies.isEmpty()) }
 
@@ -313,27 +322,34 @@ fun HomeScreen(
                 val lat = repository.getMovies(sort = "latest", limit = 15)
                 val ser = repository.getMovies(type = "series", limit = 15)
                 val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
-                
-                val act = repository.getMovies(genre = "Action", limit = 15).ifEmpty {
-                    allMoviesPool.filter { it.genre?.contains("Action", ignoreCase = true) == true }
-                }
-                val com = repository.getMovies(genre = "Comedy", limit = 15).ifEmpty {
-                    allMoviesPool.filter { it.genre?.contains("Comedy", ignoreCase = true) == true }
-                }
+
                 val facets = repository.getFacets()
+                val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
+
+                // Fetch every genre in parallel instead of one at a time —
+                // with a full genre list this could otherwise mean 10-20+
+                // sequential network round trips before Home finishes loading.
+                val genreResults = coroutineScope {
+                    allGenres.map { genre ->
+                        async {
+                            genre to repository.getMovies(genre = genre, limit = 15).ifEmpty {
+                                allMoviesPool.filter { it.genre?.contains(genre, ignoreCase = true) == true }
+                            }
+                        }
+                    }.awaitAll()
+                }.filter { (_, movies) -> movies.isNotEmpty() }
+                    .associate { it }
 
                 popularMovies = pop
                 latestMovies = lat
                 seriesList = ser
-                actionMovies = act
-                comedyMovies = com
+                genreMovies = genreResults
                 vjsList = facets.vjs ?: listOf("Soul", "Chambers", "Lenon", "Junior", "Emmy", "Kin", "Ulio")
 
                 repository.cachedPopularMovies = pop
                 repository.cachedLatestMovies = lat
                 repository.cachedSeriesList = ser
-                repository.cachedActionMovies = act
-                repository.cachedComedyMovies = com
+                repository.cachedGenreMovies = genreResults
                 repository.cachedVjsList = vjsList
                 repository.cachedFacets = facets
             } catch (e: Exception) {
@@ -434,26 +450,16 @@ fun HomeScreen(
                     }
                 }
 
-                // Action Movies Rail
-                if (actionMovies.isNotEmpty()) {
-                    item {
+                // A genre rail for every genre the catalog actually has —
+                // not just two hardcoded picks. Skips any genre that came
+                // back empty (already filtered out when genreMovies was built).
+                genreMovies.forEach { (genre, movies) ->
+                    item(key = "genre-$genre") {
                         MovieRailSection(
-                            title = "Action Movies",
-                            movies = actionMovies,
+                            title = genre,
+                            movies = movies,
                             onMovieClick = onMovieClick,
-                            onViewAllClick = { onViewAllCategoryClick("Action", null, null, "Action") }
-                        )
-                    }
-                }
-
-                // Comedy Movies Rail
-                if (comedyMovies.isNotEmpty()) {
-                    item {
-                        MovieRailSection(
-                            title = "Comedy Hits",
-                            movies = comedyMovies,
-                            onMovieClick = onMovieClick,
-                            onViewAllClick = { onViewAllCategoryClick("Comedy", null, null, "Comedy") }
+                            onViewAllClick = { onViewAllCategoryClick(genre, null, null, genre) }
                         )
                     }
                 }

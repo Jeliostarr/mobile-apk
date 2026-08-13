@@ -127,7 +127,19 @@ fun DetailScreen(
 
     LaunchedEffect(movieId) {
         scope.launch {
-            isLoading = true
+            // Paint instantly from cache on a revisit — only show the full
+            // loading state on a genuinely first-ever view of this title.
+            val cached = repository.getCachedMovieDetail(movieId)
+            if (cached != null) {
+                movie = cached
+                isLoading = false
+            } else {
+                isLoading = true
+            }
+
+            // Always still fetch the latest copy — this silently replaces
+            // the cached data above once it arrives, so revisits feel
+            // instant without ever going stale.
             val m = repository.getMovieDetail(movieId)
             movie = m
             if (m != null) {
@@ -170,10 +182,13 @@ fun DetailScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp)
+                            .aspectRatio(16f / 9f)
                     ) {
                         SubcomposeAsyncImage(
-                            model = m.cover ?: m.poster ?: m.displayPosterUrl,
+                            // heroImage is the proper wide banner shot — cover/poster
+                            // are tall and only used as a last-resort fallback, since
+                            // stretching them here crops them into an unrecognizable sliver.
+                            model = m.heroImage ?: m.cover ?: m.poster ?: m.displayPosterUrl,
                             contentDescription = m.title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
@@ -663,11 +678,9 @@ fun InAppTrailerModal(
     onDismiss: () -> Unit
 ) {
     val ytId = extractYouTubeId(trailerUrl)
-    val embedUrl = if (ytId != null) {
-        "https://www.youtube.com/embed/$ytId?autoplay=1&controls=1"
-    } else {
-        trailerUrl
-    }
+    var isLoading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    var loadFailed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
@@ -709,21 +722,90 @@ fun InAppTrailerModal(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
-                        .background(Color.Black)
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.ui.viewinterop.AndroidView(
-                        factory = { ctx ->
-                            android.webkit.WebView(ctx).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.mediaPlaybackRequiresUserGesture = false
-                                webChromeClient = android.webkit.WebChromeClient()
-                                webViewClient = android.webkit.WebViewClient()
-                                loadUrl(embedUrl)
+                    if (ytId == null || loadFailed) {
+                        // Never leave a dead black box — give a clear way
+                        // forward instead of a silent, confusing failure.
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Text(
+                                text = "Couldn't play the trailer here.",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
+                                    } catch (e: Exception) { }
+                                }
+                            ) {
+                                Text("Watch on YouTube", color = Color.White)
                             }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                        }
+                    } else {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { ctx ->
+                                android.webkit.WebView(ctx).apply {
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.mediaPlaybackRequiresUserGesture = false
+                                    settings.loadWithOverviewMode = true
+                                    settings.useWideViewPort = true
+                                    setBackgroundColor(android.graphics.Color.BLACK)
+                                    webChromeClient = android.webkit.WebChromeClient()
+                                    webViewClient = object : android.webkit.WebViewClient() {
+                                        override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                            isLoading = false
+                                        }
+                                        override fun onReceivedError(
+                                            view: android.webkit.WebView?,
+                                            request: android.webkit.WebResourceRequest?,
+                                            error: android.webkit.WebResourceError?
+                                        ) {
+                                            if (request?.isForMainFrame != false) {
+                                                isLoading = false
+                                                loadFailed = true
+                                            }
+                                        }
+                                    }
+                                    // Navigating a WebView directly to
+                                    // youtube.com/embed/... as a top-level page
+                                    // is the actual reason trailers were silently
+                                    // failing to play — YouTube's embed player
+                                    // expects to be loaded inside an iframe on a
+                                    // real page with a real origin, not opened
+                                    // directly as the page itself. Wrapping it in
+                                    // a minimal local HTML page with a real
+                                    // youtube.com base URL is what makes this
+                                    // work reliably across devices.
+                                    val html = """
+                                        <html><head>
+                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                        <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;}
+                                        iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}</style>
+                                        </head><body>
+                                        <iframe src="https://www.youtube.com/embed/$ytId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1"
+                                        allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+                                        </body></html>
+                                    """.trimIndent()
+                                    loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
+                                }
+                            },
+                            update = { /* no-op: content is fixed per dialog instance */ },
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        if (isLoading) {
+                            androidx.compose.material3.CircularProgressIndicator(color = YoPrimaryAmber)
+                        }
+                    }
                 }
             }
         }

@@ -40,11 +40,14 @@ fun VJListScreen(
     onBackClick: () -> Unit,
     onVJClick: (String) -> Unit
 ) {
-    var vjsList by remember { mutableStateOf<List<String>>(emptyList()) }
+    var vjsList by remember {
+        mutableStateOf(repository.cachedFacets?.vjs ?: emptyList())
+    }
 
     LaunchedEffect(Unit) {
         val facets = repository.getFacets()
         vjsList = facets.vjs ?: listOf("Soul", "Chambers", "Lenon", "Junior", "Emmy", "Kin", "Ulio")
+        repository.cachedFacets = facets
     }
 
     Column(

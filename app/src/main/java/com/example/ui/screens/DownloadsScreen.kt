@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -187,6 +188,7 @@ fun ActiveDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(elevation = 3.dp, shape = RoundedCornerShape(14.dp), clip = false)
             .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
@@ -277,6 +279,7 @@ fun CompletedDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(elevation = 3.dp, shape = RoundedCornerShape(14.dp), clip = false)
             .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
@@ -337,13 +340,22 @@ fun EmptyState(message: String) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Default.DownloadDone,
-                contentDescription = null,
-                tint = YoBorder,
-                modifier = Modifier.size(56.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(88.dp)
+                    .clip(RoundedCornerShape(44.dp))
+                    .background(YoSurface)
+                    .border(1.dp, YoBorder, RoundedCornerShape(44.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DownloadDone,
+                    contentDescription = null,
+                    tint = YoTextMuted,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = message,
                 fontSize = 14.sp,
