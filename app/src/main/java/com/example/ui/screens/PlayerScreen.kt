@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.util.Log
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
@@ -120,12 +121,14 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // Keep screen on (orientation is forced by manifest)
+    // Force landscape and keep screen on
     DisposableEffect(Unit) {
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             playerManager.release()
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             activity?.window?.let { win ->
                 WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
             }
@@ -222,7 +225,7 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view – no setUseTextureView
+        // Video view
         if (loadError == null) {
             AndroidView(
                 factory = { ctx ->
