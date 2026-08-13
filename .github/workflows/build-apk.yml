@@ -57,8 +57,11 @@ jobs:
           fi
           echo "Confirmed: ./debug.keystore exists."
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Verify debug APK output
         run: |
