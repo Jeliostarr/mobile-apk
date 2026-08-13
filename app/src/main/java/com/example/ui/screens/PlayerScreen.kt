@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +69,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.data.model.Movie
 import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
@@ -101,6 +104,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
 
@@ -120,7 +124,7 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // Keep screen on (orientation handled by manifest)
+    // Keep screen on (orientation forced by manifest)
     DisposableEffect(Unit) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
@@ -132,11 +136,35 @@ fun PlayerScreen(
         }
     }
 
+    // Hide system bars
     LaunchedEffect(Unit) {
         val win = activity?.window ?: return@LaunchedEffect
         val controller = WindowInsetsControllerCompat(win, win.decorView)
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    // Lifecycle observer to handle PiP – keep playing when activity is paused but in PiP
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    // If we are in PiP mode, we want to continue playing
+                    if (activity?.isInPictureInPictureMode == true) {
+                        playerManager.exoPlayer.playWhenReady = true
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    // When returning to full screen, ensure playing state is as expected
+                    // (user may have paused manually – we don't force play here)
+                }
+                else -> { /* ignore */ }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Load movie and start playback (with error handling)
@@ -222,7 +250,7 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view – no try/catch around the composable call
+        // Video view
         if (loadError == null) {
             AndroidView(
                 factory = { ctx ->
@@ -231,6 +259,8 @@ fun PlayerScreen(
                             player = playerManager.exoPlayer
                             useController = false
                             this.resizeMode = resizeMode
+                            // Use TextureView for better PiP support
+                            setUseTextureView(true)
                         }
                     } catch (e: Throwable) {
                         Log.e(TAG, "Error creating PlayerView", e)
@@ -249,7 +279,7 @@ fun PlayerScreen(
             )
         }
 
-        // ----- LOAD ERROR OVERLAY -----
+        // Load error overlay
         if (loadError != null) {
             Box(
                 modifier = Modifier
@@ -283,7 +313,7 @@ fun PlayerScreen(
             }
         }
 
-        // ----- PlayerManager error -----
+        // PlayerManager error / reconnecting
         if (loadError == null && playerError != null && !isReconnecting) {
             Box(
                 modifier = Modifier
@@ -318,7 +348,7 @@ fun PlayerScreen(
             }
         }
 
-        // ----- Controls (only if no load error) -----
+        // Controls (only if no load error)
         if (loadError == null) {
             AnimatedVisibility(
                 visible = isControlsVisible,
@@ -327,7 +357,7 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Top scrim + bar
+                    // Top scrim + bar (unchanged)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -380,7 +410,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Center transport controls
+                    // Center controls
                     Row(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalArrangement = Arrangement.spacedBy(36.dp),
@@ -514,7 +544,12 @@ private fun SpinningLoader(color: Color = YoPrimaryAmber, size: androidx.compose
 private fun Activity.enterPictureInPictureModeSafely() {
     try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
+            // Check if PiP is supported
+            if (packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+                enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
+            } else {
+                // Fallback: do nothing or show a toast
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
