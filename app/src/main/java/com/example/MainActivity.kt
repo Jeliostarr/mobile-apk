@@ -33,12 +33,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // Do nothing – we keep the activity alive
-    }
-
-    // Called when entering/exiting PiP – we can use this to manage player state
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        // The player will be managed via lifecycle observer in PlayerScreen
+        // We keep the activity alive – orientation changes are handled by the composable
     }
 }
