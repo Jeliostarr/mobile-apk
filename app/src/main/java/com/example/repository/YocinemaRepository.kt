@@ -63,8 +63,9 @@ class YocinemaRepository(context: Context) {
     var cachedPopularMovies: List<Movie> = emptyList()
     var cachedLatestMovies: List<Movie> = emptyList()
     var cachedSeriesList: List<Movie> = emptyList()
-    var cachedActionMovies: List<Movie> = emptyList()
-    var cachedComedyMovies: List<Movie> = emptyList()
+    // Keyed by genre name — replaces the old fixed Action/Comedy-only fields
+    // so Home can show a rail for every genre the catalog actually has.
+    var cachedGenreMovies: Map<String, List<Movie>> = emptyMap()
     var cachedVjsList: List<String> = emptyList()
     var cachedFacets: FacetsResponse? = null
 
@@ -217,6 +218,15 @@ class YocinemaRepository(context: Context) {
             getCachedMovie(movieId)
         }
     }
+
+    /**
+     * Cache-only lookup — no network call. Screens use this to paint instantly
+     * with whatever we already have on a revisit, then call [getMovieDetail]
+     * separately to silently refresh with the latest data in the background.
+     * Returns null on a genuinely first-ever view of a title, in which case
+     * the screen should fall back to its normal loading state.
+     */
+    suspend fun getCachedMovieDetail(movieId: String): Movie? = getCachedMovie(movieId)
 
     private suspend fun getCachedMovie(movieId: String): Movie? {
         return try {
