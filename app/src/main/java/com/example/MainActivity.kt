@@ -13,9 +13,8 @@ import com.example.ui.theme.YocinemaTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Required on Android 13+ for the playback notification
     private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* either way, playback itself is unaffected */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,9 +31,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Prevent activity recreation on orientation/size changes – we handle it via configChanges in manifest
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // Keep everything as is – the composable will recompose naturally if needed
+        // Do nothing – we keep the activity alive
+    }
+
+    // Called when entering/exiting PiP – we can use this to manage player state
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // The player will be managed via lifecycle observer in PlayerScreen
     }
 }
