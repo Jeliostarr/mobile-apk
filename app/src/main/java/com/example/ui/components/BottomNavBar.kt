@@ -20,6 +20,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +59,18 @@ fun BottomNavBar(
     NavigationBar(
         modifier = Modifier
             .background(YoSurface)
+            .drawBehind {
+                // A same-color, zero-elevation bar sitting directly on
+                // scrolling content has no visual edge to it — this hairline
+                // is what actually separates "nav bar" from "page content"
+                // when both use the same surface color.
+                drawLine(
+                    color = YoBorder,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
             .windowInsetsPadding(WindowInsets.navigationBars),
         containerColor = YoSurface,
         tonalElevation = 0.dp

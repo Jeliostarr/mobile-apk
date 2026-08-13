@@ -1,6 +1,6 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -43,20 +43,23 @@ fun ShimmerSkeleton(
     shapeRadius: Dp = 14.dp
 ) {
     val shimmerColors = listOf(
-        YoBorder.copy(alpha = 0.6f),
-        YoSurfaceVariant.copy(alpha = 0.9f),
-        YoBorder.copy(alpha = 0.6f)
+        YoSurfaceVariant,
+        YoBorder.copy(alpha = 0.9f),
+        YoSurfaceVariant
     )
 
     val transition = rememberInfiniteTransition(label = "shimmer")
+    // Sweeps a fixed-width band across the surface at constant speed — the
+    // previous version stretched the gradient out from a fixed corner each
+    // cycle instead, which reads as the shimmer "growing" rather than
+    // sweeping, and looks noticeably different (worse) on wide vs. narrow
+    // skeletons since the same animated range produced very different
+    // apparent speeds depending on element size.
     val translateAnim = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
+        initialValue = -600f,
+        targetValue = 600f,
         animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 1200,
-                easing = FastOutSlowInEasing
-            ),
+            animation = tween(durationMillis = 1300, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmer_anim"
@@ -64,8 +67,8 @@ fun ShimmerSkeleton(
 
     val brush = Brush.linearGradient(
         colors = shimmerColors,
-        start = Offset.Zero,
-        end = Offset(x = translateAnim.value, y = translateAnim.value)
+        start = Offset(translateAnim.value - 300f, 0f),
+        end = Offset(translateAnim.value + 300f, 300f)
     )
 
     Box(

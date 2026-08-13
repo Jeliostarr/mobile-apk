@@ -1,8 +1,12 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,10 +27,15 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +55,38 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+
+/**
+ * A clickable modifier that scales down slightly on press, in addition to
+ * the normal ripple. This one small addition is most of what makes tappable
+ * elements feel like a native app rather than a web page — nothing here
+ * physically responds to touch otherwise.
+ */
+@Composable
+private fun Modifier.pressScaleClickable(onClick: () -> Unit): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, label = "pressScale")
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick
+        )
+}
+
+/**
+ * Thin bottom-edge scrim for legibility — anything (badges, labels) sitting
+ * directly on top of arbitrary photo content needs this behind it, since a
+ * still or poster's own colors can't be relied on for contrast.
+ */
+private val BottomLegibilityScrim = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+)
 
 @Composable
 fun YoCinemaLogoPlaceholder(
@@ -97,10 +138,11 @@ fun SpotlightCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(elevation = 6.dp, shape = RoundedCornerShape(18.dp), clip = false)
             .clip(RoundedCornerShape(18.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
-            .clickable { onClick() }
+            .pressScaleClickable(onClick)
             .padding(12.dp)
     ) {
         Row(
@@ -111,6 +153,7 @@ fun SpotlightCard(
                 modifier = Modifier
                     .width(110.dp)
                     .aspectRatio(2f / 3f)
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), clip = false)
                     .clip(RoundedCornerShape(14.dp))
                     .background(YoSurfaceVariant)
             ) {
@@ -188,15 +231,15 @@ fun PosterCard(
 
     Column(
         modifier = containerModifier
-            .clickable { onClick() }
+            .pressScaleClickable(onClick)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
+                .shadow(elevation = 5.dp, shape = RoundedCornerShape(14.dp), clip = false)
                 .clip(RoundedCornerShape(14.dp))
                 .background(YoSurfaceVariant)
-                .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
         ) {
             SubcomposeAsyncImage(
                 model = movie.displayPosterUrl,
@@ -208,12 +251,21 @@ fun PosterCard(
             )
 
             if (!movie.vjName.isNull_orBlank()) {
+                // A scrim behind the badge — a solid-color pill sitting
+                // directly on unpredictable poster art can vanish into it.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(BottomLegibilityScrim)
+                )
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(6.dp)
                 ) {
-                    VJBadgeChip(vjName = movie.vjName!!)
+                    VJBadgeChip(vjName = movie.vjName!!, onImage = true)
                 }
             }
         }
@@ -276,18 +328,18 @@ fun PosterCard(
 }
 
 @Composable
-fun VJBadgeChip(vjName: String) {
+fun VJBadgeChip(vjName: String, onImage: Boolean = false) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(YoBorder)
+            .background(if (onImage) Color.Black.copy(alpha = 0.55f) else YoBorder)
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Text(
             text = "VJ $vjName".uppercase(),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            color = YoTextPrimary
+            color = if (onImage) YoPrimaryAmber else YoTextPrimary
         )
     }
 }
@@ -304,7 +356,7 @@ fun VJChip(
             .clip(RoundedCornerShape(20.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
-            .clickable { onClick() }
+            .pressScaleClickable(onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -342,15 +394,15 @@ fun EpisodeCard(
     Column(
         modifier = modifier
             .width(200.dp)
-            .clickable { onClick() }
+            .pressScaleClickable(onClick)
     ) {
         Box(
             modifier = Modifier
                 .width(200.dp)
                 .aspectRatio(16f / 9f)
+                .shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), clip = false)
                 .clip(RoundedCornerShape(14.dp))
                 .background(YoSurfaceVariant)
-                .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
         ) {
             SubcomposeAsyncImage(
                 model = episode.getDisplayStill(movieId),
@@ -361,6 +413,16 @@ fun EpisodeCard(
                 error = { YoCinemaLogoPlaceholder() }
             )
 
+            // Scrim across the bottom so the S·E label and duration pill stay
+            // legible no matter what color the still underneath happens to be.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(BottomLegibilityScrim)
+            )
+
             // Duration Pill top right
             if (episode.duration != null && episode.duration > 0) {
                 Box(
@@ -368,7 +430,7 @@ fun EpisodeCard(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
+                        .background(Color.Black.copy(alpha = 0.55f))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
@@ -384,9 +446,10 @@ fun EpisodeCard(
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(36.dp)
+                    .size(40.dp)
+                    .shadow(elevation = 3.dp, shape = CircleShape, clip = false)
                     .clip(CircleShape)
-                    .background(YoBaseBackground.copy(alpha = 0.7f)),
+                    .background(YoBaseBackground.copy(alpha = 0.75f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -397,7 +460,8 @@ fun EpisodeCard(
                 )
             }
 
-            // S1 E2 bottom left
+            // S1 E2 bottom left — sits on the scrim above, so it stays
+            // readable regardless of the thumbnail's own colors.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -407,7 +471,7 @@ fun EpisodeCard(
                     text = "S${episode.sNum} E${episode.eNum}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = YoTextPrimary
+                    color = Color.White
                 )
             }
         }
@@ -435,13 +499,14 @@ fun CastAvatarCard(
     Column(
         modifier = modifier
             .width(110.dp)
-            .clickable { onClick() },
+            .pressScaleClickable(onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         val avatarUrl = cast.avatarUrl ?: "$BASE_URL/api/v1/movies/$movieId/cast/0/avatar"
         Box(
             modifier = Modifier
                 .size(80.dp)
+                .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
                 .clip(CircleShape)
                 .background(YoSurfaceVariant)
                 .border(2.dp, YoBorder, CircleShape)
