@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.util.Log
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -25,12 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,12 +84,8 @@ private fun formatTime(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
-/**
- * Pure fullscreen video surface — no portrait mode, no info/cast/episode
- * browsing here anymore. All of that lives on the Detail screen; tapping
- * Watch just drops straight into this, landscape and immersive from the
- * first frame, and the back gesture returns to Detail.
- */
+private const val TAG = "PlayerScreen"
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
@@ -106,6 +104,7 @@ fun PlayerScreen(
     val playerManager = remember { PlayerManager(context, repository, scope) }
 
     var movie by remember { mutableStateOf<Movie?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
     var isDragging by remember { mutableStateOf(false) }
     var dragPositionMs by remember { mutableFloatStateOf(0f) }
@@ -120,7 +119,7 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // Landscape, immersive, screen-always-on — every time, unconditionally.
+    // Landscape, immersive, screen-always-on
     DisposableEffect(Unit) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -141,37 +140,51 @@ fun PlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
+    // ---------------------- FIX: wrap in try/catch ----------------------
     LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
-        if (!localFilePath.isNullOrBlank()) {
-            movie = Movie(id = movieId, title = "Offline Download")
-            playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
-        } else {
-            val downloadId = if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
-            val downloadedEntity = repository.downloadDao.getDownloadById(downloadId)
-            val downloadedFile = downloadedEntity?.localFilePath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
-
-            if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedFile?.exists() == true) {
-                val m = repository.getMovieDetail(movieId)
-                movie = m ?: Movie(id = movieId, title = downloadedEntity.title)
-                playerManager.playMedia(
-                    movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
-                    title = movie?.title ?: downloadedEntity.title,
-                    posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
-                )
+        loadError = null
+        try {
+            if (!localFilePath.isNullOrBlank()) {
+                movie = Movie(id = movieId, title = "Offline Download")
+                playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
             } else {
-                val m = repository.getMovieDetail(movieId)
-                movie = m
-                if (m != null) {
-                    val url = repository.getPlayUrl(m, seasonNum, epNum)
+                val downloadId = if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
+                val downloadedEntity = repository.downloadDao.getDownloadById(downloadId)
+                val downloadedFile = downloadedEntity?.localFilePath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+
+                if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedFile?.exists() == true) {
+                    val m = repository.getMovieDetail(movieId)
+                    movie = m ?: Movie(id = movieId, title = downloadedEntity.title)
                     playerManager.playMedia(
-                        movieId, url, seasonNum, epNum, initialPosMs,
-                        title = m.title,
-                        posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
+                        movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
+                        title = movie?.title ?: downloadedEntity.title,
+                        posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
                     )
+                } else {
+                    val m = repository.getMovieDetail(movieId)
+                    movie = m
+                    if (m != null) {
+                        val url = repository.getPlayUrl(m, seasonNum, epNum)
+                        // Optional: validate the URL is not empty
+                        if (url.isBlank()) {
+                            throw IllegalArgumentException("Play URL is empty")
+                        }
+                        playerManager.playMedia(
+                            movieId, url, seasonNum, epNum, initialPosMs,
+                            title = m.title,
+                            posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
+                        )
+                    } else {
+                        loadError = "Could not load movie details. Please check your connection."
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start playback", e)
+            loadError = "Failed to start playback: ${e.message ?: "unknown error"}"
         }
     }
+    // ----------------------------------------------------------------
 
     LaunchedEffect(isControlsVisible, isPlaying) {
         if (isControlsVisible && isPlaying) {
@@ -194,6 +207,7 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
+        // Video view
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -206,8 +220,54 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        if (playerError != null && !isReconnecting) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
+        // Error overlay (local load error)
+        if (loadError != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Text("Error", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        loadError!!,
+                        color = YoTextMuted,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            // Optionally retry: reset error and re-trigger effect? For simplicity, go back.
+                            // If you want retry, you can set loadError = null and then call the loading logic again.
+                            // But since LaunchedEffect won't rerun with same keys, you'd need a reload trigger.
+                            // Better to use a retry flag, but for now we just go back.
+                            onBackClick()
+                        },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = YoPrimaryAmber,
+                            contentColor = com.example.ui.theme.YoBaseBackground
+                        )
+                    ) {
+                        Text("Go Back")
+                    }
+                }
+            }
+        }
+
+        // Player error from PlayerManager
+        if (playerError != null && !isReconnecting && loadError == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Playback Error", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -220,8 +280,13 @@ fun PlayerScreen(
                     }
                 }
             }
-        } else if (isReconnecting) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
+        } else if (isReconnecting && loadError == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     SpinningLoader()
                     Spacer(modifier = Modifier.height(10.dp))
@@ -230,164 +295,163 @@ fun PlayerScreen(
             }
         }
 
-        AnimatedVisibility(
-            visible = isControlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // Top scrim + bar
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(90.dp)
-                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ControlIconButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", onClick = onBackClick)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(displayTitle, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (displaySubtitle != null) {
-                            Text(displaySubtitle, color = YoTextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Controls overlay (only if no error)
+        if (loadError == null) {
+            AnimatedVisibility(
+                visible = isControlsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Top scrim + bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(90.dp)
+                            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ControlIconButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", onClick = onBackClick)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(displayTitle, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (displaySubtitle != null) {
+                                Text(displaySubtitle, color = YoTextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.Black.copy(alpha = 0.55f))
-                                .clickable { showSpeedMenu = true }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (playbackSpeed == 1f) "Normal" else "${playbackSpeed}x",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
-                            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
-                                DropdownMenuItem(
-                                    text = { Text(if (speed == 1f) "Normal" else "${speed}x") },
-                                    onClick = {
-                                        playbackSpeed = speed
-                                        playerManager.exoPlayer.setPlaybackSpeed(speed)
-                                        showSpeedMenu = false
-                                    }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Box {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .clickable { showSpeedMenu = true }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (playbackSpeed == 1f) "Normal" else "${playbackSpeed}x",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
+                            }
+                            DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
+                                listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                                    DropdownMenuItem(
+                                        text = { Text(if (speed == 1f) "Normal" else "${speed}x") },
+                                        onClick = {
+                                            playbackSpeed = speed
+                                            playerManager.exoPlayer.setPlaybackSpeed(speed)
+                                            showSpeedMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                // Center transport controls
-                Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(36.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ControlIconButton(
-                        icon = Icons.Default.Replay10,
-                        contentDescription = "Rewind 10s",
-                        size = 46.dp,
-                        onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition - 10_000).coerceAtLeast(0)) }
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
-                            .clip(CircleShape)
-                            .background(YoPrimaryAmber)
-                            .clickable(enabled = !isBuffering) {
-                                if (isPlaying) playerManager.exoPlayer.pause() else playerManager.exoPlayer.play()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // This is exactly the gap that was reported: previously
-                        // tapping Play while the stream was still buffering gave
-                        // no feedback at all. Now the button itself becomes a
-                        // spinner during buffering instead of sitting static.
-                        if (isBuffering) {
-                            SpinningLoader(color = com.example.ui.theme.YoBaseBackground, size = 28.dp)
-                        } else {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = com.example.ui.theme.YoBaseBackground,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-
-                    ControlIconButton(
-                        icon = Icons.Default.Forward10,
-                        contentDescription = "Forward 10s",
-                        size = 46.dp,
-                        onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition + 10_000).coerceAtMost(durationMs)) }
-                    )
-                }
-
-                // Bottom scrim + seek bar + row
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    val displayPos = if (isDragging) dragPositionMs.toLong() else currentPosMs
-                    Slider(
-                        value = displayPos.toFloat(),
-                        valueRange = 0f..(durationMs.coerceAtLeast(1L)).toFloat(),
-                        onValueChange = {
-                            isDragging = true
-                            dragPositionMs = it
-                        },
-                        onValueChangeFinished = {
-                            playerManager.exoPlayer.seekTo(dragPositionMs.toLong())
-                            isDragging = false
-                        },
-                        colors = SliderDefaults.colors(
-                            thumbColor = YoPrimaryAmber,
-                            activeTrackColor = YoPrimaryAmber,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                        ),
-                        modifier = Modifier.fillMaxWidth().height(24.dp)
-                    )
+                    // Center transport controls
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalArrangement = Arrangement.spacedBy(36.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${formatTime(displayPos)} / ${formatTime(durationMs)}", color = Color.White, fontSize = 12.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ControlIconButton(
-                                icon = Icons.Default.AspectRatio,
-                                contentDescription = "Resize",
-                                size = 36.dp,
-                                onClick = {
-                                    resizeMode = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT)
-                                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                    else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                }
-                            )
-                            ControlIconButton(
-                                icon = Icons.Default.PictureInPicture,
-                                contentDescription = "Picture in picture",
-                                size = 36.dp,
-                                onClick = { activity?.enterPictureInPictureModeSafely() }
-                            )
+                        ControlIconButton(
+                            icon = Icons.Default.Replay10,
+                            contentDescription = "Rewind 10s",
+                            size = 46.dp,
+                            onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition - 10_000).coerceAtLeast(0)) }
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(68.dp)
+                                .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
+                                .clip(CircleShape)
+                                .background(YoPrimaryAmber)
+                                .clickable(enabled = !isBuffering) {
+                                    if (isPlaying) playerManager.exoPlayer.pause() else playerManager.exoPlayer.play()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isBuffering) {
+                                SpinningLoader(color = com.example.ui.theme.YoBaseBackground, size = 28.dp)
+                            } else {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                    tint = com.example.ui.theme.YoBaseBackground,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+
+                        ControlIconButton(
+                            icon = Icons.Default.Forward10,
+                            contentDescription = "Forward 10s",
+                            size = 46.dp,
+                            onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition + 10_000).coerceAtMost(durationMs)) }
+                        )
+                    }
+
+                    // Bottom scrim + seek bar + row
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        val displayPos = if (isDragging) dragPositionMs.toLong() else currentPosMs
+                        Slider(
+                            value = displayPos.toFloat(),
+                            valueRange = 0f..(durationMs.coerceAtLeast(1L)).toFloat(),
+                            onValueChange = {
+                                isDragging = true
+                                dragPositionMs = it
+                            },
+                            onValueChangeFinished = {
+                                playerManager.exoPlayer.seekTo(dragPositionMs.toLong())
+                                isDragging = false
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = YoPrimaryAmber,
+                                activeTrackColor = YoPrimaryAmber,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier.fillMaxWidth().height(24.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("${formatTime(displayPos)} / ${formatTime(durationMs)}", color = Color.White, fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ControlIconButton(
+                                    icon = Icons.Default.AspectRatio,
+                                    contentDescription = "Resize",
+                                    size = 36.dp,
+                                    onClick = {
+                                        resizeMode = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT)
+                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                        else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                    }
+                                )
+                                ControlIconButton(
+                                    icon = Icons.Default.PictureInPicture,
+                                    contentDescription = "Picture in picture",
+                                    size = 36.dp,
+                                    onClick = { activity?.enterPictureInPictureModeSafely() }
+                                )
+                            }
                         }
                     }
                 }
@@ -417,8 +481,6 @@ private fun ControlIconButton(
 
 @Composable
 private fun SpinningLoader(color: Color = YoPrimaryAmber, size: androidx.compose.ui.unit.Dp = 32.dp) {
-    // Material3's CircularProgressIndicator already animates itself when no
-    // progress value is passed — no need to wrap it in extra rotation logic.
     androidx.compose.material3.CircularProgressIndicator(
         modifier = Modifier.size(size),
         color = color,
