@@ -52,6 +52,13 @@ class PlayerManager(
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
+    // Exposed so the play/pause button can show a spinner instead of a
+    // static icon while genuinely buffering — previously nothing surfaced
+    // this, so tapping Play while data was still loading looked like
+    // nothing had happened at all.
+    private val _isBuffering = MutableStateFlow(false)
+    val isBuffering: StateFlow<Boolean> = _isBuffering
+
     private var currentMovieId: String = ""
     private var currentEpisodeId: String? = null
     private var currentSeasonNum: Int? = null
@@ -81,6 +88,7 @@ class PlayerManager(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                _isBuffering.value = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_READY) {
                     _isReconnecting.value = false
                     _playerError.value = null
