@@ -104,7 +104,6 @@ fun PlayerScreen(
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
 
-    // State
     var movie by remember { mutableStateOf<Movie?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
@@ -121,7 +120,7 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // Keep screen on (orientation is handled by manifest configChanges)
+    // Keep screen on (orientation handled by manifest)
     DisposableEffect(Unit) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
@@ -144,7 +143,6 @@ fun PlayerScreen(
     LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
         loadError = null
         try {
-            // 1) Check API key
             val apiKey = repository.tokenManager.getApiKey()
             if (apiKey.isNullOrBlank()) {
                 loadError = "❌ API key missing. Please enter a valid key in settings."
@@ -152,7 +150,6 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
-            // 2) Offline / downloaded file
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
                 playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
@@ -175,7 +172,6 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
-            // 3) Online stream
             Log.d(TAG, "Fetching movie detail for $movieId")
             val m = repository.getMovieDetail(movieId)
             if (m == null) {
@@ -205,7 +201,6 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-hide controls
     LaunchedEffect(isControlsVisible, isPlaying) {
         if (isControlsVisible && isPlaying) {
             delay(3500)
@@ -219,7 +214,6 @@ fun PlayerScreen(
         if (seasonNum != null && epNum != null) "S$seasonNum · E$epNum" else null
     ).joinToString(" · ").ifBlank { null }
 
-    // Main UI
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -228,39 +222,34 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view (only if no load error)
+        // Video view – no try/catch around the composable call
         if (loadError == null) {
-            try {
-                AndroidView(
-                    factory = { ctx ->
-                        try {
-                            PlayerView(ctx).apply {
-                                player = playerManager.exoPlayer
-                                useController = false
-                                this.resizeMode = resizeMode
-                            }
-                        } catch (e: Throwable) {
-                            Log.e(TAG, "Error creating PlayerView", e)
-                            loadError = "Failed to create video surface: ${e.message}"
-                            android.widget.FrameLayout(ctx).apply {
-                                setBackgroundColor(android.graphics.Color.BLACK)
-                            }
+            AndroidView(
+                factory = { ctx ->
+                    try {
+                        PlayerView(ctx).apply {
+                            player = playerManager.exoPlayer
+                            useController = false
+                            this.resizeMode = resizeMode
                         }
-                    },
-                    update = { view ->
-                        if (view is PlayerView) {
-                            view.resizeMode = resizeMode
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Error creating PlayerView", e)
+                        loadError = "Failed to create video surface: ${e.message}"
+                        android.widget.FrameLayout(ctx).apply {
+                            setBackgroundColor(android.graphics.Color.BLACK)
                         }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } catch (e: Throwable) {
-                Log.e(TAG, "AndroidView composition failed", e)
-                loadError = "Video surface composition error: ${e.message}"
-            }
+                    }
+                },
+                update = { view ->
+                    if (view is PlayerView) {
+                        view.resizeMode = resizeMode
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
-        // ----- LOAD ERROR OVERLAY (top priority) -----
+        // ----- LOAD ERROR OVERLAY -----
         if (loadError != null) {
             Box(
                 modifier = Modifier
@@ -294,7 +283,7 @@ fun PlayerScreen(
             }
         }
 
-        // PlayerManager error (if no load error)
+        // ----- PlayerManager error -----
         if (loadError == null && playerError != null && !isReconnecting) {
             Box(
                 modifier = Modifier
@@ -329,7 +318,7 @@ fun PlayerScreen(
             }
         }
 
-        // Controls (only if no load error)
+        // ----- Controls (only if no load error) -----
         if (loadError == null) {
             AnimatedVisibility(
                 visible = isControlsVisible,
@@ -435,7 +424,7 @@ fun PlayerScreen(
                         )
                     }
 
-                    // Bottom scrim + seek bar + row
+                    // Bottom scrim + seek bar
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
