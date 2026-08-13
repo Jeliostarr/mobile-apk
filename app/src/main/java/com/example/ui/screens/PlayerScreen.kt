@@ -55,10 +55,12 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -68,6 +70,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.layout.ContentScale
@@ -78,6 +82,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -89,6 +94,7 @@ import com.example.download.DownloadWorker
 import androidx.compose.material3.ButtonDefaults
 import com.example.ui.components.PosterCard
 import com.example.ui.components.ReportDialog
+import com.example.ui.components.RequestDialog
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
@@ -127,10 +133,11 @@ fun PlayerScreen(
     var movie by remember { mutableStateOf<Movie?>(null) }
     var relatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var mediaUrl by remember { mutableStateOf("") }
-    var isFullscreen by remember { mutableStateOf(false) }
-    var isControlsVisible by remember { mutableStateOf(true) }
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var isControlsVisible by rememberSaveable { mutableStateOf(true) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
+    var showRequestDialog by remember { mutableStateOf(false) }
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
     val isPlaying by playerManager.isPlaying.collectAsState()
@@ -174,9 +181,32 @@ fun PlayerScreen(
     }
 
     DisposableEffect(Unit) {
+        // Keep the screen on for the whole time this screen is composed —
+        // without this, the device's normal screen-timeout still applies
+        // during playback and the display turns off mid-video.
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             playerManager.release()
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.window?.let { win ->
+                WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    // True immersive fullscreen: hide the status/nav bars while in fullscreen
+    // mode, restore them the moment we leave it. Rotating the device alone
+    // doesn't do this — the status bar staying visible on top of a
+    // "fullscreen" landscape video is what makes it look unfinished.
+    LaunchedEffect(isFullscreen) {
+        val win = activity?.window ?: return@LaunchedEffect
+        val controller = WindowInsetsControllerCompat(win, win.decorView)
+        if (isFullscreen) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 
@@ -433,7 +463,8 @@ fun PlayerScreen(
 
                                 Box(
                                     modifier = Modifier
-                                        .size(52.dp)
+                                        .size(58.dp)
+                                        .shadow(elevation = 6.dp, shape = CircleShape, clip = false)
                                         .clip(CircleShape)
                                         .background(YoPrimaryAmber)
                                         .clickable {
@@ -446,7 +477,7 @@ fun PlayerScreen(
                                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                         contentDescription = "Play/Pause",
                                         tint = YoBaseBackground,
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(34.dp)
                                     )
                                 }
 
@@ -665,6 +696,16 @@ fun PlayerScreen(
                                     }
 
                                     OutlinedButton(
+                                        onClick = { showRequestDialog = true },
+                                        modifier = Modifier.height(42.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextMuted)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.MovieFilter, contentDescription = "Request", modifier = Modifier.size(16.dp))
+                                    }
+
+                                    OutlinedButton(
                                         onClick = { showReportDialog = true },
                                         modifier = Modifier.height(42.dp),
                                         shape = RoundedCornerShape(12.dp),
@@ -734,11 +775,14 @@ fun PlayerScreen(
 
         if (showReportDialog && movie != null) {
             ReportDialog(
-                onDismiss = { showReportDialog = false },
-                onSubmitReport = { _ ->
-                    showReportDialog = false
-                }
+                movieId = activeMovieId,
+                movieTitle = movie?.title ?: "",
+                onDismiss = { showReportDialog = false }
             )
+        }
+
+        if (showRequestDialog) {
+            RequestDialog(onDismiss = { showRequestDialog = false })
         }
     }
 }
@@ -874,7 +918,8 @@ fun FullscreenPlayerView(
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .size(64.dp)
+                        .size(68.dp)
+                        .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
                         .clip(CircleShape)
                         .background(YoPrimaryAmber)
                         .clickable { onTogglePlay() },
