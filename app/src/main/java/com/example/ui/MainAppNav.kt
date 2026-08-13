@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BottomTab
+import com.example.ui.components.LoadingScreen
 import com.example.ui.screens.AccountScreen
 import com.example.ui.screens.CastDetailScreen
 import com.example.ui.screens.DetailScreen
@@ -32,6 +34,7 @@ import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.VJCatalogueScreen
 import com.example.ui.screens.VJListScreen
 import com.example.ui.theme.YoBaseBackground
+import kotlinx.coroutines.delay
 
 sealed class Screen {
     object Home : Screen()
@@ -67,6 +70,16 @@ fun MainAppNav() {
     val currentScreen = screenBackStack.lastOrNull() ?: initialScreen
     var currentTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
 
+    // A brief branded splash on launch — the auth check itself is instant,
+    // but jumping straight to Login/Home with no launch moment at all is
+    // what makes an app feel like it "just opened a screen" rather than
+    // like it started up. Every polished native app has this beat.
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(900)
+        showSplash = false
+    }
+
     fun navigateTo(screen: Screen) {
         screenBackStack.add(screen)
     }
@@ -92,6 +105,11 @@ fun MainAppNav() {
         is Screen.Downloads -> "downloads"
         is Screen.Account -> "account"
         else -> currentTab.route
+    }
+
+    if (showSplash) {
+        LoadingScreen()
+        return
     }
 
     Scaffold(
