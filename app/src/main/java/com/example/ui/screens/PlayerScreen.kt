@@ -105,6 +105,7 @@ fun PlayerScreen(
 
     val playerManager = remember { PlayerManager(context, repository, scope) }
 
+    // State
     var movie by remember { mutableStateOf<Movie?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
@@ -114,7 +115,6 @@ fun PlayerScreen(
     var showSpeedMenu by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
-    // State from PlayerManager – collected normally (no safe‑call issues)
     val isPlaying by playerManager.isPlaying.collectAsState()
     val isBuffering by playerManager.isBuffering.collectAsState()
     val isReconnecting by playerManager.isReconnecting.collectAsState()
@@ -122,14 +122,12 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // ----- Lifecycle (orientation, immersive, keep screen on) -----
+    // Keep screen on (orientation is handled by manifest configChanges)
     DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             playerManager.release()
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             activity?.window?.let { win ->
                 WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
             }
@@ -143,19 +141,19 @@ fun PlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    // ----- Load movie and start playback (with error handling) -----
+    // Load movie and start playback (with error handling)
     LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
         loadError = null
         try {
-            // 1) API key check
+            // 1) Check API key
             val apiKey = repository.tokenManager.getApiKey()
             if (apiKey.isNullOrBlank()) {
-                loadError = "❌ API key missing – please enter a valid key in settings."
+                loadError = "❌ API key missing. Please enter a valid key in settings."
                 Log.e(TAG, "API key is null or empty")
                 return@LaunchedEffect
             }
 
-            // 2) Offline / downloaded file?
+            // 2) Offline / downloaded file
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
                 playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
@@ -208,7 +206,7 @@ fun PlayerScreen(
         }
     }
 
-    // ----- Auto‑hide controls after 3.5s when playing -----
+    // Auto-hide controls
     LaunchedEffect(isControlsVisible, isPlaying) {
         if (isControlsVisible && isPlaying) {
             delay(3500)
@@ -222,7 +220,7 @@ fun PlayerScreen(
         if (seasonNum != null && epNum != null) "S$seasonNum · E$epNum" else null
     ).joinToString(" · ").ifBlank { null }
 
-    // ----- Main UI -----
+    // Main UI
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -231,18 +229,37 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = playerManager.exoPlayer
-                    useController = false
-                    this.resizeMode = resizeMode
-                }
-            },
-            update = { it.resizeMode = resizeMode },
-            modifier = Modifier.fillMaxSize()
-        )
+        // Video view (only if no load error)
+        if (loadError == null) {
+            try {
+                AndroidView(
+                    factory = { ctx ->
+                        try {
+                            PlayerView(ctx).apply {
+                                player = playerManager.exoPlayer
+                                useController = false
+                                this.resizeMode = resizeMode
+                            }
+                        } catch (e: Throwable) {
+                            Log.e(TAG, "Error creating PlayerView", e)
+                            loadError = "Failed to create video surface: ${e.message}"
+                            android.widget.FrameLayout(ctx).apply {
+                                setBackgroundColor(android.graphics.Color.BLACK)
+                            }
+                        }
+                    },
+                    update = { view ->
+                        if (view is PlayerView) {
+                            view.resizeMode = resizeMode
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } catch (e: Throwable) {
+                Log.e(TAG, "AndroidView composition failed", e)
+                loadError = "Video surface composition error: ${e.message}"
+            }
+        }
 
         // ----- LOAD ERROR OVERLAY (top priority) -----
         if (loadError != null) {
@@ -278,7 +295,7 @@ fun PlayerScreen(
             }
         }
 
-        // ----- Player error (if no load error) -----
+        // PlayerManager error (if no load error)
         if (loadError == null && playerError != null && !isReconnecting) {
             Box(
                 modifier = Modifier
@@ -313,7 +330,7 @@ fun PlayerScreen(
             }
         }
 
-        // ----- Controls (only if no load error) -----
+        // Controls (only if no load error)
         if (loadError == null) {
             AnimatedVisibility(
                 visible = isControlsVisible,
