@@ -55,7 +55,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -152,7 +152,10 @@ fun PlayerScreen(
         if (!localFilePath.isNull_orBlank()) {
             movie = Movie(id = activeMovieId, title = "Offline Download")
             mediaUrl = localFilePath!!
-            playerManager.playMedia(activeMovieId, localFilePath!!, activeSeasonNum, activeEpNum, initialPosMs)
+            playerManager.playMedia(
+                activeMovieId, localFilePath!!, activeSeasonNum, activeEpNum, initialPosMs,
+                title = "Offline Download"
+            )
         } else {
             // Check if downloaded in DB first
             val downloadId = if (activeSeasonNum != null && activeEpNum != null) "${activeMovieId}_S${activeSeasonNum}E${activeEpNum}" else activeMovieId
@@ -164,7 +167,11 @@ fun PlayerScreen(
                     movie = m ?: Movie(id = activeMovieId, title = downloadedEntity.title)
                     mediaUrl = downloadedEntity.localFilePath
                     relatedMovies = repository.getRelatedMovies(activeMovieId)
-                    playerManager.playMedia(activeMovieId, downloadedEntity.localFilePath, activeSeasonNum, activeEpNum, initialPosMs)
+                    playerManager.playMedia(
+                        activeMovieId, downloadedEntity.localFilePath, activeSeasonNum, activeEpNum, initialPosMs,
+                        title = movie?.title ?: downloadedEntity.title,
+                        posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
+                    )
                     return@LaunchedEffect
                 }
             }
@@ -175,7 +182,11 @@ fun PlayerScreen(
                 val url = repository.getPlayUrl(m, activeSeasonNum, activeEpNum)
                 mediaUrl = url
                 relatedMovies = repository.getRelatedMovies(activeMovieId)
-                playerManager.playMedia(activeMovieId, url, activeSeasonNum, activeEpNum, initialPosMs)
+                playerManager.playMedia(
+                    activeMovieId, url, activeSeasonNum, activeEpNum, initialPosMs,
+                    title = m.title,
+                    posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
+                )
             }
         }
     }
@@ -332,7 +343,11 @@ fun PlayerScreen(
                                         if (movie != null) {
                                             scope.launch {
                                                 val url = repository.getPlayUrl(movie!!, activeSeasonNum, activeEpNum)
-                                                playerManager.playMedia(activeMovieId, url, activeSeasonNum, activeEpNum, currentPosMs)
+                                                playerManager.playMedia(
+                                                    activeMovieId, url, activeSeasonNum, activeEpNum, currentPosMs,
+                                                    title = movie?.title,
+                                                    posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
+                                                )
                                             }
                                         }
                                     },
