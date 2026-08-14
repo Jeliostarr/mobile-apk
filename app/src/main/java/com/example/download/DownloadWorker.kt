@@ -1,6 +1,11 @@
 package com.example.download
 
+import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.local.AppDatabase
@@ -11,7 +16,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.io.RandomAccessFile
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 class DownloadWorker(
@@ -31,15 +36,22 @@ class DownloadWorker(
         val db = AppDatabase.getInstance(context)
         val downloadDao = db.downloadDao()
 
-        val movie = repository.getMovieDetail(movieId) ?: return@withContext Result.failure()
+        // Get movie details (for metadata)
+        val movie = repository.getMovieDetail(movieId)
+        if (movie == null) {
+            downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
+            return@withContext Result.failure()
+        }
         val downloadUrl = repository.getDownloadMediaUrl(movie, seasonNum, epNum)
 
-        val storageDir = context.getExternalFilesDir(null) ?: context.filesDir
         val safeFilename = "${title.replace(Regex("[^a-zA-Z0-9._-]"), "_")}.mp4"
-        val targetFile = File(storageDir, safeFilename)
 
-        var existingBytes = if (targetFile.exists()) targetFile.length() else 0L
+        // Temp file in internal cache (supports resume)
+        val cacheDir = context.cacheDir
+        val tempFile = File(cacheDir, "$downloadId.part")
+        var existingBytes = if (tempFile.exists()) tempFile.length() else 0L
 
+        // Create or update DB entity with all metadata
         var entity = downloadDao.getDownloadById(downloadId)
         if (entity == null) {
             entity = DownloadEntity(
@@ -47,14 +59,22 @@ class DownloadWorker(
                 movieId = movieId,
                 episodeId = episodeId,
                 title = title,
+                posterUrl = movie.displayPosterUrl,
+                vjName = movie.vjName,
+                seasonNumber = seasonNum,
+                episodeNumber = epNum,
+                episodeTitle = null, // can be filled if needed
                 filename = safeFilename,
-                localFilePath = targetFile.absolutePath,
+                tempFilePath = tempFile.absolutePath,
                 totalBytes = 0L,
                 downloadedBytes = existingBytes,
-                status = "DOWNLOADING",
-                speedBytesPerSec = 0L
+                status = DownloadEntity.STATUS_DOWNLOADING,
+                localFilePath = null,
+                downloadedAt = null
             )
             downloadDao.saveDownload(entity)
+        } else {
+            downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_DOWNLOADING)
         }
 
         val client = OkHttpClient.Builder()
@@ -74,26 +94,21 @@ class DownloadWorker(
         try {
             val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful && response.code != 206) {
-                downloadDao.updateProgress(downloadId, existingBytes, entity.totalBytes, 0, "FAILED")
+                downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
                 return@withContext Result.failure()
             }
 
             val body = response.body ?: run {
-                downloadDao.updateProgress(downloadId, existingBytes, entity.totalBytes, 0, "FAILED")
+                downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
                 return@withContext Result.failure()
             }
 
             val contentLength = body.contentLength()
             val totalBytes = if (response.code == 206) existingBytes + contentLength else contentLength
+            downloadDao.updateProgress(downloadId, existingBytes, totalBytes, 0, DownloadEntity.STATUS_DOWNLOADING)
 
-            val raf = RandomAccessFile(targetFile, "rw")
-            if (response.code == 206) {
-                raf.seek(existingBytes)
-            } else {
-                raf.setLength(0)
-                existingBytes = 0
-            }
-
+            // Write to temp file (append)
+            val outputStream = FileOutputStream(tempFile, true)
             val inputStream = body.byteStream()
             val buffer = ByteArray(8192)
             var bytesRead: Int
@@ -103,12 +118,12 @@ class DownloadWorker(
 
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                 if (isStopped) {
-                    raf.close()
-                    downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, "PAUSED")
+                    outputStream.close()
+                    downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
                     return@withContext Result.retry()
                 }
 
-                raf.write(buffer, 0, bytesRead)
+                outputStream.write(buffer, 0, bytesRead)
                 downloaded += bytesRead
                 bytesSinceLastUpdate += bytesRead
 
@@ -116,19 +131,70 @@ class DownloadWorker(
                 val delta = now - lastUpdateMs
                 if (delta >= 1000) {
                     val speed = (bytesSinceLastUpdate * 1000) / delta
-                    downloadDao.updateProgress(downloadId, downloaded, totalBytes, speed, "DOWNLOADING")
+                    downloadDao.updateProgress(downloadId, downloaded, totalBytes, speed, DownloadEntity.STATUS_DOWNLOADING)
                     lastUpdateMs = now
                     bytesSinceLastUpdate = 0L
                 }
             }
 
-            raf.close()
-            downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, "COMPLETED")
+            outputStream.close()
+            inputStream.close()
+
+            // --- Download complete: move to public Downloads ---
+            val publicUri = moveToPublicDownloads(tempFile, safeFilename, title)
+            if (publicUri == null) {
+                downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
+                return@withContext Result.failure()
+            }
+
+            // Mark completed in DB with the public URI
+            downloadDao.markCompleted(downloadId, publicUri.toString())
+            // Delete temp file
+            tempFile.delete()
+
             Result.success()
+
         } catch (e: Exception) {
             e.printStackTrace()
-            downloadDao.updateProgress(downloadId, existingBytes, entity.totalBytes, 0, "FAILED")
+            downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
             Result.failure()
+        }
+    }
+
+    // Move temp file to public Downloads (Android 10+ uses MediaStore, older uses file copy)
+    private fun moveToPublicDownloads(tempFile: File, filename: String, displayName: String): Uri? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                ?: return null
+            context.contentResolver.openOutputStream(uri)?.use { output ->
+                tempFile.inputStream().use { input ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+            // Mark as not pending
+            val values = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
+            context.contentResolver.update(uri, values, null, null)
+            uri
+        } else {
+            // Legacy: copy to external Downloads directory (requires WRITE_EXTERNAL_STORAGE permission)
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val destFile = File(downloadsDir, filename)
+            try {
+                destFile.outputStream().use { output ->
+                    tempFile.inputStream().use { input ->
+                        input.copyTo(output)
+                    }
+                }
+                Uri.fromFile(destFile)
+            } catch (e: Exception) {
+                null
+            }
         }
     }
 
@@ -140,4 +206,35 @@ class DownloadWorker(
         const val KEY_SEASON_NUM = "season_num"
         const val KEY_EP_NUM = "ep_num"
     }
+}
+
+// Helper function to start the download (place this in a separate file or use directly)
+fun startDownloadWorker(
+    context: Context,
+    movie: com.example.data.model.Movie,
+    seasonNum: Int?,
+    epNum: Int?
+) {
+    val downloadId = if (seasonNum != null && epNum != null) {
+        "${movie.id}_S${seasonNum}E${epNum}"
+    } else {
+        movie.id
+    }
+    val episodeId = if (seasonNum != null && epNum != null) "S${seasonNum}E${epNum}" else null
+
+    val data = androidx.work.workDataOf(
+        DownloadWorker.KEY_DOWNLOAD_ID to downloadId,
+        DownloadWorker.KEY_MOVIE_ID to movie.id,
+        DownloadWorker.KEY_EPISODE_ID to episodeId,
+        DownloadWorker.KEY_TITLE to movie.title,
+        DownloadWorker.KEY_SEASON_NUM to (seasonNum ?: -1),
+        DownloadWorker.KEY_EP_NUM to (epNum ?: -1)
+    )
+
+    val request = androidx.work.OneTimeWorkRequestBuilder<DownloadWorker>()
+        .setInputData(data)
+        .addTag(downloadId) // for cancellation
+        .build()
+
+    androidx.work.WorkManager.getInstance(context).enqueue(request)
 }
