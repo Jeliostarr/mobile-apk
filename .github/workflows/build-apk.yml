@@ -57,8 +57,9 @@ jobs:
           fi
           echo "Confirmed: ./debug.keystore exists."
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      # 🔥 KEY CHANGE: clean before building
+      - name: Build debug APK (clean + assemble)
+        run: gradle clean :app:assembleDebug --stacktrace --no-daemon
 
       - name: Verify debug APK output
         run: |
