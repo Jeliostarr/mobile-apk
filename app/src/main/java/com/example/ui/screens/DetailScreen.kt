@@ -63,19 +63,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.CastMember
 import com.example.data.model.Episode
 import com.example.data.model.Movie
 import com.example.data.model.Season
 import com.example.data.model.formatDuration
-import com.example.download.DownloadWorker
+import android.widget.Toast
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.PlayerView
+import com.example.data.local.DownloadEntity
+import com.example.download.startDownloadWorker
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.CastAvatarCard
 import com.example.ui.components.EpisodeCard
+import com.example.ui.components.EpisodeDownloadSheet
 import com.example.ui.components.GateModalBottomSheet
 import com.example.ui.components.ModernLoader
 import com.example.ui.components.PosterCard
@@ -115,9 +124,78 @@ fun DetailScreen(
     var showDownloadStartedDialog by remember { mutableStateOf(false) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var selectedSeasonNumber by remember { mutableStateOf(1) }
+    var showEpisodeDownloadSheet by remember { mutableStateOf(false) }
 
     val isWatchlisted by repository.isWatchlisted(movieId).collectAsState(initial = false)
     val gateSheetState = rememberModalBottomSheetState()
+    val episodeDownloadSheetState = rememberModalBottomSheetState()
+
+    // Existing downloads for THIS movie (active + completed), keyed as "S{season}E{episode}"
+    // for series or the bare movie id for a plain movie. Used to: (1) block starting a
+    // duplicate download and show a clear message instead, and (2) grey out episodes in
+    // the picker that are already downloading/downloaded.
+    val activeDownloads by repository.activeDownloads.collectAsState(initial = emptyList())
+    val completedDownloads by repository.completedDownloads.collectAsState(initial = emptyList())
+    val downloadStatusByEpisodeKey = remember(activeDownloads, completedDownloads, movieId) {
+        (activeDownloads + completedDownloads)
+            .filter { it.movieId == movieId && it.seasonNumber != null && it.episodeNumber != null }
+            .associate { "S${it.seasonNumber}E${it.episodeNumber}" to it.status }
+    }
+
+    fun buildDownloadId(seasonNum: Int?, epNum: Int?): String =
+        if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
+
+    // Returns true if a new download was actually started (false if it was already
+    // downloading/downloaded, in which case the caller gets to decide how to surface that).
+    suspend fun startIfNotDuplicate(target: Movie, seasonNum: Int?, epNum: Int?): Boolean {
+        val downloadId = buildDownloadId(seasonNum, epNum)
+        val existing = repository.downloadDao.getDownloadById(downloadId)
+        return when (existing?.status) {
+            DownloadEntity.STATUS_COMPLETED, DownloadEntity.STATUS_DOWNLOADING,
+            DownloadEntity.STATUS_QUEUED, DownloadEntity.STATUS_PAUSED -> false
+            else -> {
+                startDownloadWorker(context, target, seasonNum, epNum)
+                true
+            }
+        }
+    }
+
+    // Single-item entry point (movie, or one episode) — shows the existing
+    // "Download Started" dialog, or a clear "already downloading/downloaded" toast.
+    fun startOrNotifyDownload(target: Movie, seasonNum: Int?, epNum: Int?) {
+        scope.launch {
+            val downloadId = buildDownloadId(seasonNum, epNum)
+            val existing = repository.downloadDao.getDownloadById(downloadId)
+            val alreadyDownloaded = existing?.status == DownloadEntity.STATUS_COMPLETED
+            if (alreadyDownloaded) {
+                Toast.makeText(context, "Already downloaded", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val started = startIfNotDuplicate(target, seasonNum, epNum)
+            if (started) {
+                showDownloadStartedDialog = true
+            } else {
+                Toast.makeText(context, "Already downloading", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Batch entry point from the episode picker — one summary toast instead of
+    // repeating the single-item dialog once per selected episode.
+    fun startBatchDownload(target: Movie, episodes: List<Episode>) {
+        scope.launch {
+            var startedCount = 0
+            episodes.forEach { ep ->
+                if (startIfNotDuplicate(target, ep.sNum, ep.eNum)) startedCount++
+            }
+            val message = when {
+                startedCount == 0 -> "Already downloading"
+                startedCount == episodes.size -> "Downloading $startedCount episode${if (startedCount > 1) "s" else ""}"
+                else -> "Downloading $startedCount of ${episodes.size} — the rest are already downloading"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Helper to gate actions behind login
     fun checkAuthAndExecute(action: () -> Unit) {
@@ -327,8 +405,11 @@ fun DetailScreen(
                                 IconButton(
                                     onClick = {
                                         checkAuthAndExecute {
-                                            startDownloadWorker(context, m, null, null)
-                                            showDownloadStartedDialog = true
+                                            if (m.isSeries) {
+                                                showEpisodeDownloadSheet = true
+                                            } else {
+                                                startOrNotifyDownload(m, null, null)
+                                            }
                                         }
                                     },
                                     modifier = Modifier
@@ -467,8 +548,11 @@ fun DetailScreen(
                                 OutlinedButton(
                                     onClick = {
                                         checkAuthAndExecute {
-                                            startDownloadWorker(context, m, null, null)
-                                            showDownloadStartedDialog = true
+                                            if (m.isSeries) {
+                                                showEpisodeDownloadSheet = true
+                                            } else {
+                                                startOrNotifyDownload(m, null, null)
+                                            }
                                         }
                                     },
                                     modifier = Modifier
@@ -495,8 +579,10 @@ fun DetailScreen(
                                 InlineTrailerSection(
                                     trailerUrl = m.trailerUrl!!,
                                     movieTitle = m.title,
+                                    posterFallbackUrl = m.cover ?: m.poster ?: m.displayPosterUrl,
                                     expanded = trailerExpanded,
-                                    onToggle = { trailerExpanded = !trailerExpanded }
+                                    onToggle = { trailerExpanded = !trailerExpanded },
+                                    repository = repository
                                 )
                             }
 
@@ -679,6 +765,20 @@ fun DetailScreen(
             )
         }
 
+        // Episode Download Picker
+        if (showEpisodeDownloadSheet && movie != null) {
+            EpisodeDownloadSheet(
+                sheetState = episodeDownloadSheetState,
+                episodes = episodesList,
+                downloadStatusByEpisodeKey = downloadStatusByEpisodeKey,
+                onDismiss = { showEpisodeDownloadSheet = false },
+                onDownloadSelected = { selectedEpisodes ->
+                    showEpisodeDownloadSheet = false
+                    startBatchDownload(movie!!, selectedEpisodes)
+                }
+            )
+        }
+
         // Download Started Dialog
         if (showDownloadStartedDialog) {
             androidx.compose.material3.AlertDialog(
@@ -713,14 +813,26 @@ fun extractYouTubeId(url: String): String? {
     }
 }
 
+/** True for trailers hosted on YouTube/Vimeo/Dailymotion — matches the backend's own
+ *  isEmbed check, so this mirrors exactly which trailers the API leaves as a raw
+ *  external link vs which ones it turns into an authenticated proxy URL. */
+private fun isExternallyEmbeddableTrailer(url: String): Boolean =
+    url.contains("youtube", ignoreCase = true) ||
+        url.contains("youtu.be", ignoreCase = true) ||
+        url.contains("vimeo", ignoreCase = true) ||
+        url.contains("dailymotion", ignoreCase = true)
+
 @Composable
 fun InlineTrailerSection(
     trailerUrl: String,
     movieTitle: String,
+    posterFallbackUrl: String?,
     expanded: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    repository: YocinemaRepository
 ) {
     val ytId = remember(trailerUrl) { extractYouTubeId(trailerUrl) }
+    val isEmbeddable = remember(trailerUrl) { isExternallyEmbeddableTrailer(trailerUrl) }
 
     Column {
         Text(
@@ -745,7 +857,7 @@ fun InlineTrailerSection(
                 .clickable { onToggle() }
         ) {
             SubcomposeAsyncImage(
-                model = if (ytId != null) "https://img.youtube.com/vi/$ytId/hqdefault.jpg" else null,
+                model = if (ytId != null) "https://img.youtube.com/vi/$ytId/hqdefault.jpg" else posterFallbackUrl,
                 contentDescription = "$movieTitle trailer",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -777,7 +889,84 @@ fun InlineTrailerSection(
 
         if (expanded) {
             Spacer(modifier = Modifier.height(12.dp))
-            InlineYouTubePlayer(trailerUrl = trailerUrl, ytId = ytId)
+            if (isEmbeddable) {
+                InlineYouTubePlayer(trailerUrl = trailerUrl, ytId = ytId)
+            } else {
+                // Our own hosted trailer, proxied through the backend and gated behind
+                // the same API-key auth as regular playback — a WebView/browser can't
+                // supply that header, so this plays it directly with an authenticated
+                // ExoPlayer instead, the same way the main player streams movies.
+                InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
+            }
+        }
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+fun InlineAuthenticatedTrailerPlayer(trailerUrl: String, repository: YocinemaRepository) {
+    val context = LocalContext.current
+    var isLoading by remember(trailerUrl) { mutableStateOf(true) }
+    var hasError by remember(trailerUrl) { mutableStateOf(false) }
+
+    val exoPlayer = remember(trailerUrl) {
+        val apiKey = repository.tokenManager.getApiKey()
+        val headers = mutableMapOf<String, String>()
+        if (!apiKey.isNullOrBlank()) {
+            headers["X-API-Key"] = apiKey
+            headers["x-api-key"] = apiKey
+        }
+        val dataSourceFactory = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(30_000)
+            .setDefaultRequestProperties(headers)
+
+        ExoPlayer.Builder(context).build().apply {
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) isLoading = false
+                }
+                override fun onPlayerError(error: PlaybackException) {
+                    isLoading = false
+                    hasError = true
+                }
+            })
+            val mediaSource = DefaultMediaSourceFactory(dataSourceFactory)
+                .createMediaSource(MediaItem.fromUri(trailerUrl))
+            setMediaSource(mediaSource)
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        onDispose { exoPlayer.release() }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (hasError) {
+            Text(
+                text = "Couldn't play the trailer.",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        } else {
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx -> PlayerView(ctx).apply { player = exoPlayer; useController = true } },
+                modifier = Modifier.fillMaxSize()
+            )
+            if (isLoading) {
+                CircularProgressIndicator(color = YoPrimaryAmber)
+            }
         }
     }
 }
@@ -862,28 +1051,6 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
             }
         }
     }
-}
-
-fun startDownloadWorker(
-    context: android.content.Context,
-    movie: Movie,
-    seasonNum: Int?,
-    epNum: Int?
-) {
-    val downloadId = "${movie.id}_${if (seasonNum != null && epNum != null) "S${seasonNum}E${epNum}" else "movie"}"
-    val data = workDataOf(
-        DownloadWorker.KEY_DOWNLOAD_ID to downloadId,
-        DownloadWorker.KEY_MOVIE_ID to movie.id,
-        DownloadWorker.KEY_TITLE to movie.title,
-        DownloadWorker.KEY_SEASON_NUM to (seasonNum ?: -1),
-        DownloadWorker.KEY_EP_NUM to (epNum ?: -1)
-    )
-
-    val request = OneTimeWorkRequestBuilder<DownloadWorker>()
-        .setInputData(data)
-        .build()
-
-    WorkManager.getInstance(context).enqueue(request)
 }
 
 private fun String?.isNull_orEmpty(): Boolean = this == null || this.trim().isEmpty()
