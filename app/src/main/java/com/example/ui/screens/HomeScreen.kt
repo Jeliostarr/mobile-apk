@@ -61,9 +61,8 @@ import com.example.data.model.formatDuration
 import com.example.data.model.isNull_orEmpty
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.HomeSkeleton
+import com.example.ui.components.MovieRailSection
 import com.example.ui.components.PosterCard
-import com.example.ui.components.ShimmerSkeleton
-import com.example.ui.components.SpotlightCard
 import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.VJChip
 import com.example.ui.components.YoCinemaLogoPlaceholder
@@ -71,7 +70,6 @@ import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
-import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -92,7 +90,7 @@ fun HeroSliderPager(
     LaunchedEffect(movies) {
         if (movies.size > 1) {
             while (true) {
-                delay(4000)
+                delay(4500)
                 val nextPage = (pagerState.currentPage + 1) % movies.size
                 pagerState.animateScrollToPage(nextPage)
             }
@@ -106,7 +104,7 @@ fun HeroSliderPager(
             pageSpacing = 12.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(210.dp)
+                .height(220.dp)
         ) { page ->
             val movie = movies[page]
             Box(
@@ -118,10 +116,6 @@ fun HeroSliderPager(
                     .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
                     .clickable { onMovieClick(movie.id) }
             ) {
-                // Backdrop Image — heroImage is the proper wide banner shot;
-                // cover/poster are tall and only used as a last-resort
-                // fallback, since stretching them across this wide pager
-                // crops them into an unrecognizable sliver.
                 SubcomposeAsyncImage(
                     model = movie.heroImage ?: movie.cover ?: movie.poster ?: movie.displayPosterUrl,
                     contentDescription = movie.title,
@@ -131,21 +125,19 @@ fun HeroSliderPager(
                     error = { YoCinemaLogoPlaceholder() }
                 )
 
-                // Dark Scrim Overlay
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.3f),
-                                    Color.Black.copy(alpha = 0.85f)
+                                    Color.Black.copy(alpha = 0.2f),
+                                    Color.Black.copy(alpha = 0.88f)
                                 )
                             )
                         )
                 )
 
-                // Content
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -304,8 +296,6 @@ fun HomeScreen(
     var popularMovies by remember { mutableStateOf(repository.cachedPopularMovies) }
     var latestMovies by remember { mutableStateOf(repository.cachedLatestMovies) }
     var seriesList by remember { mutableStateOf(repository.cachedSeriesList) }
-    // Keyed by genre name, in catalog order — a rail for every genre the
-    // API actually has, not just two hardcoded ones.
     var genreMovies by remember { mutableStateOf(repository.cachedGenreMovies) }
     var vjsList by remember { mutableStateOf(repository.cachedVjsList) }
     var isLoading by remember { mutableStateOf(popularMovies.isEmpty() && latestMovies.isEmpty()) }
@@ -326,9 +316,6 @@ fun HomeScreen(
                 val facets = repository.getFacets()
                 val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
 
-                // Fetch every genre in parallel instead of one at a time —
-                // with a full genre list this could otherwise mean 10-20+
-                // sequential network round trips before Home finishes loading.
                 val genreResults = coroutineScope {
                     allGenres.map { genre ->
                         async {
@@ -365,7 +352,6 @@ fun HomeScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        // Pinned Top Rounded Search Bar with Quick Action Icons
         HomeSearchBar(
             onSearchClick = onSearchClick,
             onWatchlistClick = onWatchlistClick,
@@ -381,7 +367,6 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // Sliding Hero Header with latest movies
                 val heroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
                 if (heroList.isNotEmpty()) {
                     item {
@@ -392,7 +377,6 @@ fun HomeScreen(
                     }
                 }
 
-                // VJs (Translators) Rail
                 if (vjsList.isNotEmpty()) {
                     item {
                         RailHeader(
@@ -414,7 +398,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Popular Rail
                 if (popularMovies.isNotEmpty()) {
                     item {
                         MovieRailSection(
@@ -426,7 +409,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Latest Rail
                 if (latestMovies.isNotEmpty()) {
                     item {
                         MovieRailSection(
@@ -438,7 +420,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Series Rail
                 if (seriesList.isNotEmpty()) {
                     item {
                         MovieRailSection(
@@ -450,9 +431,6 @@ fun HomeScreen(
                     }
                 }
 
-                // A genre rail for every genre the catalog actually has —
-                // not just two hardcoded picks. Skips any genre that came
-                // back empty (already filtered out when genreMovies was built).
                 genreMovies.forEach { (genre, movies) ->
                     item(key = "genre-$genre") {
                         MovieRailSection(
@@ -479,11 +457,12 @@ fun HomeSearchBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp), clip = false)
             .clip(RoundedCornerShape(20.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
             .clickable { onSearchClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -501,7 +480,8 @@ fun HomeSearchBar(
             Text(
                 text = "Search Movies & Series",
                 fontSize = 14.sp,
-                color = YoTextMuted,
+                fontWeight = FontWeight.Medium,
+                color = YoTextPrimary.copy(alpha = 0.7f),
                 modifier = Modifier.weight(1f)
             )
 
@@ -557,49 +537,33 @@ fun RailHeader(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = title,
+                title,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary
             )
         }
-
-        IconButton(onClick = onViewAllClick, modifier = Modifier.size(32.dp)) {
+        
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onViewAllClick() }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "See All",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = YoPrimaryAmber
+            )
+            Spacer(modifier = Modifier.width(2.dp))
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "View All",
-                tint = YoTextMuted,
-                modifier = Modifier.size(20.dp)
+                contentDescription = null,
+                tint = YoPrimaryAmber,
+                modifier = Modifier.size(14.dp)
             )
-        }
-    }
-}
-
-@Composable
-fun MovieRailSection(
-    title: String,
-    movies: List<Movie>,
-    onMovieClick: (String) -> Unit,
-    onViewAllClick: () -> Unit
-) {
-    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
-    // Calculate width for exactly 3 poster cards across the screen width (32dp horizontal padding + 28dp total spacing between 3 items)
-    val cardWidthDp = ((screenWidthDp - 32 - 28) / 3).coerceAtLeast(100)
-
-    Column {
-        RailHeader(title = title, onViewAllClick = onViewAllClick)
-        Spacer(modifier = Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(movies) { movie ->
-                PosterCard(
-                    movie = movie,
-                    onClick = { onMovieClick(movie.id) },
-                    widthDp = cardWidthDp
-                )
-            }
         }
     }
 }

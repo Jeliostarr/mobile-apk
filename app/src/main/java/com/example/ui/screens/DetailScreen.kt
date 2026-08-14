@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -64,10 +62,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import com.example.data.model.CastMember
 import com.example.data.model.Episode
 import com.example.data.model.Movie
-import com.example.data.model.Season
 import com.example.data.model.formatDuration
 import android.widget.Toast
 import androidx.compose.material3.CircularProgressIndicator
@@ -90,6 +86,7 @@ import com.example.ui.components.ModernLoader
 import com.example.ui.components.PosterCard
 import com.example.ui.components.ReportDialog
 import com.example.ui.components.VJBadgeChip
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
@@ -130,10 +127,6 @@ fun DetailScreen(
     val gateSheetState = rememberModalBottomSheetState()
     val episodeDownloadSheetState = rememberModalBottomSheetState()
 
-    // Existing downloads for THIS movie (active + completed), keyed as "S{season}E{episode}"
-    // for series or the bare movie id for a plain movie. Used to: (1) block starting a
-    // duplicate download and show a clear message instead, and (2) grey out episodes in
-    // the picker that are already downloading/downloaded.
     val activeDownloads by repository.activeDownloads.collectAsState(initial = emptyList())
     val completedDownloads by repository.completedDownloads.collectAsState(initial = emptyList())
     val downloadStatusByEpisodeKey = remember(activeDownloads, completedDownloads, movieId) {
@@ -145,8 +138,6 @@ fun DetailScreen(
     fun buildDownloadId(seasonNum: Int?, epNum: Int?): String =
         if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
 
-    // Returns true if a new download was actually started (false if it was already
-    // downloading/downloaded, in which case the caller gets to decide how to surface that).
     suspend fun startIfNotDuplicate(target: Movie, seasonNum: Int?, epNum: Int?): Boolean {
         val downloadId = buildDownloadId(seasonNum, epNum)
         val existing = repository.downloadDao.getDownloadById(downloadId)
@@ -160,8 +151,6 @@ fun DetailScreen(
         }
     }
 
-    // Single-item entry point (movie, or one episode) — shows the existing
-    // "Download Started" dialog, or a clear "already downloading/downloaded" toast.
     fun startOrNotifyDownload(target: Movie, seasonNum: Int?, epNum: Int?) {
         scope.launch {
             val downloadId = buildDownloadId(seasonNum, epNum)
@@ -180,8 +169,6 @@ fun DetailScreen(
         }
     }
 
-    // Batch entry point from the episode picker — one summary toast instead of
-    // repeating the single-item dialog once per selected episode.
     fun startBatchDownload(target: Movie, episodes: List<Episode>) {
         scope.launch {
             var startedCount = 0
@@ -191,13 +178,12 @@ fun DetailScreen(
             val message = when {
                 startedCount == 0 -> "Already downloading"
                 startedCount == episodes.size -> "Downloading $startedCount episode${if (startedCount > 1) "s" else ""}"
-                else -> "Downloading $startedCount of ${episodes.size} — the rest are already downloading"
+                else -> "Downloading $startedCount of ${episodes.size} — others active"
             }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Helper to gate actions behind login
     fun checkAuthAndExecute(action: () -> Unit) {
         if (!repository.isLoggedIn()) {
             showGateSheet = true
@@ -206,21 +192,17 @@ fun DetailScreen(
         }
     }
 
-    // Load movie data
     LaunchedEffect(movieId) {
-        // Reset error and loading states
         errorState = null
         isLoading = true
 
         try {
-            // 1. Show cached data immediately if available
             val cached = repository.getCachedMovieDetail(movieId)
             if (cached != null) {
                 movie = cached
-                isLoading = false // show the cached version while we fetch fresh
+                isLoading = false
             }
 
-            // 2. Fetch fresh data (this will replace cached when it arrives)
             val m = repository.getMovieDetail(movieId)
             if (m != null) {
                 movie = m
@@ -228,7 +210,6 @@ fun DetailScreen(
                     val rawEps = repository.getMovieEpisodes(movieId)
                     val allEps = if (rawEps.isNotEmpty()) rawEps else m.episodes.orEmpty()
                     episodesList = allEps.sortedWith(compareBy({ it.sNum ?: 1 }, { it.eNum ?: 1 }))
-                    // Update selected season if needed
                     val seasons = episodesList.mapNotNull { it.sNum }.distinct().sorted()
                     if (seasons.isNotEmpty() && selectedSeasonNumber !in seasons) {
                         selectedSeasonNumber = seasons.first()
@@ -236,13 +217,11 @@ fun DetailScreen(
                 }
                 relatedMovies = repository.getRelatedMovies(movieId)
             } else {
-                // If fresh data is null and we had no cached data, we have an error
                 if (movie == null) {
                     errorState = "Failed to load movie details. Please try again."
                 }
             }
         } catch (e: Exception) {
-            // If we already have cached data, keep it; otherwise show error
             if (movie == null) {
                 errorState = "Network error: ${e.message}"
             }
@@ -251,7 +230,6 @@ fun DetailScreen(
         }
     }
 
-    // Keep season selection in sync when episodes change
     LaunchedEffect(episodesList) {
         val seasons = episodesList.mapNotNull { it.sNum }.distinct().sorted()
         if (seasons.isNotEmpty() && selectedSeasonNumber !in seasons) {
@@ -266,7 +244,6 @@ fun DetailScreen(
     ) {
         when {
             isLoading && movie == null -> {
-                // Show loader only when we have no cached data and are loading
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -275,7 +252,6 @@ fun DetailScreen(
                 }
             }
             errorState != null && movie == null -> {
-                // Show error with retry option
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -289,22 +265,7 @@ fun DetailScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = {
-                            // Retry: re-trigger LaunchedEffect by changing the key?
-                            // Since movieId hasn't changed, we need to manually trigger reload.
-                            // A simple way: set isLoading = true and clear error, then reload.
-                            // But LaunchedEffect won't re-run because key is same.
-                            // Better: use a separate retry state or call repository directly.
-                            // For simplicity, we can restart by setting a dummy key.
-                            // However, we'll handle it by cancelling and re-launching effect.
-                            // A robust approach: use a remember { mutableStateOf(0) } and increment.
-                            // But we'll keep it simple: we'll have a retry flag.
-                            // Actually, we can call the same logic again inline.
-                            // But we already have LaunchedEffect. To trigger it again, we can change movieId? Not ideal.
-                            // Easiest: we can wrap the load in a function and call it from here.
-                            // We'll use a separate reload function.
-                            // Let's add a reload trigger.
-                        },
+                        onClick = { },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryAmber,
                             contentColor = YoBaseBackground
@@ -315,13 +276,12 @@ fun DetailScreen(
                 }
             }
             movie != null -> {
-                // Main content
                 val m = movie!!
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 32.dp)
+                    contentPadding = PaddingValues(bottom = 40.dp)
                 ) {
-                    // Backdrop with Gradient Scrim
+                    // Backdrop with Gradient Scrim and Official Branding
                     item {
                         Box(
                             modifier = Modifier
@@ -333,11 +293,10 @@ fun DetailScreen(
                                 contentDescription = m.title,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
-                                loading = { com.example.ui.components.YoCinemaLogoPlaceholder() },
-                                error = { com.example.ui.components.YoCinemaLogoPlaceholder() }
+                                loading = { YoCinemaLogoPlaceholder() },
+                                error = { YoCinemaLogoPlaceholder() }
                             )
 
-                            // Top Scrim
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -349,7 +308,6 @@ fun DetailScreen(
                                     )
                             )
 
-                            // Bottom Scrim
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -362,14 +320,13 @@ fun DetailScreen(
                                     )
                             )
 
-                            // Back Button
                             IconButton(
                                 onClick = onBackClick,
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
                                     .padding(16.dp)
                                     .clip(CircleShape)
-                                    .background(YoBaseBackground.copy(alpha = 0.6f))
+                                    .background(YoBaseBackground.copy(alpha = 0.7f))
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -378,7 +335,6 @@ fun DetailScreen(
                                 )
                             }
 
-                            // Top Right Action Icons
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
@@ -393,7 +349,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(YoBaseBackground.copy(alpha = 0.6f))
+                                        .background(YoBaseBackground.copy(alpha = 0.7f))
                                 ) {
                                     Icon(
                                         imageVector = if (isWatchlisted) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -414,7 +370,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(YoBaseBackground.copy(alpha = 0.6f))
+                                        .background(YoBaseBackground.copy(alpha = 0.7f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Download,
@@ -427,7 +383,7 @@ fun DetailScreen(
                                     onClick = { showReportDialog = true },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(YoBaseBackground.copy(alpha = 0.6f))
+                                        .background(YoBaseBackground.copy(alpha = 0.7f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.BugReport,
@@ -448,8 +404,8 @@ fun DetailScreen(
                         ) {
                             Text(
                                 text = m.title,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = YoTextPrimary
                             )
 
@@ -469,7 +425,8 @@ fun DetailScreen(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(YoSurface)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .border(1.dp, YoBorder, RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 6.dp, vertical = 3.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Star,
@@ -509,14 +466,13 @@ fun DetailScreen(
                                 Text(
                                     text = m.genre!!,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = YoPrimaryAmber
                                 )
                             }
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            // Play Now & Download Buttons
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -529,8 +485,8 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(48.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = YoPrimaryAmber,
                                         contentColor = YoBaseBackground
@@ -539,7 +495,7 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = Icons.Default.PlayArrow,
                                         contentDescription = null,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -557,8 +513,8 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(48.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = YoTextPrimary
@@ -575,7 +531,7 @@ fun DetailScreen(
                             }
 
                             if (!m.trailerUrl.isNull_orEmpty()) {
-                                Spacer(modifier = Modifier.height(18.dp))
+                                Spacer(modifier = Modifier.height(20.dp))
                                 InlineTrailerSection(
                                     trailerUrl = m.trailerUrl!!,
                                     movieTitle = m.title,
@@ -588,14 +544,13 @@ fun DetailScreen(
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            // Synopsis
                             if (!m.description.isNull_orEmpty()) {
                                 Column(modifier = Modifier.animateContentSize()) {
                                     Text(
                                         text = m.description!!,
                                         fontSize = 14.sp,
                                         color = YoTextMuted,
-                                        lineHeight = 20.sp,
+                                        lineHeight = 21.sp,
                                         maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -747,7 +702,6 @@ fun DetailScreen(
             }
         }
 
-        // Report Dialog
         if (showReportDialog) {
             ReportDialog(
                 movieId = movieId,
@@ -756,7 +710,6 @@ fun DetailScreen(
             )
         }
 
-        // Gate Modal Sheet
         if (showGateSheet) {
             GateModalBottomSheet(
                 sheetState = gateSheetState,
@@ -765,7 +718,6 @@ fun DetailScreen(
             )
         }
 
-        // Episode Download Picker
         if (showEpisodeDownloadSheet && movie != null) {
             EpisodeDownloadSheet(
                 sheetState = episodeDownloadSheetState,
@@ -779,7 +731,6 @@ fun DetailScreen(
             )
         }
 
-        // Download Started Dialog
         if (showDownloadStartedDialog) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showDownloadStartedDialog = false },
@@ -813,9 +764,6 @@ fun extractYouTubeId(url: String): String? {
     }
 }
 
-/** True for trailers hosted on YouTube/Vimeo/Dailymotion — matches the backend's own
- *  isEmbed check, so this mirrors exactly which trailers the API leaves as a raw
- *  external link vs which ones it turns into an authenticated proxy URL. */
 private fun isExternallyEmbeddableTrailer(url: String): Boolean =
     url.contains("youtube", ignoreCase = true) ||
         url.contains("youtu.be", ignoreCase = true) ||
@@ -843,7 +791,6 @@ fun InlineTrailerSection(
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Thumbnail rail
         Box(
             modifier = Modifier
                 .width(180.dp)
@@ -861,8 +808,8 @@ fun InlineTrailerSection(
                 contentDescription = "$movieTitle trailer",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                loading = { com.example.ui.components.YoCinemaLogoPlaceholder() },
-                error = { com.example.ui.components.YoCinemaLogoPlaceholder() }
+                loading = { YoCinemaLogoPlaceholder() },
+                error = { YoCinemaLogoPlaceholder() }
             )
             Box(
                 modifier = Modifier
@@ -892,10 +839,6 @@ fun InlineTrailerSection(
             if (isEmbeddable) {
                 InlineYouTubePlayer(trailerUrl = trailerUrl, ytId = ytId)
             } else {
-                // Our own hosted trailer, proxied through the backend and gated behind
-                // the same API-key auth as regular playback — a WebView/browser can't
-                // supply that header, so this plays it directly with an authenticated
-                // ExoPlayer instead, the same way the main player streams movies.
                 InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
             }
         }
@@ -998,7 +941,6 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
                 }
             }
         } else {
-            // Use AndroidView with proper disposal
             var webView: android.webkit.WebView? by remember { mutableStateOf(null) }
             DisposableEffect(Unit) {
                 onDispose {

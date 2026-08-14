@@ -50,13 +50,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.download.startDownloadWorker
 import com.example.repository.YocinemaRepository
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoDestructive
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
@@ -71,7 +71,7 @@ fun DownloadsScreen(
     repository: YocinemaRepository,
     onPlayOfflineFile: (movieId: String, localFilePath: String) -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Active, 1: Completed
+    var selectedTab by remember { mutableStateOf(0) }
     val activeDownloads by repository.activeDownloads.collectAsState(initial = emptyList())
     val completedDownloads by repository.completedDownloads.collectAsState(initial = emptyList())
 
@@ -83,12 +83,18 @@ fun DownloadsScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(
                 text = "Downloads",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
                 color = YoTextPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Access your offline content anytime",
+                fontSize = 13.sp,
+                color = YoTextMuted
             )
         }
 
@@ -99,7 +105,8 @@ fun DownloadsScreen(
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryAmber
+                    color = YoPrimaryAmber,
+                    height = 3.dp
                 )
             }
         ) {
@@ -145,7 +152,6 @@ fun DownloadsScreen(
                             },
                             onCancel = {
                                 androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
-                                // Delete temp file if exists
                                 item.tempFilePath?.let { path ->
                                     try { java.io.File(path).delete() } catch (_: Exception) {}
                                 }
@@ -172,7 +178,6 @@ fun DownloadsScreen(
                                 }
                             },
                             onDelete = {
-                                // Delete the actual file
                                 item.localFilePath?.let { uriStr ->
                                     try {
                                         val uri = Uri.parse(uriStr)
@@ -212,38 +217,34 @@ fun ActiveDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp), clip = false)
+            .clip(RoundedCornerShape(16.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Poster thumbnail
         Box(
             modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .size(54.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(YoBorder)
         ) {
             if (!download.posterUrl.isNullOrBlank()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = download.posterUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    loading = { YoCinemaLogoPlaceholder() },
+                    error = { YoCinemaLogoPlaceholder() }
                 )
             } else {
-                Icon(
-                    imageVector = Icons.Default.DownloadDone,
-                    contentDescription = null,
-                    tint = YoTextMuted,
-                    modifier = Modifier.size(28.dp).align(Alignment.Center)
-                )
+                YoCinemaLogoPlaceholder()
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -255,7 +256,6 @@ fun ActiveDownloadRow(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Subtitle: VJ / Season & Episode
             val subtitle = buildString {
                 download.vjName?.let { append("by $it") }
                 if (download.seasonNumber != null && download.episodeNumber != null) {
@@ -264,6 +264,7 @@ fun ActiveDownloadRow(
                 }
             }
             if (subtitle.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
@@ -273,7 +274,7 @@ fun ActiveDownloadRow(
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             LinearProgressIndicator(
                 progress = { progress },
@@ -285,7 +286,7 @@ fun ActiveDownloadRow(
                 trackColor = YoBorder
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -319,7 +320,7 @@ fun ActiveDownloadRow(
             }
         }
 
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isDownloading) {
@@ -348,44 +349,49 @@ fun CompletedDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp), clip = false)
+            .clip(RoundedCornerShape(16.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
             .clickable { onPlay() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Poster thumbnail
         Box(
             modifier = Modifier
                 .size(60.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(YoBorder)
         ) {
             if (!download.posterUrl.isNullOrBlank()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = download.posterUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    loading = { YoCinemaLogoPlaceholder() },
+                    error = { YoCinemaLogoPlaceholder() }
                 )
             } else {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(YoPrimaryAmber.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = YoPrimaryAmber,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
+                YoCinemaLogoPlaceholder()
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(YoPrimaryAmber.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = YoBaseBackground,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -397,7 +403,6 @@ fun CompletedDownloadRow(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Subtitle and episode info
             val subtitle = buildString {
                 download.vjName?.let { append("by $it") }
                 if (download.seasonNumber != null && download.episodeNumber != null) {
@@ -411,6 +416,7 @@ fun CompletedDownloadRow(
                 }
             }
             if (subtitle.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
@@ -423,9 +429,10 @@ fun CompletedDownloadRow(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "${formatBytes(download.downloadedBytes)} · Ready",
+                text = "${formatBytes(download.downloadedBytes)} · Ready to Watch",
                 fontSize = 12.sp,
-                color = YoTextMuted
+                fontWeight = FontWeight.Medium,
+                color = YoPrimaryAmber
             )
         }
 
@@ -441,21 +448,21 @@ fun EmptyState(message: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
-                    .size(88.dp)
-                    .clip(RoundedCornerShape(44.dp))
+                    .size(90.dp)
+                    .clip(RoundedCornerShape(45.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(44.dp)),
+                    .border(1.dp, YoBorder, RoundedCornerShape(45.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.DownloadDone,
                     contentDescription = null,
                     tint = YoTextMuted,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(38.dp)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = message, fontSize = 14.sp, color = YoTextMuted)
+            Text(text = message, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = YoTextMuted)
         }
     }
 }

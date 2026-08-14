@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.FacetsResponse
 import com.example.data.model.Movie
 import com.example.repository.YocinemaRepository
-import com.example.ui.components.ModernLoader
 import com.example.ui.components.MovieGridSkeleton
 import com.example.ui.components.PosterCard
 import com.example.ui.theme.YoBaseBackground
@@ -91,7 +89,6 @@ fun ExploreScreen(
                 limit = 48
             )
 
-            // Client-side fallback filter
             if (selectedGenre != "All") res = res.filter { it.genre?.contains(selectedGenre, ignoreCase = true) == true }
             if (selectedVj != "All") res = res.filter { it.vjName?.equals(selectedVj, ignoreCase = true) == true }
             if (selectedCountry != "All") res = res.filter { it.country?.equals(selectedCountry, ignoreCase = true) == true }
@@ -107,17 +104,21 @@ fun ExploreScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        // Header
-        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(
                 text = initialCategoryTitle ?: "Explore Catalogue",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
                 color = YoTextPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Discover movies, series & exclusive content",
+                fontSize = 13.sp,
+                color = YoTextMuted
             )
         }
 
-        // Type & Sort Filter Chips
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -168,12 +169,11 @@ fun ExploreScreen(
             }
         }
 
-        // Genres Chips
         val genreOptions = listOf("All") + (facets.genres ?: listOf("Action", "Comedy", "Drama", "Sci-Fi", "Thriller", "Horror", "Animation"))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(vertical = 2.dp)
+            modifier = Modifier.padding(vertical = 4.dp)
         ) {
             item {
                 Text(
@@ -181,7 +181,7 @@ fun ExploreScreen(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = YoTextMuted,
-                    modifier = Modifier.padding(end = 4.dp)
+                    modifier = Modifier.padding(end = 4.dp, top = 6.dp)
                 )
             }
             items(genreOptions) { g ->
@@ -191,7 +191,7 @@ fun ExploreScreen(
                     onClick = { selectedGenre = g },
                     label = { Text(g, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
+                        selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.15f),
                         selectedLabelColor = YoPrimaryAmber,
                         containerColor = YoSurface,
                         labelColor = YoTextMuted
@@ -206,13 +206,12 @@ fun ExploreScreen(
             }
         }
 
-        // VJs Chips if present in facets
         if (!facets.vjs.isNullOrEmpty()) {
             val vjOptions = listOf("All") + facets.vjs!!
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(vertical = 2.dp)
+                modifier = Modifier.padding(vertical = 4.dp)
             ) {
                 item {
                     Text(
@@ -220,7 +219,7 @@ fun ExploreScreen(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = YoTextMuted,
-                        modifier = Modifier.padding(end = 4.dp)
+                        modifier = Modifier.padding(end = 4.dp, top = 6.dp)
                     )
                 }
                 items(vjOptions) { vj ->
@@ -230,47 +229,7 @@ fun ExploreScreen(
                         onClick = { selectedVj = vj },
                         label = { Text(vj, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
-                            selectedLabelColor = YoPrimaryAmber,
-                            containerColor = YoSurface,
-                            labelColor = YoTextMuted
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
-                            selectedBorderColor = YoPrimaryAmber,
-                            enabled = true,
-                            selected = isSelected
-                        )
-                    )
-                }
-            }
-        }
-
-        // Years / Countries Chips if present
-        if (!facets.years.isNullOrEmpty()) {
-            val yearOptions = listOf("All") + facets.years!!
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(vertical = 2.dp)
-            ) {
-                item {
-                    Text(
-                        text = "Year:",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = YoTextMuted,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                }
-                items(yearOptions) { yr ->
-                    val isSelected = (yr == selectedYear)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { selectedYear = yr },
-                        label = { Text(yr, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
+                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.15f),
                             selectedLabelColor = YoPrimaryAmber,
                             containerColor = YoSurface,
                             labelColor = YoTextMuted
@@ -298,6 +257,7 @@ fun ExploreScreen(
                 Text(
                     text = "No movies found for selected filters",
                     fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
                     color = YoTextMuted
                 )
             }

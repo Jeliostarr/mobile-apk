@@ -18,9 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,19 +36,18 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.CastDetail
 import com.example.data.model.FilmographyItem
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
-import com.example.ui.components.VJBadgeChip
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
@@ -85,7 +81,7 @@ fun CastDetailScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBackClick) {
@@ -95,6 +91,7 @@ fun CastDetailScreen(
                     tint = YoTextPrimary
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Cast Profile",
                 fontSize = 20.sp,
@@ -127,17 +124,19 @@ fun CastDetailScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
+                            .shadow(elevation = 6.dp, shape = RoundedCornerShape(20.dp), clip = false)
+                            .clip(RoundedCornerShape(20.dp))
                             .background(YoSurface)
-                            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
-                            .padding(16.dp),
+                            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
+                            .padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(90.dp)
+                                .size(96.dp)
                                 .clip(CircleShape)
                                 .background(YoSurfaceVariant)
+                                .border(2.dp, YoPrimaryAmber.copy(alpha = 0.5f), CircleShape)
                         ) {
                             SubcomposeAsyncImage(
                                 model = c.photo,
@@ -149,7 +148,7 @@ fun CastDetailScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(18.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -159,7 +158,7 @@ fun CastDetailScreen(
                                 color = YoTextPrimary
                             )
 
-                            if (!c.birthday.isNull_orBlank()) {
+                            if (!c.birthday.isNull_or_Blank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "Born: ${c.birthday}",
@@ -168,7 +167,7 @@ fun CastDetailScreen(
                                 )
                             }
 
-                            if (!c.placeOfBirth.isNull_orBlank()) {
+                            if (!c.placeOfBirth.isNull_or_Blank()) {
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = c.placeOfBirth!!,
@@ -180,21 +179,21 @@ fun CastDetailScreen(
                     }
                 }
 
-                if (!c.bio.isNull_orBlank()) {
+                if (!c.bio.isNull_or_Blank()) {
                     item {
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
                         Text(
                             text = "Biography",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = YoTextPrimary
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = c.bio!!,
                             fontSize = 13.sp,
                             color = YoTextMuted,
-                            lineHeight = 18.sp
+                            lineHeight = 20.sp
                         )
                     }
                 }
@@ -241,9 +240,10 @@ fun FilmographyRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .shadow(elevation = 3.dp, shape = RoundedCornerShape(14.dp), clip = false)
+            .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(12.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .clickable(enabled = isAvailable) {
                 if (!versionMovieId.isNull_orBlank()) {
                     onMovieClick(versionMovieId!!)
@@ -254,7 +254,7 @@ fun FilmographyRow(
     ) {
         Box(
             modifier = Modifier
-                .width(50.dp)
+                .width(52.dp)
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(YoSurfaceVariant)
@@ -269,7 +269,7 @@ fun FilmographyRow(
             )
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -282,6 +282,7 @@ fun FilmographyRow(
             )
 
             if (!item.character.isNull_orBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "as ${item.character}",
                     fontSize = 12.sp,
@@ -289,14 +290,14 @@ fun FilmographyRow(
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (isAvailable) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(YoSuccessGreen.copy(alpha = 0.2f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(YoSuccessGreen.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = "AVAILABLE ON YOCINEMA",
@@ -313,9 +314,9 @@ fun FilmographyRow(
                     if (isRequested) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(YoPrimaryAmber.copy(alpha = 0.2f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(YoPrimaryAmber.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = "REQUEST SENT",
@@ -327,7 +328,7 @@ fun FilmographyRow(
                     } else {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(YoPrimaryAmber)
                                 .clickable(enabled = !isRequesting) {
                                     isRequesting = true
@@ -345,7 +346,7 @@ fun FilmographyRow(
                                         isRequested = true
                                     }
                                 }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
                             Text(
                                 text = if (isRequesting) "Sending..." else "Request Title",
@@ -361,4 +362,4 @@ fun FilmographyRow(
     }
 }
 
-private fun String?.isNull_orBlank(): Boolean = this == null || this.trim().isEmpty()
+private fun String?.isNull_or_Blank(): Boolean = this == null || this.trim().isEmpty()
