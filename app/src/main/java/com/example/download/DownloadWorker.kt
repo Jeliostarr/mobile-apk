@@ -130,6 +130,15 @@ class DownloadWorker(
                 val now = System.currentTimeMillis()
                 val delta = now - lastUpdateMs
                 if (delta >= 1000) {
+                    // Re-check isStopped right here: cancellation can land between
+                    // the loop's top-of-iteration check and this write. Without this,
+                    // a periodic "still downloading" write can race the pause button's
+                    // PAUSED write and silently overwrite it, making pause look broken.
+                    if (isStopped) {
+                        outputStream.close()
+                        downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
+                        return@withContext Result.retry()
+                    }
                     val speed = (bytesSinceLastUpdate * 1000) / delta
                     downloadDao.updateProgress(downloadId, downloaded, totalBytes, speed, DownloadEntity.STATUS_DOWNLOADING)
                     lastUpdateMs = now
