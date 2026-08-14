@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         DownloadEntity::class,
         MovieCacheEntity::class
     ],
-    version = 1,
+    version = 2, // increment version because we changed schema
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -31,7 +31,8 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "yocinema.db"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration() // will drop and recreate on version change
+                 .build()
                 INSTANCE = instance
                 instance
             }

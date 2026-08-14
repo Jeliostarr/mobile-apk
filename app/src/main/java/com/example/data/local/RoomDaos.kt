@@ -44,7 +44,7 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads ORDER BY updatedAt DESC")
     fun getAllDownloads(): Flow<List<DownloadEntity>>
 
-    @Query("SELECT * FROM downloads WHERE status != 'COMPLETED' ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING', 'PAUSED') ORDER BY updatedAt DESC")
     fun getActiveDownloads(): Flow<List<DownloadEntity>>
 
     @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' ORDER BY updatedAt DESC")
@@ -62,18 +62,12 @@ interface DownloadDao {
     @Query("UPDATE downloads SET downloadedBytes = :downloadedBytes, totalBytes = :totalBytes, speedBytesPerSec = :speed, status = :status, updatedAt = :updatedAt WHERE downloadId = :downloadId")
     suspend fun updateProgress(downloadId: String, downloadedBytes: Long, totalBytes: Long, speed: Long, status: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE downloads SET status = :status WHERE downloadId = :downloadId")
+    suspend fun updateStatus(downloadId: String, status: String)
+
+    @Query("UPDATE downloads SET localFilePath = :path, downloadedAt = :time, status = 'COMPLETED', updatedAt = :updatedAt WHERE downloadId = :downloadId")
+    suspend fun markCompleted(downloadId: String, path: String, time: Long = System.currentTimeMillis(), updatedAt: Long = System.currentTimeMillis())
+
     @Query("DELETE FROM downloads WHERE downloadId = :downloadId")
     suspend fun deleteDownload(downloadId: String)
-}
-
-@Dao
-interface MovieCacheDao {
-    @Query("SELECT * FROM movie_cache WHERE movieId = :movieId LIMIT 1")
-    suspend fun getCachedMovie(movieId: String): MovieCacheEntity?
-
-    @Query("SELECT * FROM movie_cache ORDER BY updatedAt DESC LIMIT 50")
-    suspend fun getAllCachedMovies(): List<MovieCacheEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun cacheMovie(cache: MovieCacheEntity)
 }

@@ -35,12 +35,19 @@ data class DownloadEntity(
     val movieId: String,
     val episodeId: String? = null,
     val title: String,
+    val posterUrl: String? = null,          // NEW: for display
+    val vjName: String? = null,             // NEW: for display
+    val seasonNumber: Int? = null,          // NEW
+    val episodeNumber: Int? = null,         // NEW
+    val episodeTitle: String? = null,       // NEW
     val filename: String,
-    val localFilePath: String,
+    val localFilePath: String? = null,      // now nullable (null until complete)
+    val tempFilePath: String? = null,       // NEW: temp file during download
     val totalBytes: Long = 0L,
     val downloadedBytes: Long = 0L,
-    val status: String = "QUEUED", // QUEUED, DOWNLOADING, PAUSED, COMPLETED, FAILED
+    val status: String = "QUEUED",          // QUEUED, DOWNLOADING, PAUSED, COMPLETED, FAILED
     val speedBytesPerSec: Long = 0L,
+    val downloadedAt: Long? = null,         // NEW: completion timestamp
     val updatedAt: Long = System.currentTimeMillis()
 )
 
