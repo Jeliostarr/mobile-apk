@@ -288,13 +288,19 @@ fun ActiveDownloadRow(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "$formattedDownloaded / $formattedTotal",
                     fontSize = 11.sp,
-                    color = YoTextMuted
+                    color = YoTextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 val statusText = when {
                     isDownloading -> formatSpeed(download.speedBytesPerSec)
@@ -305,14 +311,16 @@ fun ActiveDownloadRow(
                     text = statusText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isDownloading) YoPrimaryAmber else YoTextMuted
+                    color = if (isDownloading) YoPrimaryAmber else YoTextMuted,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(4.dp))
 
-        Row {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             if (isDownloading) {
                 IconButton(onClick = onPause) {
                     Icon(Icons.Default.Pause, contentDescription = "Pause", tint = YoPrimaryAmber)
@@ -324,7 +332,7 @@ fun ActiveDownloadRow(
             }
 
             IconButton(onClick = onCancel) {
-                Icon(Icons.Default.Delete, contentDescription = "Cancel", tint = YoDestructive)
+                Icon(Icons.Default.Delete, contentDescription = "Cancel", tint = YoTextMuted)
             }
         }
     }

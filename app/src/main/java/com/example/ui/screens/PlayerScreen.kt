@@ -165,13 +165,23 @@ fun PlayerScreen(
 
             if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedFile?.exists() == true) {
                 Log.d(TAG, "Playing from local file: ${downloadedEntity.localFilePath}")
-                val m = repository.getMovieDetail(movieId)
-                movie = m ?: Movie(id = movieId, title = downloadedEntity.title)
+                // Start playback from the local file right away — this must never
+                // depend on the network. Movie metadata is only used for the
+                // title/subtitle overlay, so it's fetched best-effort afterward
+                // and never blocks or breaks offline playback.
+                movie = Movie(id = movieId, title = downloadedEntity.title)
                 playerManager.playMedia(
                     movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
-                    title = movie?.title ?: downloadedEntity.title,
-                    posterUrl = movie?.cover ?: movie?.poster ?: movie?.displayPosterUrl
+                    title = downloadedEntity.title,
+                    posterUrl = downloadedEntity.posterUrl
                 )
+                try {
+                    repository.getMovieDetail(movieId)?.let { m -> movie = m }
+                } catch (e: Exception) {
+                    // Offline (or a flaky connection) is expected here — we already
+                    // have everything needed to keep playing from the local file.
+                    Log.d(TAG, "Metadata refresh skipped (likely offline): ${e.message}")
+                }
                 return@LaunchedEffect
             }
 
