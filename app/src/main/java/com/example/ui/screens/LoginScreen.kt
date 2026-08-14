@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border          // ✅ this was missing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,7 +63,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(
     repository: YocinemaRepository,
-    onBackClick: () -> Unit,   // kept for navigation but we hide the button
+    onBackClick: () -> Unit,   // kept for compatibility but button is hidden
     onLoginSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -91,7 +92,6 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Logo with shadow
             Image(
                 painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
                 contentDescription = "YOCINEMA Logo",
@@ -129,7 +129,7 @@ fun LoginScreen(
                     .shadow(12.dp, RoundedCornerShape(24.dp), clip = false)
                     .clip(RoundedCornerShape(24.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(24.dp))
+                    .border(1.dp, YoBorder, RoundedCornerShape(24.dp))   // border now works
                     .padding(20.dp)
             ) {
                 Column(
