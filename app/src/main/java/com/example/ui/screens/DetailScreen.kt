@@ -260,7 +260,7 @@ fun DetailScreen(
                     Text(
                         text = errorState!!,
                         color = YoTextMuted,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         modifier = Modifier.padding(horizontal = 32.dp)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -408,7 +408,7 @@ fun DetailScreen(
                         ) {
                             Text(
                                 text = m.title,
-                                fontSize = 26.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = YoTextPrimary
                             )
@@ -468,7 +468,7 @@ fun DetailScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = m.genre!!,
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = YoPrimaryAmber
                                 )
@@ -502,7 +502,7 @@ fun DetailScreen(
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
 
                                 OutlinedButton(
@@ -553,7 +553,7 @@ fun DetailScreen(
                                 Column(modifier = Modifier.animateContentSize()) {
                                     Text(
                                         text = m.description!!,
-                                        fontSize = 15.sp,
+                                        fontSize = 14.sp,
                                         color = YoTextMuted,
                                         lineHeight = 22.sp,
                                         maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
@@ -581,7 +581,7 @@ fun DetailScreen(
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = "Episodes",
-                                    fontSize = 20.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = YoTextPrimary,
                                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -606,7 +606,7 @@ fun DetailScreen(
                                             ) {
                                                 Text(
                                                     text = "Season $seasonNum",
-                                                    fontSize = 13.sp,
+                                                    fontSize = 12.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (isSelected) YoBaseBackground else YoTextPrimary
                                                 )
@@ -647,7 +647,7 @@ fun DetailScreen(
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = "Cast & Crew",
-                                    fontSize = 20.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = YoTextPrimary,
                                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -674,38 +674,37 @@ fun DetailScreen(
                         }
                     }
 
-                    // Related Movies Rail
-                    if (relatedMovies.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(28.dp))
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = "More Like This",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = YoTextPrimary,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
+                   
+                                            // Related Movies Rail
+if (relatedMovies.isNotEmpty()) {
+    item {
+        Spacer(modifier = Modifier.height(28.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "More Like This",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = YoTextPrimary,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
 
-                                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    items(relatedMovies) { rel ->
-                                        PosterCard(
-                                            movie = rel,
-                                            onClick = { onRelatedMovieClick(rel.id) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(relatedMovies) { rel ->
+                    PosterCard(
+                        movie = rel,
+                        onClick = { onRelatedMovieClick(rel.id) },
+                        widthDp = 100   // 👈 This shrinks the posters
+                    )
                 }
             }
         }
+    }
+}
 
         // Report Dialog
         if (showReportDialog) {
