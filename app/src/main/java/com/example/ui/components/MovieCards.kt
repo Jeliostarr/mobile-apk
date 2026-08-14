@@ -37,12 +37,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import com.example.R
 import com.example.data.model.BASE_URL
 import com.example.data.model.CastMember
 import com.example.data.model.Episode
@@ -56,12 +57,6 @@ import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
-/**
- * A clickable modifier that scales down slightly on press, in addition to
- * the normal ripple. This one small addition is most of what makes tappable
- * elements feel like a native app rather than a web page — nothing here
- * physically responds to touch otherwise.
- */
 @Composable
 private fun Modifier.pressScaleClickable(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
@@ -79,11 +74,6 @@ private fun Modifier.pressScaleClickable(onClick: () -> Unit): Modifier {
         )
 }
 
-/**
- * Thin bottom-edge scrim for legibility — anything (badges, labels) sitting
- * directly on top of arbitrary photo content needs this behind it, since a
- * still or poster's own colors can't be relied on for contrast.
- */
 private val BottomLegibilityScrim = Brush.verticalGradient(
     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
 )
@@ -98,34 +88,13 @@ fun YoCinemaLogoPlaceholder(
             .background(YoSurfaceVariant),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(YoPrimaryAmber)
-                    .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = YoBaseBackground,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "YOCINEMA",
-                fontWeight = FontWeight.Black,
-                fontSize = 9.sp,
-                letterSpacing = 1.sp,
-                color = YoPrimaryAmber
-            )
-        }
+        androidx.compose.foundation.Image(
+            painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
+            contentDescription = "YOCINEMA Logo",
+            modifier = Modifier
+                .size(50.dp)
+                .clip(CircleShape)
+        )
     }
 }
 
@@ -138,22 +107,21 @@ fun SpotlightCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(elevation = 6.dp, shape = RoundedCornerShape(18.dp), clip = false)
-            .clip(RoundedCornerShape(18.dp))
+            .shadow(8.dp, RoundedCornerShape(20.dp), clip = false)
+            .clip(RoundedCornerShape(20.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
             .pressScaleClickable(onClick)
-            .padding(12.dp)
+            .padding(14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Poster Left
             Box(
                 modifier = Modifier
                     .width(110.dp)
                     .aspectRatio(2f / 3f)
-                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), clip = false)
+                    .shadow(6.dp, RoundedCornerShape(14.dp), clip = false)
                     .clip(RoundedCornerShape(14.dp))
                     .background(YoSurfaceVariant)
             ) {
@@ -167,9 +135,8 @@ fun SpotlightCard(
                 )
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-            // Title + Genre + Synopsis Right
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -187,7 +154,7 @@ fun SpotlightCard(
                 if (!movie.genre.isNull_orBlank()) {
                     Text(
                         text = movie.genre!!,
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = YoPrimaryAmber,
                         maxLines = 1,
@@ -199,11 +166,11 @@ fun SpotlightCard(
                 if (!movie.description.isNull_orBlank()) {
                     Text(
                         text = movie.description!!,
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         color = YoTextMuted,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
-                        lineHeight = 18.sp
+                        lineHeight = 20.sp
                     )
                 }
 
@@ -237,7 +204,7 @@ fun PosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .shadow(elevation = 5.dp, shape = RoundedCornerShape(14.dp), clip = false)
+                .shadow(6.dp, RoundedCornerShape(14.dp), clip = false)
                 .clip(RoundedCornerShape(14.dp))
                 .background(YoSurfaceVariant)
         ) {
@@ -251,30 +218,28 @@ fun PosterCard(
             )
 
             if (!movie.vjName.isNull_orBlank()) {
-                // A scrim behind the badge — a solid-color pill sitting
-                // directly on unpredictable poster art can vanish into it.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(52.dp)
                         .align(Alignment.BottomCenter)
                         .background(BottomLegibilityScrim)
                 )
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(6.dp)
+                        .padding(8.dp)
                 ) {
                     VJBadgeChip(vjName = movie.vjName!!, onImage = true)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = movie.title,
-            fontSize = 13.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = YoTextPrimary,
             maxLines = 1,
@@ -284,7 +249,7 @@ fun PosterCard(
         if (!movie.genre.isNull_orBlank()) {
             Text(
                 text = movie.genre!!,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = YoTextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -302,12 +267,12 @@ fun PosterCard(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
                             tint = YoPrimaryAmber,
-                            modifier = Modifier.size(11.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = movie.imdbRating!!,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = YoTextPrimary
                         )
@@ -316,7 +281,7 @@ fun PosterCard(
                 if (movie.duration != null && movie.duration > 0) {
                     Text(
                         text = com.example.data.model.formatDuration(movie.duration),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = YoTextMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -332,8 +297,8 @@ fun VJBadgeChip(vjName: String, onImage: Boolean = false) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(if (onImage) Color.Black.copy(alpha = 0.55f) else YoBorder)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .background(if (onImage) Color.Black.copy(alpha = 0.6f) else YoBorder)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
             text = "VJ $vjName".uppercase(),
@@ -353,16 +318,17 @@ fun VJChip(
     val initial = vjName.take(1).uppercase()
     Row(
         modifier = modifier
+            .shadow(4.dp, RoundedCornerShape(20.dp), clip = false)
             .clip(RoundedCornerShape(20.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
             .pressScaleClickable(onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(32.dp)
                 .clip(CircleShape)
                 .background(YoPrimaryAmber),
             contentAlignment = Alignment.Center
@@ -370,14 +336,14 @@ fun VJChip(
             Text(
                 text = initial,
                 color = YoBaseBackground,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = vjName,
-            fontSize = 13.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = YoTextPrimary
         )
@@ -400,7 +366,7 @@ fun EpisodeCard(
             modifier = Modifier
                 .width(200.dp)
                 .aspectRatio(16f / 9f)
-                .shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), clip = false)
+                .shadow(6.dp, RoundedCornerShape(14.dp), clip = false)
                 .clip(RoundedCornerShape(14.dp))
                 .background(YoSurfaceVariant)
         ) {
@@ -413,41 +379,37 @@ fun EpisodeCard(
                 error = { YoCinemaLogoPlaceholder() }
             )
 
-            // Scrim across the bottom so the S·E label and duration pill stay
-            // legible no matter what color the still underneath happens to be.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(60.dp)
                     .align(Alignment.BottomCenter)
                     .background(BottomLegibilityScrim)
             )
 
-            // Duration Pill top right
             if (episode.duration != null && episode.duration > 0) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
+                        .padding(10.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = com.example.data.model.formatEpisodeDuration(episode.duration),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = YoTextPrimary
                     )
                 }
             }
 
-            // Play icon overlay center
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(40.dp)
-                    .shadow(elevation = 3.dp, shape = CircleShape, clip = false)
+                    .size(44.dp)
+                    .shadow(6.dp, CircleShape, clip = false)
                     .clip(CircleShape)
                     .background(YoBaseBackground.copy(alpha = 0.75f)),
                 contentAlignment = Alignment.Center
@@ -456,31 +418,29 @@ fun EpisodeCard(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
                     tint = YoPrimaryAmber,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
-            // S1 E2 bottom left — sits on the scrim above, so it stays
-            // readable regardless of the thumbnail's own colors.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(8.dp)
+                    .padding(10.dp)
             ) {
                 Text(
                     text = "S${episode.sNum} E${episode.eNum}",
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = episode.title ?: "Episode ${episode.eNum}",
-            fontSize = 13.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = YoTextPrimary,
             maxLines = 1,
@@ -505,8 +465,8 @@ fun CastAvatarCard(
         val avatarUrl = cast.avatarUrl ?: "$BASE_URL/api/v1/movies/$movieId/cast/0/avatar"
         Box(
             modifier = Modifier
-                .size(80.dp)
-                .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                .size(84.dp)
+                .shadow(6.dp, CircleShape, clip = false)
                 .clip(CircleShape)
                 .background(YoSurfaceVariant)
                 .border(2.dp, YoBorder, CircleShape)
@@ -521,11 +481,11 @@ fun CastAvatarCard(
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
             text = cast.name,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = YoTextPrimary,
             maxLines = 1,
@@ -535,7 +495,7 @@ fun CastAvatarCard(
         if (!cast.character.isNull_orBlank()) {
             Text(
                 text = "as ${cast.character}",
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = YoTextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
