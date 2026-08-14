@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
+import com.example.download.startDownloadWorker
 import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
