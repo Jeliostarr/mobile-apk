@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Button
-import androidx.compute.material3.ButtonDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -84,7 +84,6 @@ fun EpisodeDownloadSheet(
                 .heightIn(max = 600.dp)
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            // Header
             Text(
                 text = "Download Episodes",
                 fontSize = 20.sp,
@@ -99,7 +98,6 @@ fun EpisodeDownloadSheet(
             )
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Season chips
             if (seasons.size > 1) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -130,7 +128,6 @@ fun EpisodeDownloadSheet(
                 }
             }
 
-            // Select all / deselect all
             val selectableKeysThisSeason = remember(visibleEpisodes, downloadStatusByEpisodeKey) {
                 visibleEpisodes.map { episodeKey(it) }.filter { it !in downloadStatusByEpisodeKey }.toSet()
             }
@@ -162,7 +159,6 @@ fun EpisodeDownloadSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Episode list
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -232,7 +228,6 @@ fun EpisodeDownloadSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Download button
             Button(
                 onClick = { onDownloadSelected(episodes.filter { episodeKey(it) in selectedKeys }) },
                 enabled = selectedKeys.isNotEmpty(),

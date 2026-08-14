@@ -48,7 +48,7 @@ fun SharePlatformPicker(
         ) {
             PlatformButton(
                 label = "WhatsApp",
-                icon = Icons.Default.Send, // We can use a custom icon, but I'll keep it simple
+                icon = Icons.Default.Send,
                 color = WhatsAppGreen,
                 enabled = enabled,
                 modifier = Modifier.weight(1f)
