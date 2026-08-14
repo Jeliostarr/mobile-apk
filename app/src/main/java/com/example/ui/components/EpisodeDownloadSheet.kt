@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compute.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,6 +49,7 @@ import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
+import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
@@ -74,14 +75,16 @@ fun EpisodeDownloadSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = YoSurface
+        containerColor = YoSurface,
+        scrimColor = YoBaseBackground.copy(alpha = 0.85f)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 600.dp)
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
+            // Header
             Text(
                 text = "Download Episodes",
                 fontSize = 20.sp,
@@ -94,32 +97,40 @@ fun EpisodeDownloadSheet(
                 fontSize = 14.sp,
                 color = YoTextMuted
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
+            // Season chips
             if (seasons.size > 1) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(bottom = 14.dp)
+                ) {
                     items(seasons) { s ->
                         val isSelected = s == selectedSeason
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (isSelected) YoPrimaryAmber else YoBaseBackground)
-                                .border(1.dp, if (isSelected) YoPrimaryAmber else YoBorder, RoundedCornerShape(20.dp))
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(if (isSelected) YoPrimaryAmber else YoSurfaceVariant)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) YoPrimaryAmber else YoBorder,
+                                    RoundedCornerShape(24.dp)
+                                )
                                 .clickable { selectedSeason = s }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .padding(horizontal = 18.dp, vertical = 10.dp)
                         ) {
                             Text(
                                 text = "Season $s",
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) YoBaseBackground else YoTextPrimary
                             )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(14.dp))
             }
 
+            // Select all / deselect all
             val selectableKeysThisSeason = remember(visibleEpisodes, downloadStatusByEpisodeKey) {
                 visibleEpisodes.map { episodeKey(it) }.filter { it !in downloadStatusByEpisodeKey }.toSet()
             }
@@ -149,8 +160,9 @@ fun EpisodeDownloadSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
+            // Episode list
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -166,14 +178,14 @@ fun EpisodeDownloadSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(YoBaseBackground)
+                            .background(YoSurfaceVariant)
                             .then(
                                 if (isLocked) Modifier
                                 else Modifier.clickable {
                                     selectedKeys = if (isChecked) selectedKeys - key else selectedKeys + key
                                 }
                             )
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
@@ -193,40 +205,55 @@ fun EpisodeDownloadSheet(
                         Text(
                             text = "E${ep.eNum} · ${ep.title ?: "Episode ${ep.eNum}"}",
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = YoTextPrimary,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isLocked) YoTextMuted else YoTextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
                         if (existingStatus != null) {
-                            Text(
-                                text = statusLabel(existingStatus),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = YoTextMuted
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(YoPrimaryAmber.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = statusLabel(existingStatus),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = YoPrimaryAmber
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // Download button
             Button(
                 onClick = { onDownloadSelected(episodes.filter { episodeKey(it) in selectedKeys }) },
                 enabled = selectedKeys.isNotEmpty(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 24.dp)
+                    .shadow(8.dp, RoundedCornerShape(14.dp), clip = false),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = YoPrimaryAmber,
-                    contentColor = YoBaseBackground
+                    contentColor = YoBaseBackground,
+                    disabledContainerColor = YoSurfaceVariant,
+                    disabledContentColor = YoTextMuted
                 )
             ) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(22.dp))
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp)
+                )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = if (selectedKeys.isEmpty()) "Select episodes"

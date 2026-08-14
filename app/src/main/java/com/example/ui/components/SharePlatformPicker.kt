@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -31,10 +33,6 @@ import com.example.util.shareViaChat
 private val WhatsAppGreen = Color(0xFF25D366)
 private val TelegramBlue = Color(0xFF229ED9)
 
-/**
- * Two big platform buttons. No API/network call to our own backend happens
- * here — this only copies text and opens a chat app/link.
- */
 @Composable
 fun SharePlatformPicker(
     enabled: Boolean,
@@ -46,10 +44,11 @@ fun SharePlatformPicker(
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             PlatformButton(
                 label = "WhatsApp",
+                icon = Icons.Default.Send, // We can use a custom icon, but I'll keep it simple
                 color = WhatsAppGreen,
                 enabled = enabled,
                 modifier = Modifier.weight(1f)
@@ -59,6 +58,7 @@ fun SharePlatformPicker(
             }
             PlatformButton(
                 label = "Telegram",
+                icon = Icons.Default.Send,
                 color = TelegramBlue,
                 enabled = enabled,
                 modifier = Modifier.weight(1f)
@@ -68,20 +68,24 @@ fun SharePlatformPicker(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Icon(
                 imageVector = Icons.Default.Send,
                 contentDescription = null,
                 tint = YoTextMuted,
                 modifier = Modifier
                     .padding(end = 6.dp)
-                    .height(14.dp)
+                    .size(16.dp)
             )
             Text(
-                text = "Opens our community chat — paste your message there and send it.",
-                fontSize = 11.sp,
+                text = "Opens our community chat — paste your message and send it.",
+                fontSize = 12.sp,
                 color = YoTextMuted
             )
         }
@@ -91,6 +95,7 @@ fun SharePlatformPicker(
 @Composable
 private fun PlatformButton(
     label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: Color,
     enabled: Boolean,
     modifier: Modifier = Modifier,
@@ -98,17 +103,30 @@ private fun PlatformButton(
 ) {
     Row(
         modifier = modifier
-            .height(46.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = if (enabled) 0.14f else 0.06f))
-            .border(1.dp, color.copy(alpha = if (enabled) 0.35f else 0.12f), RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClick = onClick),
+            .height(56.dp)
+            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (enabled) color.copy(alpha = 0.15f) else Color.Transparent)
+            .border(
+                1.5.dp,
+                if (enabled) color.copy(alpha = 0.5f) else YoTextMuted.copy(alpha = 0.2f),
+                RoundedCornerShape(14.dp)
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) color else YoTextMuted,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = label,
-            fontSize = 13.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = if (enabled) color else YoTextMuted
         )
