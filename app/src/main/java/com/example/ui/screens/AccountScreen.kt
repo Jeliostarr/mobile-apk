@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -66,6 +67,7 @@ import com.example.data.model.AccountUser
 import com.example.data.model.formatDuration
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.VJBadgeChip
+import com.example.ui.components.RequestDialog
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoDestructive
@@ -94,6 +96,8 @@ fun AccountScreen(
     val history by repository.history.collectAsState(initial = emptyList())
     val apiKey = repository.tokenManager.getApiKey()
 
+    var showRequestDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
             accountUser = repository.getAccountMe()
@@ -114,6 +118,7 @@ fun AccountScreen(
             )
         }
 
+        // User Info Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -240,8 +245,32 @@ fun AccountScreen(
             }
         }
 
+        // Request a Movie button
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { showRequestDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = YoPrimaryAmber,
+                contentColor = YoBaseBackground
+            )
+        ) {
+            Icon(imageVector = Icons.Default.MovieFilter, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Request a Movie or Series", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+
+        if (showRequestDialog) {
+            RequestDialog(onDismiss = { showRequestDialog = false })
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Tabs
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = YoSurface,

@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compute.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,6 +48,7 @@ import com.example.data.model.FilmographyItem
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
 import com.example.ui.components.VJBadgeChip
+import com.example.ui.components.RequestDialog
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
@@ -230,9 +231,7 @@ fun FilmographyRow(
 ) {
     val versionMovieId = item.versions?.firstOrNull()?.movieId
     val isAvailable = item.onYocinema || !versionMovieId.isNull_orBlank()
-    var isRequested by remember { mutableStateOf(false) }
-    var isRequesting by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    var showRequestDialog by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -304,54 +303,27 @@ fun FilmographyRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isRequested) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(YoPrimaryAmber.copy(alpha = 0.2f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "REQUEST SENT",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = YoPrimaryAmber
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(YoPrimaryAmber)
-                                .clickable(enabled = !isRequesting) {
-                                    isRequesting = true
-                                    scope.launch {
-                                        val tmdbId = item.tmdbId ?: item.id ?: ""
-                                        val mediaType = item.mediaType ?: "movie"
-                                        repository.requestCastMovie(
-                                            castId = castId,
-                                            tmdbId = tmdbId,
-                                            mediaType = mediaType,
-                                            title = item.title,
-                                            poster = item.poster
-                                        )
-                                        isRequesting = false
-                                        isRequested = true
-                                    }
-                                }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = if (isRequesting) "Sending..." else "Request Title",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = YoBaseBackground
-                            )
-                        }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(YoPrimaryAmber)
+                            .clickable { showRequestDialog = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Request Title",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = YoBaseBackground
+                        )
                     }
                 }
             }
         }
+    }
+
+    if (showRequestDialog) {
+        RequestDialog(onDismiss = { showRequestDialog = false })
     }
 }
 
