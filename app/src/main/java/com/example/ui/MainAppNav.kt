@@ -70,10 +70,6 @@ fun MainAppNav() {
     val currentScreen = screenBackStack.lastOrNull() ?: initialScreen
     var currentTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
 
-    // A brief branded splash on launch — the auth check itself is instant,
-    // but jumping straight to Login/Home with no launch moment at all is
-    // what makes an app feel like it "just opened a screen" rather than
-    // like it started up. Every polished native app has this beat.
     var showSplash by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         delay(900)
