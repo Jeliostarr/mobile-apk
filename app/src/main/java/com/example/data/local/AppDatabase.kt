@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         DownloadEntity::class,
         MovieCacheEntity::class
     ],
-    version = 3,  // increment to force schema rebuild
+    version = 4,  // increment to force schema rebuild
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
