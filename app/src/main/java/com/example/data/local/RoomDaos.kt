@@ -71,3 +71,22 @@ interface DownloadDao {
     @Query("DELETE FROM downloads WHERE downloadId = :downloadId")
     suspend fun deleteDownload(downloadId: String)
 }
+
+// ========== ADD THIS MISSING DAO ==========
+@Dao
+interface MovieCacheDao {
+    @Query("SELECT * FROM movie_cache WHERE movieId = :movieId LIMIT 1")
+    suspend fun getCachedMovie(movieId: String): MovieCacheEntity?
+
+    @Query("SELECT * FROM movie_cache ORDER BY updatedAt DESC LIMIT 50")
+    suspend fun getAllCachedMovies(): List<MovieCacheEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun cacheMovie(cache: MovieCacheEntity)
+
+    @Query("DELETE FROM movie_cache WHERE movieId = :movieId")
+    suspend fun deleteCachedMovie(movieId: String)
+
+    @Query("DELETE FROM movie_cache WHERE updatedAt < :cutoff")
+    suspend fun clearStale(cutoff: Long)
+}
