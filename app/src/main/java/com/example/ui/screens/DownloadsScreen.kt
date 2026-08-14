@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -42,10 +44,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
@@ -56,6 +61,9 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun DownloadsScreen(
@@ -67,6 +75,7 @@ fun DownloadsScreen(
     val completedDownloads by repository.completedDownloads.collectAsState(initial = emptyList())
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -114,33 +123,32 @@ fun DownloadsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(activeDownloads, key = { it.downloadId }) { item ->
-                        val context = androidx.compose.ui.platform.LocalContext.current
                         ActiveDownloadRow(
                             download = item,
                             onPause = {
                                 androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
                                 scope.launch {
-                                    repository.downloadDao.updateProgress(item.downloadId, item.downloadedBytes, item.totalBytes, 0, "PAUSED")
+                                    repository.downloadDao.updateStatus(item.downloadId, DownloadEntity.STATUS_PAUSED)
                                 }
                             },
                             onResume = {
                                 scope.launch {
-                                    val m = repository.getMovieDetail(item.movieId) ?: com.example.data.model.Movie(id = item.movieId, title = item.title)
-                                    var sNum: Int? = null
-                                    var eNum: Int? = null
-                                    if (item.episodeId != null && item.episodeId.startsWith("S")) {
-                                        val parts = item.episodeId.split("E")
-                                        if (parts.size == 2) {
-                                            sNum = parts[0].removePrefix("S").toIntOrNull()
-                                            eNum = parts[1].toIntOrNull()
-                                        }
-                                    }
-                                    startDownloadWorker(context, m, sNum, eNum)
+                                    val movie = repository.getMovieDetail(item.movieId) ?: return@launch
+                                    startDownloadWorker(
+                                        context,
+                                        movie,
+                                        item.seasonNumber,
+                                        item.episodeNumber
+                                    )
                                 }
                             },
-                            onDelete = {
+                            onCancel = {
                                 androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
-                                scope.launch { repository.deleteDownload(item.downloadId) }
+                                // Delete temp file if exists
+                                item.tempFilePath?.let { path ->
+                                    try { java.io.File(path).delete() } catch (_: Exception) {}
+                                }
+                                scope.launch { repository.downloadDao.deleteDownload(item.downloadId) }
                             }
                         )
                     }
@@ -157,9 +165,24 @@ fun DownloadsScreen(
                     items(completedDownloads, key = { it.downloadId }) { item ->
                         CompletedDownloadRow(
                             download = item,
-                            onPlay = { onPlayOfflineFile(item.movieId, item.localFilePath) },
+                            onPlay = {
+                                item.localFilePath?.let { path ->
+                                    onPlayOfflineFile(item.movieId, path)
+                                }
+                            },
                             onDelete = {
-                                scope.launch { repository.deleteDownload(item.downloadId) }
+                                // Delete the actual file
+                                item.localFilePath?.let { uriStr ->
+                                    try {
+                                        val uri = Uri.parse(uriStr)
+                                        if (uri.scheme == "content") {
+                                            context.contentResolver.delete(uri, null, null)
+                                        } else {
+                                            java.io.File(uriStr).delete()
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                                scope.launch { repository.downloadDao.deleteDownload(item.downloadId) }
                             }
                         )
                     }
@@ -174,7 +197,7 @@ fun ActiveDownloadRow(
     download: DownloadEntity,
     onPause: () -> Unit,
     onResume: () -> Unit,
-    onDelete: () -> Unit
+    onCancel: () -> Unit
 ) {
     val progress = if (download.totalBytes > 0) {
         (download.downloadedBytes.toFloat() / download.totalBytes.toFloat()).coerceIn(0f, 1f)
@@ -182,8 +205,8 @@ fun ActiveDownloadRow(
 
     val formattedDownloaded = formatBytes(download.downloadedBytes)
     val formattedTotal = if (download.totalBytes > 0) formatBytes(download.totalBytes) else "..."
-    val formattedSpeed = formatSpeed(download.speedBytesPerSec)
-    val isDownloading = download.status == "DOWNLOADING"
+    val isDownloading = download.status == DownloadEntity.STATUS_DOWNLOADING
+    val isPaused = download.status == DownloadEntity.STATUS_PAUSED
 
     Row(
         modifier = Modifier
@@ -195,6 +218,32 @@ fun ActiveDownloadRow(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Poster thumbnail
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(YoBorder)
+        ) {
+            if (!download.posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = download.posterUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.DownloadDone,
+                    contentDescription = null,
+                    tint = YoTextMuted,
+                    modifier = Modifier.size(28.dp).align(Alignment.Center)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = download.title,
@@ -204,6 +253,24 @@ fun ActiveDownloadRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            // Subtitle: VJ / Season & Episode
+            val subtitle = buildString {
+                download.vjName?.let { append("by $it") }
+                if (download.seasonNumber != null && download.episodeNumber != null) {
+                    if (isNotEmpty()) append(" · ")
+                    append("S${download.seasonNumber} E${download.episodeNumber}")
+                }
+            }
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = YoTextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -217,7 +284,7 @@ fun ActiveDownloadRow(
                 trackColor = YoBorder
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -229,11 +296,16 @@ fun ActiveDownloadRow(
                     color = YoTextMuted
                 )
 
+                val statusText = when {
+                    isDownloading -> formatSpeed(download.speedBytesPerSec)
+                    isPaused -> "Paused"
+                    else -> download.status
+                }
                 Text(
-                    text = if (isDownloading) formattedSpeed else download.status,
+                    text = statusText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = YoPrimaryAmber
+                    color = if (isDownloading) YoPrimaryAmber else YoTextMuted
                 )
             }
         }
@@ -243,28 +315,16 @@ fun ActiveDownloadRow(
         Row {
             if (isDownloading) {
                 IconButton(onClick = onPause) {
-                    Icon(
-                        imageVector = Icons.Default.Pause,
-                        contentDescription = "Pause",
-                        tint = YoPrimaryAmber
-                    )
+                    Icon(Icons.Default.Pause, contentDescription = "Pause", tint = YoPrimaryAmber)
                 }
-            } else {
+            } else if (isPaused) {
                 IconButton(onClick = onResume) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
-                        contentDescription = "Resume",
-                        tint = YoPrimaryAmber
-                    )
+                    Icon(Icons.Default.Refresh, contentDescription = "Resume", tint = YoPrimaryAmber)
                 }
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Cancel",
-                    tint = YoDestructive
-                )
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Default.Delete, contentDescription = "Cancel", tint = YoDestructive)
             }
         }
     }
@@ -287,19 +347,33 @@ fun CompletedDownloadRow(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Poster thumbnail
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(YoPrimaryAmber),
-            contentAlignment = Alignment.Center
+                .size(60.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(YoBorder)
         ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = YoBaseBackground,
-                modifier = Modifier.size(28.dp)
-            )
+            if (!download.posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = download.posterUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(YoPrimaryAmber.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = YoPrimaryAmber,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -314,31 +388,47 @@ fun CompletedDownloadRow(
                 overflow = TextOverflow.Ellipsis
             )
 
+            // Subtitle and episode info
+            val subtitle = buildString {
+                download.vjName?.let { append("by $it") }
+                if (download.seasonNumber != null && download.episodeNumber != null) {
+                    if (isNotEmpty()) append(" · ")
+                    append("S${download.seasonNumber} E${download.episodeNumber}")
+                }
+                if (download.downloadedAt != null) {
+                    if (isNotEmpty()) append(" · ")
+                    val date = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(download.downloadedAt))
+                    append(date)
+                }
+            }
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = YoTextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "${formatBytes(download.downloadedBytes)} · Offline Ready",
+                text = "${formatBytes(download.downloadedBytes)} · Ready",
                 fontSize = 12.sp,
                 color = YoTextMuted
             )
         }
 
         IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Delete",
-                tint = YoTextMuted
-            )
+            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = YoTextMuted)
         }
     }
 }
 
 @Composable
 fun EmptyState(message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
@@ -356,11 +446,7 @@ fun EmptyState(message: String) {
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = message,
-                fontSize = 14.sp,
-                color = YoTextMuted
-            )
+            Text(text = message, fontSize = 14.sp, color = YoTextMuted)
         }
     }
 }
