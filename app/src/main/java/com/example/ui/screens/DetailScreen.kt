@@ -265,12 +265,7 @@ fun DetailScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = {
-                            // Simple retry: clear error and set loading, LaunchedEffect will re-run because movieId unchanged but we can force by using a key? For simplicity, we can call the same logic by setting a dummy state. But we'll just reload.
-                            // Actually LaunchedEffect won't re-run on same key, so we need a retry flag. Let's add a retry counter.
-                            // To keep it simple, we'll just navigate back and re-enter.
-                            onBackClick()
-                        },
+                        onClick = { onBackClick() },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryAmber,
                             contentColor = YoBaseBackground
@@ -489,7 +484,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(52.dp),
+                                        .height(48.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = YoPrimaryAmber,
@@ -499,7 +494,7 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = Icons.Default.PlayArrow,
                                         contentDescription = null,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -517,7 +512,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(52.dp),
+                                        .height(48.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                                     colors = ButtonDefaults.outlinedButtonColors(
@@ -527,10 +522,10 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = Icons.Default.Download,
                                         contentDescription = null,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                    Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                                 }
                             }
 
@@ -674,37 +669,39 @@ fun DetailScreen(
                         }
                     }
 
-                   
-                                            // Related Movies Rail
-if (relatedMovies.isNotEmpty()) {
-    item {
-        Spacer(modifier = Modifier.height(28.dp))
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "More Like This",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+                    // Related Movies Rail
+                    if (relatedMovies.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(28.dp))
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "More Like This",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = YoTextPrimary,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
 
-            Spacer(modifier = Modifier.height(14.dp))
+                                Spacer(modifier = Modifier.height(14.dp))
 
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(relatedMovies) { rel ->
-                    PosterCard(
-                        movie = rel,
-                        onClick = { onRelatedMovieClick(rel.id) },
-                        widthDp = 100   // 👈 This shrinks the posters
-                    )
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    items(relatedMovies) { rel ->
+                                        PosterCard(
+                                            movie = rel,
+                                            onClick = { onRelatedMovieClick(rel.id) },
+                                            widthDp = 100   // 👈 fixed size
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
-}
 
         // Report Dialog
         if (showReportDialog) {

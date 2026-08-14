@@ -105,18 +105,15 @@ fun AccountScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        // Header
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Account & Library",
-                fontSize = 24.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = YoTextPrimary,
-                letterSpacing = 0.5.sp
+                color = YoTextPrimary
             )
         }
 
-        // User Info Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -131,7 +128,7 @@ fun AccountScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(50.dp)
                             .clip(CircleShape)
                             .background(YoPrimaryAmber),
                         contentAlignment = Alignment.Center
@@ -140,28 +137,28 @@ fun AccountScreen(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
                             tint = YoBaseBackground,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isLoggedIn) (accountUser?.name ?: "YOCINEMA Subscriber") else "Guest Mode",
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = YoTextPrimary
                         )
                         Text(
                             text = if (isLoggedIn) (accountUser?.email ?: "API Key Active") else "Enter key for unlimited access",
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             color = YoTextMuted
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 if (isLoggedIn && !apiKey.isNullOrBlank()) {
                     val maskedKey = apiKey.take(6) + "..." + apiKey.takeLast(4)
@@ -170,7 +167,7 @@ fun AccountScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(YoSurfaceVariant)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -179,12 +176,12 @@ fun AccountScreen(
                                 imageVector = Icons.Default.Key,
                                 contentDescription = null,
                                 tint = YoPrimaryAmber,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = maskedKey,
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = YoTextPrimary
                             )
@@ -197,55 +194,54 @@ fun AccountScreen(
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "API Key copied", Toast.LENGTH_SHORT).show()
                             },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
                                 contentDescription = "Copy",
                                 tint = YoTextMuted,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedButton(
                         onClick = { repository.logout() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp),
+                            .height(42.dp),
                         shape = RoundedCornerShape(10.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, YoDestructive.copy(alpha = 0.5f)),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = YoDestructive)
                     ) {
-                        Icon(imageVector = Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Log Out", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Icon(imageVector = Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Log Out", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 } else {
                     Button(
                         onClick = onLoginClick,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp),
+                            .height(44.dp),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryAmber,
                             contentColor = YoBaseBackground
                         )
                     ) {
-                        Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Enter API Key", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Enter API Key", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Tabs
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = YoSurface,
@@ -253,31 +249,29 @@ fun AccountScreen(
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryAmber,
-                    height = 3.dp
+                    color = YoPrimaryAmber
                 )
             }
         ) {
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Watchlist (${watchlist.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                text = { Text("Watchlist (${watchlist.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("History (${history.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                text = { Text("History (${history.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             )
         }
 
-        // Content
         if (selectedTab == 0) {
             if (watchlist.isEmpty()) {
                 EmptyAccountState("Your watchlist is empty")
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(watchlist, key = { it.movieId }) { item ->
                         WatchlistRow(
@@ -296,7 +290,7 @@ fun AccountScreen(
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(history, key = { it.id }) { item ->
                         HistoryRow(
@@ -329,12 +323,12 @@ fun WatchlistRow(
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(12.dp),
+            .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .width(60.dp)
+                .width(55.dp)
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(YoSurfaceVariant)
@@ -347,12 +341,12 @@ fun WatchlistRow(
             )
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.title,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary,
                 maxLines = 1,
@@ -392,12 +386,12 @@ fun HistoryRow(
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(12.dp),
+            .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .width(60.dp)
+                .width(55.dp)
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(YoSurfaceVariant)
@@ -411,7 +405,7 @@ fun HistoryRow(
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(28.dp)
+                    .size(24.dp)
                     .clip(CircleShape)
                     .background(YoPrimaryAmber),
                 contentAlignment = Alignment.Center
@@ -420,17 +414,17 @@ fun HistoryRow(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
                     tint = YoBaseBackground,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.title,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary,
                 maxLines = 1,
@@ -439,7 +433,7 @@ fun HistoryRow(
             if (item.seasonNumber != null && item.episodeNumber != null) {
                 Text(
                     text = "S${item.seasonNumber} E${item.episodeNumber}${if (!item.episodeTitle.isNull_orBlank()) " · ${item.episodeTitle}" else ""}",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = YoPrimaryAmber
                 )
             }
@@ -448,7 +442,7 @@ fun HistoryRow(
             val durSec = (item.durationMs / 1000).toInt()
             Text(
                 text = "Resume at ${formatDuration(posSec)} of ${formatDuration(durSec)}",
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = YoTextMuted
             )
         }
@@ -471,9 +465,8 @@ fun EmptyAccountState(message: String) {
     ) {
         Text(
             text = message,
-            fontSize = 16.sp,
-            color = YoTextMuted,
-            fontWeight = FontWeight.Medium
+            fontSize = 14.sp,
+            color = YoTextMuted
         )
     }
 }

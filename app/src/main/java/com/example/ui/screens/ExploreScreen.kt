@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.FacetsResponse
 import com.example.data.model.Movie
 import com.example.repository.YocinemaRepository
+import com.example.ui.components.ModernLoader
 import com.example.ui.components.MovieGridSkeleton
 import com.example.ui.components.PosterCard
 import com.example.ui.theme.YoBaseBackground
@@ -104,18 +106,12 @@ fun ExploreScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)) {
             Text(
                 text = initialCategoryTitle ?: "Explore Catalogue",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
                 color = YoTextPrimary
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Discover movies, series & exclusive content",
-                fontSize = 13.sp,
-                color = YoTextMuted
             )
         }
 
@@ -130,7 +126,7 @@ fun ExploreScreen(
                 FilterChip(
                     selected = isSelected,
                     onClick = { selectedType = tOpt },
-                    label = { Text(tOpt, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                    label = { Text(tOpt, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = YoPrimaryAmber,
                         selectedLabelColor = YoBaseBackground,
@@ -152,7 +148,7 @@ fun ExploreScreen(
                 FilterChip(
                     selected = isSelected,
                     onClick = { selectedSort = sortOpt },
-                    label = { Text("Sort: ${sortOpt.replaceFirstChar { it.uppercase() }}", fontSize = 12.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Sort: ${sortOpt.replaceFirstChar { it.uppercase() }}", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = YoSurfaceVariant,
                         selectedLabelColor = YoPrimaryAmber,
@@ -173,7 +169,7 @@ fun ExploreScreen(
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(vertical = 4.dp)
+            modifier = Modifier.padding(vertical = 2.dp)
         ) {
             item {
                 Text(
@@ -181,7 +177,7 @@ fun ExploreScreen(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = YoTextMuted,
-                    modifier = Modifier.padding(end = 4.dp, top = 6.dp)
+                    modifier = Modifier.padding(end = 4.dp)
                 )
             }
             items(genreOptions) { g ->
@@ -191,7 +187,7 @@ fun ExploreScreen(
                     onClick = { selectedGenre = g },
                     label = { Text(g, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.15f),
+                        selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
                         selectedLabelColor = YoPrimaryAmber,
                         containerColor = YoSurface,
                         labelColor = YoTextMuted
@@ -211,7 +207,7 @@ fun ExploreScreen(
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(vertical = 4.dp)
+                modifier = Modifier.padding(vertical = 2.dp)
             ) {
                 item {
                     Text(
@@ -219,7 +215,7 @@ fun ExploreScreen(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = YoTextMuted,
-                        modifier = Modifier.padding(end = 4.dp, top = 6.dp)
+                        modifier = Modifier.padding(end = 4.dp)
                     )
                 }
                 items(vjOptions) { vj ->
@@ -229,7 +225,46 @@ fun ExploreScreen(
                         onClick = { selectedVj = vj },
                         label = { Text(vj, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.15f),
+                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
+                            selectedLabelColor = YoPrimaryAmber,
+                            containerColor = YoSurface,
+                            labelColor = YoTextMuted
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
+                            selectedBorderColor = YoPrimaryAmber,
+                            enabled = true,
+                            selected = isSelected
+                        )
+                    )
+                }
+            }
+        }
+
+        if (!facets.years.isNullOrEmpty()) {
+            val yearOptions = listOf("All") + facets.years!!
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Year:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = YoTextMuted,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+                items(yearOptions) { yr ->
+                    val isSelected = (yr == selectedYear)
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedYear = yr },
+                        label = { Text(yr, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
                             selectedLabelColor = YoPrimaryAmber,
                             containerColor = YoSurface,
                             labelColor = YoTextMuted
@@ -257,7 +292,6 @@ fun ExploreScreen(
                 Text(
                     text = "No movies found for selected filters",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
                     color = YoTextMuted
                 )
             }

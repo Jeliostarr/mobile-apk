@@ -50,13 +50,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.download.startDownloadWorker
 import com.example.repository.YocinemaRepository
-import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
+import com.example.ui.theme.YoDestructive
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
@@ -83,18 +83,12 @@ fun DownloadsScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Downloads",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
                 color = YoTextPrimary
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Access your offline content anytime",
-                fontSize = 13.sp,
-                color = YoTextMuted
             )
         }
 
@@ -105,8 +99,7 @@ fun DownloadsScreen(
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryAmber,
-                    height = 3.dp
+                    color = YoPrimaryAmber
                 )
             }
         ) {
@@ -217,39 +210,42 @@ fun ActiveDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp), clip = false)
-            .clip(RoundedCornerShape(16.dp))
+            .shadow(3.dp, RoundedCornerShape(14.dp), clip = false)
+            .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .size(52.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(YoBorder)
         ) {
             if (!download.posterUrl.isNullOrBlank()) {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = download.posterUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = { YoCinemaLogoPlaceholder() },
-                    error = { YoCinemaLogoPlaceholder() }
+                    contentScale = ContentScale.Crop
                 )
             } else {
-                YoCinemaLogoPlaceholder()
+                Icon(
+                    imageVector = Icons.Default.DownloadDone,
+                    contentDescription = null,
+                    tint = YoTextMuted,
+                    modifier = Modifier.size(28.dp).align(Alignment.Center)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = download.title,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary,
                 maxLines = 1,
@@ -264,17 +260,16 @@ fun ActiveDownloadRow(
                 }
             }
             if (subtitle.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = YoTextMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             LinearProgressIndicator(
                 progress = { progress },
@@ -286,7 +281,7 @@ fun ActiveDownloadRow(
                 trackColor = YoBorder
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -320,7 +315,7 @@ fun ActiveDownloadRow(
             }
         }
 
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(4.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isDownloading) {
@@ -349,10 +344,10 @@ fun CompletedDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp), clip = false)
-            .clip(RoundedCornerShape(16.dp))
+            .shadow(3.dp, RoundedCornerShape(14.dp), clip = false)
+            .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .clickable { onPlay() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -360,43 +355,37 @@ fun CompletedDownloadRow(
         Box(
             modifier = Modifier
                 .size(60.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(YoBorder)
         ) {
             if (!download.posterUrl.isNullOrBlank()) {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = download.posterUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = { YoCinemaLogoPlaceholder() },
-                    error = { YoCinemaLogoPlaceholder() }
+                    contentScale = ContentScale.Crop
                 )
             } else {
-                YoCinemaLogoPlaceholder()
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(YoPrimaryAmber.copy(alpha = 0.25f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = YoBaseBackground,
-                    modifier = Modifier.size(28.dp)
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize().background(YoPrimaryAmber.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = YoPrimaryAmber,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = download.title,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary,
                 maxLines = 1,
@@ -416,10 +405,9 @@ fun CompletedDownloadRow(
                 }
             }
             if (subtitle.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = YoTextMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -429,10 +417,9 @@ fun CompletedDownloadRow(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "${formatBytes(download.downloadedBytes)} · Ready to Watch",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = YoPrimaryAmber
+                text = "${formatBytes(download.downloadedBytes)} · Ready",
+                fontSize = 11.sp,
+                color = YoTextMuted
             )
         }
 
@@ -448,21 +435,21 @@ fun EmptyState(message: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
-                    .size(90.dp)
-                    .clip(RoundedCornerShape(45.dp))
+                    .size(88.dp)
+                    .clip(RoundedCornerShape(44.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(45.dp)),
+                    .border(1.dp, YoBorder, RoundedCornerShape(44.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.DownloadDone,
                     contentDescription = null,
                     tint = YoTextMuted,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(36.dp)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = message, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = YoTextMuted)
+            Text(text = message, fontSize = 14.sp, color = YoTextMuted)
         }
     }
 }

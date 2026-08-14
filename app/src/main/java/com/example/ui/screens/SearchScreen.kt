@@ -155,7 +155,7 @@ fun SearchScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search titles, genres, VJs...", color = YoTextMuted, fontSize = 14.sp) },
+                placeholder = { Text("Search titles, genres, VJs...", color = YoTextMuted, fontSize = 13.sp) },
                 singleLine = true,
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -170,8 +170,8 @@ fun SearchScreen(
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = YoPrimaryAmber,
                     unfocusedBorderColor = YoBorder,
@@ -194,7 +194,7 @@ fun SearchScreen(
                 FilterChip(
                     selected = isSelected,
                     onClick = { selectedFilter = filter },
-                    label = { Text(filter, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) },
+                    label = { Text(filter, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = YoPrimaryAmber,
                         selectedLabelColor = YoBaseBackground,
@@ -222,7 +222,7 @@ fun SearchScreen(
                 FilterChip(
                     selected = isSelected,
                     onClick = { selectedSort = sortOpt },
-                    label = { Text("Sort: $sortOpt", fontSize = 12.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Sort: $sortOpt", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = YoSurfaceVariant,
                         selectedLabelColor = YoPrimaryAmber,
@@ -251,19 +251,19 @@ fun SearchScreen(
                         imageVector = Icons.Default.Search,
                         contentDescription = null,
                         tint = YoBorder,
-                        modifier = Modifier.size(72.dp)
+                        modifier = Modifier.size(64.dp)
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Search YOCINEMA Catalogue",
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = YoTextMuted
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Type a title, genre (e.g. Action) or VJ (e.g. Soul)",
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         color = YoTextMuted
                     )
                 }
@@ -275,7 +275,7 @@ fun SearchScreen(
             ) {
                 Text(
                     text = "No titles found matching \"$query\"",
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = YoTextMuted
                 )
             }
@@ -314,7 +314,7 @@ fun SearchResultRow(
     ) {
         Box(
             modifier = Modifier
-                .width(75.dp)
+                .width(70.dp)
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(10.dp))
                 .background(YoSurfaceVariant)
@@ -329,12 +329,12 @@ fun SearchResultRow(
             )
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = movie.title,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary,
                 maxLines = 1,
@@ -351,7 +351,7 @@ fun SearchResultRow(
             if (!movie.genre.isNull_orEmpty()) {
                 Text(
                     text = movie.genre!!,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = YoPrimaryAmber,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -361,7 +361,7 @@ fun SearchResultRow(
             if (movie.duration != null && movie.duration > 0) {
                 Text(
                     text = formatDuration(movie.duration),
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = YoTextMuted
                 )
             }
