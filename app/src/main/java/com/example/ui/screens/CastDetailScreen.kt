@@ -32,7 +32,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +47,7 @@ import com.example.data.model.CastDetail
 import com.example.data.model.FilmographyItem
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
+import com.example.ui.components.VJBadgeChip
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
@@ -56,6 +56,7 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import kotlinx.coroutines.launch
 
 @Composable
 fun CastDetailScreen(
@@ -81,7 +82,7 @@ fun CastDetailScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBackClick) {
@@ -91,7 +92,6 @@ fun CastDetailScreen(
                     tint = YoTextPrimary
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Cast Profile",
                 fontSize = 20.sp,
@@ -124,11 +124,11 @@ fun CastDetailScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .shadow(elevation = 6.dp, shape = RoundedCornerShape(20.dp), clip = false)
-                            .clip(RoundedCornerShape(20.dp))
+                            .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
+                            .clip(RoundedCornerShape(18.dp))
                             .background(YoSurface)
-                            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
-                            .padding(18.dp),
+                            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -136,7 +136,6 @@ fun CastDetailScreen(
                                 .size(96.dp)
                                 .clip(CircleShape)
                                 .background(YoSurfaceVariant)
-                                .border(2.dp, YoPrimaryAmber.copy(alpha = 0.5f), CircleShape)
                         ) {
                             SubcomposeAsyncImage(
                                 model = c.photo,
@@ -157,21 +156,19 @@ fun CastDetailScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = YoTextPrimary
                             )
-
-                            if (!c.birthday.isNull_or_Blank()) {
+                            if (!c.birthday.isNull_orBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "Born: ${c.birthday}",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     color = YoTextMuted
                                 )
                             }
-
-                            if (!c.placeOfBirth.isNull_or_Blank()) {
+                            if (!c.placeOfBirth.isNull_orBlank()) {
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = c.placeOfBirth!!,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     color = YoTextMuted
                                 )
                             }
@@ -179,19 +176,19 @@ fun CastDetailScreen(
                     }
                 }
 
-                if (!c.bio.isNull_or_Blank()) {
+                if (!c.bio.isNull_orBlank()) {
                     item {
                         Spacer(modifier = Modifier.height(20.dp))
                         Text(
                             text = "Biography",
-                            fontSize = 16.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = YoTextPrimary
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = c.bio!!,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             color = YoTextMuted,
                             lineHeight = 20.sp
                         )
@@ -199,14 +196,14 @@ fun CastDetailScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(28.dp))
                     Text(
                         text = "Filmography",
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = YoTextPrimary
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                 }
 
                 val filmography = c.filmography.orEmpty()
@@ -217,7 +214,7 @@ fun CastDetailScreen(
                         repository = repository,
                         onMovieClick = onMovieClick
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }
@@ -240,21 +237,21 @@ fun FilmographyRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(4.dp, RoundedCornerShape(12.dp), clip = false)
+            .clip(RoundedCornerShape(12.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(12.dp))
             .clickable(enabled = isAvailable) {
                 if (!versionMovieId.isNull_orBlank()) {
                     onMovieClick(versionMovieId!!)
                 }
             }
-            .padding(10.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .width(52.dp)
+                .width(55.dp)
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(YoSurfaceVariant)
@@ -274,30 +271,26 @@ fun FilmographyRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.title,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isAvailable) YoTextPrimary else YoTextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
             if (!item.character.isNull_orBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "as ${item.character}",
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     color = YoTextMuted
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(modifier = Modifier.height(6.dp))
             if (isAvailable) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(YoSuccessGreen.copy(alpha = 0.15f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(YoSuccessGreen.copy(alpha = 0.2f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = "AVAILABLE ON YOCINEMA",
@@ -314,9 +307,9 @@ fun FilmographyRow(
                     if (isRequested) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(YoPrimaryAmber.copy(alpha = 0.15f))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(YoPrimaryAmber.copy(alpha = 0.2f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "REQUEST SENT",
@@ -328,7 +321,7 @@ fun FilmographyRow(
                     } else {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(YoPrimaryAmber)
                                 .clickable(enabled = !isRequesting) {
                                     isRequesting = true
@@ -346,7 +339,7 @@ fun FilmographyRow(
                                         isRequested = true
                                     }
                                 }
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = if (isRequesting) "Sending..." else "Request Title",
@@ -362,4 +355,4 @@ fun FilmographyRow(
     }
 }
 
-private fun String?.isNull_or_Blank(): Boolean = this == null || this.trim().isEmpty()
+private fun String?.isNull_orBlank(): Boolean = this == null || this.trim().isEmpty()

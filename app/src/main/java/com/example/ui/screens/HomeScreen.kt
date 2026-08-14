@@ -18,16 +18,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,28 +48,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
 import com.example.data.model.isNull_orEmpty
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.HomeSkeleton
-import com.example.ui.components.MovieRailSection
 import com.example.ui.components.PosterCard
 import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.VJChip
@@ -70,6 +69,7 @@ import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
+import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -90,7 +90,7 @@ fun HeroSliderPager(
     LaunchedEffect(movies) {
         if (movies.size > 1) {
             while (true) {
-                delay(4500)
+                delay(4000)
                 val nextPage = (pagerState.currentPage + 1) % movies.size
                 pagerState.animateScrollToPage(nextPage)
             }
@@ -110,10 +110,10 @@ fun HeroSliderPager(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(20.dp), clip = false)
-                    .clip(RoundedCornerShape(20.dp))
+                    .shadow(10.dp, RoundedCornerShape(22.dp), clip = false)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
+                    .border(1.dp, YoBorder, RoundedCornerShape(22.dp))
                     .clickable { onMovieClick(movie.id) }
             ) {
                 SubcomposeAsyncImage(
@@ -131,8 +131,8 @@ fun HeroSliderPager(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.2f),
-                                    Color.Black.copy(alpha = 0.88f)
+                                    Color.Black.copy(alpha = 0.3f),
+                                    Color.Black.copy(alpha = 0.85f)
                                 )
                             )
                         )
@@ -157,18 +157,18 @@ fun HeroSliderPager(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color.Black.copy(alpha = 0.6f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Star,
                                     contentDescription = null,
                                     tint = YoPrimaryAmber,
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
-                                Spacer(modifier = Modifier.width(3.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = movie.imdbRating!!,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -181,18 +181,18 @@ fun HeroSliderPager(
                         if (metaInfo.isNotBlank()) {
                             Text(
                                 text = metaInfo,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.Medium
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = movie.title,
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         maxLines = 1,
@@ -203,15 +203,15 @@ fun HeroSliderPager(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = movie.description!!,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             color = Color.White.copy(alpha = 0.85f),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            lineHeight = 16.sp
+                            lineHeight = 18.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -219,40 +219,40 @@ fun HeroSliderPager(
                     ) {
                         Button(
                             onClick = { onMovieClick(movie.id) },
-                            modifier = Modifier.height(36.dp),
+                            modifier = Modifier.height(40.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = YoPrimaryAmber,
                                 contentColor = YoBaseBackground
                             ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
 
                         OutlinedButton(
                             onClick = { onMovieClick(movie.id) },
-                            modifier = Modifier.height(36.dp),
+                            modifier = Modifier.height(40.dp),
                             shape = RoundedCornerShape(10.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = Color.White
                             ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Details", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Details", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -260,7 +260,7 @@ fun HeroSliderPager(
         }
 
         if (movies.size > 1) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -271,7 +271,7 @@ fun HeroSliderPager(
                     Box(
                         modifier = Modifier
                             .padding(2.dp)
-                            .size(if (isSelected) 8.dp else 6.dp)
+                            .size(if (isSelected) 9.dp else 7.dp)
                             .clip(CircleShape)
                             .background(if (isSelected) YoPrimaryAmber else YoBorder)
                     )
@@ -365,7 +365,7 @@ fun HomeScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(28.dp)
             ) {
                 val heroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
                 if (heroList.isNotEmpty()) {
@@ -383,10 +383,10 @@ fun HomeScreen(
                             title = "Translators",
                             onViewAllClick = onViewAllVJsClick
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(vjsList) { vjName ->
                                 VJChip(
@@ -457,12 +457,12 @@ fun HomeSearchBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
-            .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp), clip = false)
+            .shadow(4.dp, RoundedCornerShape(20.dp), clip = false)
             .clip(RoundedCornerShape(20.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
             .clickable { onSearchClick() }
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -472,43 +472,42 @@ fun HomeSearchBar(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
                 tint = YoPrimaryAmber,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Text(
                 text = "Search Movies & Series",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = YoTextPrimary.copy(alpha = 0.7f),
+                fontSize = 15.sp,
+                color = YoTextMuted,
                 modifier = Modifier.weight(1f)
             )
 
-            IconButton(onClick = onWatchlistClick, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onWatchlistClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Default.Bookmark,
                     contentDescription = "Watchlist",
                     tint = YoPrimaryAmber,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            IconButton(onClick = onDownloadsClick, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDownloadsClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Default.Download,
                     contentDescription = "Downloads",
                     tint = YoPrimaryAmber,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            IconButton(onClick = onAccountClick, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onAccountClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Account",
                     tint = YoPrimaryAmber,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
@@ -530,40 +529,55 @@ fun RailHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .width(4.dp)
-                    .height(18.dp)
+                    .width(5.dp)
+                    .height(20.dp)
                     .clip(CircleShape)
                     .background(YoPrimaryAmber)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
-                title,
-                fontSize = 18.sp,
+                text = title,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary
             )
         }
-        
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { onViewAllClick() }
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "See All",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = YoPrimaryAmber
-            )
-            Spacer(modifier = Modifier.width(2.dp))
+
+        IconButton(onClick = onViewAllClick, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = YoPrimaryAmber,
-                modifier = Modifier.size(14.dp)
+                contentDescription = "View All",
+                tint = YoTextMuted,
+                modifier = Modifier.size(22.dp)
             )
+        }
+    }
+}
+
+@Composable
+fun MovieRailSection(
+    title: String,
+    movies: List<Movie>,
+    onMovieClick: (String) -> Unit,
+    onViewAllClick: () -> Unit
+) {
+    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val cardWidthDp = ((screenWidthDp - 32 - 28) / 3).coerceAtLeast(100)
+
+    Column {
+        RailHeader(title = title, onViewAllClick = onViewAllClick)
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            items(movies) { movie ->
+                PosterCard(
+                    movie = movie,
+                    onClick = { onMovieClick(movie.id) },
+                    widthDp = cardWidthDp
+                )
+            }
         }
     }
 }

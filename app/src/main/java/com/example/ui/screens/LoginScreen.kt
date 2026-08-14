@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -91,21 +92,22 @@ fun LoginScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Image(
             painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
             contentDescription = "YOCINEMA Logo",
             modifier = Modifier
-                .size(90.dp)
+                .size(100.dp)
                 .clip(CircleShape)
+                .shadow(16.dp, CircleShape, clip = false)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
             text = "Sign in to YOCINEMA",
-            fontSize = 24.sp,
+            fontSize = 26.sp,
             fontWeight = FontWeight.Bold,
             color = YoTextPrimary
         )
@@ -114,13 +116,13 @@ fun LoginScreen(
 
         Text(
             text = "Enter your YOCINEMA API key to unlock full streaming & download access.",
-            fontSize = 13.sp,
+            fontSize = 14.sp,
             color = YoTextMuted,
             textAlign = TextAlign.Center,
-            lineHeight = 18.sp
+            lineHeight = 20.sp
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
         OutlinedTextField(
             value = apiKeyInput,
@@ -148,7 +150,7 @@ fun LoginScreen(
             },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = YoPrimaryAmber,
                 unfocusedBorderColor = YoBorder,
@@ -164,13 +166,13 @@ fun LoginScreen(
             Text(
                 text = errorMessage!!,
                 color = YoDestructive,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         Button(
             onClick = {
@@ -194,20 +196,20 @@ fun LoginScreen(
             enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(14.dp),
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = YoPrimaryAmber,
                 contentColor = YoBaseBackground
             )
         ) {
             if (isLoading) {
-                ModernLoader(size = 24.dp, strokeWidth = 3.dp)
+                ModernLoader(size = 26.dp, strokeWidth = 3.dp)
             } else {
                 Text(
                     text = "Sign In & Continue",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 16.sp
                 )
             }
         }
@@ -221,14 +223,14 @@ fun LoginScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(14.dp),
+                .height(54.dp),
+            shape = RoundedCornerShape(16.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextPrimary)
         ) {
-            Text("Don't have a key? Get one at Dashboard", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.size(6.dp))
-            Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp), tint = YoTextMuted)
+            Text("Don't have a key? Get one at Dashboard", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.size(8.dp))
+            Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp), tint = YoTextMuted)
         }
     }
 }

@@ -121,7 +121,6 @@ fun PlayerScreen(
     val currentPosMs by playerManager.currentPositionMs.collectAsState()
     val durationMs by playerManager.durationMs.collectAsState()
 
-    // Force landscape and keep screen on
     DisposableEffect(Unit) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -142,7 +141,6 @@ fun PlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    // Load movie and start playback
     LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
         loadError = null
         try {
@@ -165,10 +163,6 @@ fun PlayerScreen(
 
             if (downloadedEntity != null && downloadedEntity.status == "COMPLETED" && downloadedFile?.exists() == true) {
                 Log.d(TAG, "Playing from local file: ${downloadedEntity.localFilePath}")
-                // Start playback from the local file right away — this must never
-                // depend on the network. Movie metadata is only used for the
-                // title/subtitle overlay, so it's fetched best-effort afterward
-                // and never blocks or breaks offline playback.
                 movie = Movie(id = movieId, title = downloadedEntity.title)
                 playerManager.playMedia(
                     movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
@@ -178,8 +172,6 @@ fun PlayerScreen(
                 try {
                     repository.getMovieDetail(movieId)?.let { m -> movie = m }
                 } catch (e: Exception) {
-                    // Offline (or a flaky connection) is expected here — we already
-                    // have everything needed to keep playing from the local file.
                     Log.d(TAG, "Metadata refresh skipped (likely offline): ${e.message}")
                 }
                 return@LaunchedEffect
@@ -235,7 +227,6 @@ fun PlayerScreen(
                 detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
             }
     ) {
-        // Video view
         if (loadError == null) {
             AndroidView(
                 factory = { ctx ->
@@ -262,7 +253,6 @@ fun PlayerScreen(
             )
         }
 
-        // Load error overlay
         if (loadError != null) {
             Box(
                 modifier = Modifier
@@ -296,7 +286,6 @@ fun PlayerScreen(
             }
         }
 
-        // PlayerManager error / reconnecting
         if (loadError == null && playerError != null && !isReconnecting) {
             Box(
                 modifier = Modifier
@@ -307,11 +296,11 @@ fun PlayerScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Playback Error", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(playerError ?: "Failed to load stream.", color = YoTextMuted, fontSize = 12.sp, maxLines = 2)
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(playerError ?: "Failed to load stream.", color = YoTextMuted, fontSize = 13.sp, maxLines = 2)
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = { playerManager.attemptReconnect() }) {
-                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Retry")
                     }
                 }
@@ -325,13 +314,12 @@ fun PlayerScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     SpinningLoader()
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text("Reconnecting…", color = Color.White, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Reconnecting…", color = Color.White, fontSize = 14.sp)
                 }
             }
         }
 
-        // Controls (only if no load error)
         if (loadError == null) {
             AnimatedVisibility(
                 visible = isControlsVisible,
@@ -340,41 +328,40 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Top scrim + bar
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(90.dp)
+                            .height(100.dp)
                             .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
                     )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ControlIconButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", onClick = onBackClick)
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(displayTitle, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(displayTitle, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (displaySubtitle != null) {
-                                Text(displaySubtitle, color = YoTextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(displaySubtitle, color = YoTextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Box {
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .background(Color.Black.copy(alpha = 0.6f))
                                     .clickable { showSpeedMenu = true }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = if (playbackSpeed == 1f) "Normal" else "${playbackSpeed}x",
                                     color = Color.White,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -396,20 +383,20 @@ fun PlayerScreen(
                     // Center transport controls
                     Row(
                         modifier = Modifier.align(Alignment.Center),
-                        horizontalArrangement = Arrangement.spacedBy(36.dp),
+                        horizontalArrangement = Arrangement.spacedBy(40.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ControlIconButton(
                             icon = Icons.Default.Replay10,
                             contentDescription = "Rewind 10s",
-                            size = 46.dp,
+                            size = 52.dp,
                             onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition - 10_000).coerceAtLeast(0)) }
                         )
 
                         Box(
                             modifier = Modifier
-                                .size(68.dp)
-                                .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
+                                .size(76.dp)
+                                .shadow(12.dp, CircleShape, clip = false)
                                 .clip(CircleShape)
                                 .background(YoPrimaryAmber)
                                 .clickable(enabled = !isBuffering) {
@@ -418,13 +405,13 @@ fun PlayerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             if (isBuffering) {
-                                SpinningLoader(color = YoBaseBackground, size = 28.dp)
+                                SpinningLoader(color = YoBaseBackground, size = 32.dp)
                             } else {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (isPlaying) "Pause" else "Play",
                                     tint = YoBaseBackground,
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(40.dp)
                                 )
                             }
                         }
@@ -432,7 +419,7 @@ fun PlayerScreen(
                         ControlIconButton(
                             icon = Icons.Default.Forward10,
                             contentDescription = "Forward 10s",
-                            size = 46.dp,
+                            size = 52.dp,
                             onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition + 10_000).coerceAtMost(durationMs)) }
                         )
                     }
@@ -443,7 +430,7 @@ fun PlayerScreen(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
                     ) {
                         val displayPos = if (isDragging) dragPositionMs.toLong() else currentPosMs
                         Slider(
@@ -462,19 +449,19 @@ fun PlayerScreen(
                                 activeTrackColor = YoPrimaryAmber,
                                 inactiveTrackColor = Color.White.copy(alpha = 0.25f)
                             ),
-                            modifier = Modifier.fillMaxWidth().height(24.dp)
+                            modifier = Modifier.fillMaxWidth().height(28.dp)
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("${formatTime(displayPos)} / ${formatTime(durationMs)}", color = Color.White, fontSize = 12.sp)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("${formatTime(displayPos)} / ${formatTime(durationMs)}", color = Color.White, fontSize = 13.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ControlIconButton(
                                     icon = Icons.Default.AspectRatio,
                                     contentDescription = "Resize",
-                                    size = 36.dp,
+                                    size = 40.dp,
                                     onClick = {
                                         resizeMode = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT)
                                             AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -484,7 +471,7 @@ fun PlayerScreen(
                                 ControlIconButton(
                                     icon = Icons.Default.PictureInPicture,
                                     contentDescription = "Picture in picture",
-                                    size = 36.dp,
+                                    size = 40.dp,
                                     onClick = { activity?.enterPictureInPictureModeSafely() }
                                 )
                             }
@@ -500,7 +487,7 @@ fun PlayerScreen(
 private fun ControlIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
-    size: androidx.compose.ui.unit.Dp = 40.dp,
+    size: androidx.compose.ui.unit.Dp = 44.dp,
     onClick: () -> Unit
 ) {
     Box(
@@ -516,7 +503,7 @@ private fun ControlIconButton(
 }
 
 @Composable
-private fun SpinningLoader(color: Color = YoPrimaryAmber, size: androidx.compose.ui.unit.Dp = 32.dp) {
+private fun SpinningLoader(color: Color = YoPrimaryAmber, size: androidx.compose.ui.unit.Dp = 36.dp) {
     androidx.compose.material3.CircularProgressIndicator(
         modifier = Modifier.size(size),
         color = color,

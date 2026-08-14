@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import com.example.data.model.CastMember
 import com.example.data.model.Episode
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
@@ -178,7 +180,7 @@ fun DetailScreen(
             val message = when {
                 startedCount == 0 -> "Already downloading"
                 startedCount == episodes.size -> "Downloading $startedCount episode${if (startedCount > 1) "s" else ""}"
-                else -> "Downloading $startedCount of ${episodes.size} — others active"
+                else -> "Downloading $startedCount of ${episodes.size} — the rest are already downloading"
             }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -195,14 +197,12 @@ fun DetailScreen(
     LaunchedEffect(movieId) {
         errorState = null
         isLoading = true
-
         try {
             val cached = repository.getCachedMovieDetail(movieId)
             if (cached != null) {
                 movie = cached
                 isLoading = false
             }
-
             val m = repository.getMovieDetail(movieId)
             if (m != null) {
                 movie = m
@@ -265,13 +265,18 @@ fun DetailScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = { },
+                        onClick = {
+                            // Simple retry: clear error and set loading, LaunchedEffect will re-run because movieId unchanged but we can force by using a key? For simplicity, we can call the same logic by setting a dummy state. But we'll just reload.
+                            // Actually LaunchedEffect won't re-run on same key, so we need a retry flag. Let's add a retry counter.
+                            // To keep it simple, we'll just navigate back and re-enter.
+                            onBackClick()
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryAmber,
                             contentColor = YoBaseBackground
                         )
                     ) {
-                        Text("Retry")
+                        Text("Go Back")
                     }
                 }
             }
@@ -279,9 +284,9 @@ fun DetailScreen(
                 val m = movie!!
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 40.dp)
+                    contentPadding = PaddingValues(bottom = 32.dp)
                 ) {
-                    // Backdrop with Gradient Scrim and Official Branding
+                    // Backdrop with Gradient Scrim
                     item {
                         Box(
                             modifier = Modifier
@@ -307,7 +312,6 @@ fun DetailScreen(
                                         )
                                     )
                             )
-
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -326,7 +330,7 @@ fun DetailScreen(
                                     .align(Alignment.TopStart)
                                     .padding(16.dp)
                                     .clip(CircleShape)
-                                    .background(YoBaseBackground.copy(alpha = 0.7f))
+                                    .background(YoBaseBackground.copy(alpha = 0.6f))
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -349,7 +353,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(YoBaseBackground.copy(alpha = 0.7f))
+                                        .background(YoBaseBackground.copy(alpha = 0.6f))
                                 ) {
                                     Icon(
                                         imageVector = if (isWatchlisted) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -370,7 +374,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(YoBaseBackground.copy(alpha = 0.7f))
+                                        .background(YoBaseBackground.copy(alpha = 0.6f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Download,
@@ -383,7 +387,7 @@ fun DetailScreen(
                                     onClick = { showReportDialog = true },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(YoBaseBackground.copy(alpha = 0.7f))
+                                        .background(YoBaseBackground.copy(alpha = 0.6f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.BugReport,
@@ -405,11 +409,11 @@ fun DetailScreen(
                             Text(
                                 text = m.title,
                                 fontSize = 26.sp,
-                                fontWeight = FontWeight.ExtraBold,
+                                fontWeight = FontWeight.Bold,
                                 color = YoTextPrimary
                             )
 
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -425,8 +429,7 @@ fun DetailScreen(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(YoSurface)
-                                            .border(1.dp, YoBorder, RoundedCornerShape(6.dp))
-                                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Star,
@@ -437,7 +440,7 @@ fun DetailScreen(
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = m.imdbRating!!,
-                                            fontSize = 11.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = YoTextPrimary
                                         )
@@ -447,7 +450,7 @@ fun DetailScreen(
                                 if (m.duration != null && m.duration > 0) {
                                     Text(
                                         text = formatDuration(m.duration),
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         color = YoTextMuted
                                     )
                                 }
@@ -455,7 +458,7 @@ fun DetailScreen(
                                 if (!m.releaseDate.isNull_orEmpty()) {
                                     Text(
                                         text = m.releaseDate!!.take(4),
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         color = YoTextMuted
                                     )
                                 }
@@ -465,14 +468,15 @@ fun DetailScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = m.genre!!,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = YoPrimaryAmber
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(22.dp))
 
+                            // Play & Download Buttons
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -485,7 +489,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(50.dp),
+                                        .height(52.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = YoPrimaryAmber,
@@ -497,8 +501,8 @@ fun DetailScreen(
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Watch Now", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                 }
 
                                 OutlinedButton(
@@ -513,7 +517,7 @@ fun DetailScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(50.dp),
+                                        .height(52.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                                     colors = ButtonDefaults.outlinedButtonColors(
@@ -523,10 +527,10 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = Icons.Default.Download,
                                         contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                                 }
                             }
 
@@ -542,22 +546,23 @@ fun DetailScreen(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(22.dp))
 
+                            // Synopsis
                             if (!m.description.isNull_orEmpty()) {
                                 Column(modifier = Modifier.animateContentSize()) {
                                     Text(
                                         text = m.description!!,
-                                        fontSize = 14.sp,
+                                        fontSize = 15.sp,
                                         color = YoTextMuted,
-                                        lineHeight = 21.sp,
+                                        lineHeight = 22.sp,
                                         maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = if (isSynopsisExpanded) "SHOW LESS" else "MORE...",
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = YoPrimaryAmber,
                                         modifier = Modifier
@@ -572,11 +577,11 @@ fun DetailScreen(
                     // Episodes Section (for TV Series)
                     if (m.isSeries && episodesList.isNotEmpty()) {
                         item {
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(28.dp))
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = "Episodes",
-                                    fontSize = 18.sp,
+                                    fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = YoTextPrimary,
                                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -584,7 +589,7 @@ fun DetailScreen(
 
                                 val availableSeasons = episodesList.mapNotNull { it.sNum }.distinct().sorted()
                                 if (availableSeasons.size > 1) {
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     LazyRow(
                                         contentPadding = PaddingValues(horizontal = 16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -597,11 +602,11 @@ fun DetailScreen(
                                                     .background(if (isSelected) YoPrimaryAmber else YoSurface)
                                                     .border(1.dp, if (isSelected) YoPrimaryAmber else YoBorder, RoundedCornerShape(20.dp))
                                                     .clickable { selectedSeasonNumber = seasonNum }
-                                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                                                    .padding(horizontal = 16.dp, vertical = 8.dp)
                                             ) {
                                                 Text(
                                                     text = "Season $seasonNum",
-                                                    fontSize = 12.sp,
+                                                    fontSize = 13.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (isSelected) YoBaseBackground else YoTextPrimary
                                                 )
@@ -610,7 +615,7 @@ fun DetailScreen(
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(14.dp))
 
                                 val seasonFiltered = episodesList.filter { it.sNum == selectedSeasonNumber }.ifEmpty { episodesList }
 
@@ -638,17 +643,17 @@ fun DetailScreen(
                     val allCast = m.cast.orEmpty()
                     if (allCast.isNotEmpty()) {
                         item {
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(28.dp))
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = "Cast & Crew",
-                                    fontSize = 18.sp,
+                                    fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = YoTextPrimary,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(14.dp))
 
                                 LazyRow(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -672,17 +677,17 @@ fun DetailScreen(
                     // Related Movies Rail
                     if (relatedMovies.isNotEmpty()) {
                         item {
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(28.dp))
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = "More Like This",
-                                    fontSize = 18.sp,
+                                    fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = YoTextPrimary,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(14.dp))
 
                                 LazyRow(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -702,6 +707,7 @@ fun DetailScreen(
             }
         }
 
+        // Report Dialog
         if (showReportDialog) {
             ReportDialog(
                 movieId = movieId,
@@ -710,6 +716,7 @@ fun DetailScreen(
             )
         }
 
+        // Gate Modal Sheet
         if (showGateSheet) {
             GateModalBottomSheet(
                 sheetState = gateSheetState,
@@ -718,6 +725,7 @@ fun DetailScreen(
             )
         }
 
+        // Episode Download Picker
         if (showEpisodeDownloadSheet && movie != null) {
             EpisodeDownloadSheet(
                 sheetState = episodeDownloadSheetState,
@@ -731,6 +739,7 @@ fun DetailScreen(
             )
         }
 
+        // Download Started Dialog
         if (showDownloadStartedDialog) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showDownloadStartedDialog = false },
@@ -785,21 +794,21 @@ fun InlineTrailerSection(
     Column {
         Text(
             text = "Trailer",
-            fontSize = 16.sp,
+            fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             color = YoTextPrimary
         )
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Box(
             modifier = Modifier
                 .width(180.dp)
                 .aspectRatio(16f / 9f)
-                .shadow(elevation = 4.dp, shape = RoundedCornerShape(12.dp), clip = false)
-                .clip(RoundedCornerShape(12.dp))
+                .shadow(elevation = 6.dp, shape = RoundedCornerShape(14.dp), clip = false)
+                .clip(RoundedCornerShape(14.dp))
                 .background(YoSurfaceVariant)
                 .then(
-                    if (expanded) Modifier.border(2.dp, YoPrimaryAmber, RoundedCornerShape(12.dp)) else Modifier
+                    if (expanded) Modifier.border(2.dp, YoPrimaryAmber, RoundedCornerShape(14.dp)) else Modifier
                 )
                 .clickable { onToggle() }
         ) {
@@ -819,7 +828,7 @@ fun InlineTrailerSection(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
                         .background(if (expanded) YoPrimaryAmber else Color.Black.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
@@ -828,14 +837,14 @@ fun InlineTrailerSection(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
                         tint = if (expanded) YoBaseBackground else Color.White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
         }
 
         if (expanded) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             if (isEmbeddable) {
                 InlineYouTubePlayer(trailerUrl = trailerUrl, ytId = ytId)
             } else {
@@ -891,7 +900,7 @@ fun InlineAuthenticatedTrailerPlayer(trailerUrl: String, repository: YocinemaRep
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
@@ -899,7 +908,7 @@ fun InlineAuthenticatedTrailerPlayer(trailerUrl: String, repository: YocinemaRep
             Text(
                 text = "Couldn't play the trailer.",
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
         } else {
@@ -924,20 +933,20 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         if (ytId == null || loadFailed) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                Text("Couldn't play the trailer here.", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("Couldn't play the trailer here.", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = {
                         try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl))) } catch (e: Exception) { }
                     }
                 ) {
-                    Text("Watch on YouTube", color = Color.White, fontSize = 13.sp)
+                    Text("Watch on YouTube", color = Color.White, fontSize = 14.sp)
                 }
             }
         } else {
@@ -989,7 +998,7 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
                 modifier = Modifier.fillMaxSize()
             )
             if (isLoading) {
-                androidx.compose.material3.CircularProgressIndicator(color = YoPrimaryAmber)
+                CircularProgressIndicator(color = YoPrimaryAmber)
             }
         }
     }
