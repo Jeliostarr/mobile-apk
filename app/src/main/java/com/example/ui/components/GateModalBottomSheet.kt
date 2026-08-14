@@ -58,49 +58,49 @@ fun GateModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = YoSurface,
-        scrimColor = YoBaseBackground.copy(alpha = 0.8f)
+        scrimColor = YoBaseBackground.copy(alpha = 0.85f)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = Icons.Default.Key,
                 contentDescription = null,
                 tint = YoPrimaryAmber,
-                modifier = Modifier.size(48.dp)
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "API Key Required",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Enter or paste your YOCINEMA API key to unlock full video playback, high-speed downloads, search & media details.",
-                fontSize = 13.sp,
-                color = YoTextMuted,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                modifier = Modifier.size(56.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            Text(
+                text = "API Key Required",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = YoTextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Enter or paste your YOCINEMA API key to unlock full video playback, high-speed downloads, search & media details.",
+                fontSize = 14.sp,
+                color = YoTextMuted,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
             OutlinedTextField(
                 value = inputKey,
                 onValueChange = { inputKey = it },
-                placeholder = { Text("Paste your API key here...", fontSize = 13.sp, color = YoTextMuted) },
+                placeholder = { Text("Paste your API key here...", fontSize = 14.sp, color = YoTextMuted) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = YoPrimaryAmber,
                     unfocusedBorderColor = YoBorder,
@@ -111,7 +111,7 @@ fun GateModalBottomSheet(
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             if (inputKey.isNotBlank() && onSaveKey != null) {
                 Button(
@@ -121,7 +121,7 @@ fun GateModalBottomSheet(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
+                        .height(52.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = YoPrimaryAmber,
@@ -131,11 +131,11 @@ fun GateModalBottomSheet(
                     Text(
                         text = "Save Key & Continue",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
+                        fontSize = 16.sp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             } else {
                 Button(
                     onClick = {
@@ -144,7 +144,7 @@ fun GateModalBottomSheet(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
+                        .height(52.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = YoPrimaryAmber,
@@ -154,11 +154,11 @@ fun GateModalBottomSheet(
                     Text(
                         text = "Go to Key / Login Screen",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
+                        fontSize = 16.sp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             OutlinedButton(
@@ -168,7 +168,7 @@ fun GateModalBottomSheet(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
+                    .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                 colors = ButtonDefaults.outlinedButtonColors(
@@ -178,18 +178,18 @@ fun GateModalBottomSheet(
                 Text(
                     text = "Get a Key Online",
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
+                    fontSize = 15.sp
                 )
                 Spacer(modifier = Modifier.padding(start = 8.dp))
                 Icon(
                     imageVector = Icons.Default.OpenInNew,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(18.dp),
                     tint = YoTextMuted
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }

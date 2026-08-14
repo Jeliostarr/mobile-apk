@@ -1,9 +1,12 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
@@ -20,8 +23,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,18 +62,7 @@ fun BottomNavBar(
     NavigationBar(
         modifier = Modifier
             .background(YoSurface)
-            .drawBehind {
-                // A same-color, zero-elevation bar sitting directly on
-                // scrolling content has no visual edge to it — this hairline
-                // is what actually separates "nav bar" from "page content"
-                // when both use the same surface color.
-                drawLine(
-                    color = YoBorder,
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx()
-                )
-            }
+            .shadow(4.dp, clip = false)
             .windowInsetsPadding(WindowInsets.navigationBars),
         containerColor = YoSurface,
         tonalElevation = 0.dp
@@ -82,22 +74,31 @@ fun BottomNavBar(
                 selected = isSelected,
                 onClick = { onTabSelected(tab) },
                 icon = {
-                    Icon(
-                        imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.title,
-                        tint = if (isSelected) YoPrimaryAmber else YoTextMuted
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(if (isSelected) YoPrimaryAmber.copy(alpha = 0.15f) else YoSurface),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                            contentDescription = tab.title,
+                            tint = if (isSelected) YoPrimaryAmber else YoTextMuted,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
                 },
                 label = {
                     Text(
                         text = tab.title,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) YoPrimaryAmber else YoTextMuted
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = YoBorder,
+                    indicatorColor = YoSurface,
                     selectedIconColor = YoPrimaryAmber,
                     unselectedIconColor = YoTextMuted,
                     selectedTextColor = YoPrimaryAmber,

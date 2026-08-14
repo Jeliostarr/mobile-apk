@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,19 +52,6 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
-/**
- * Lets the user pick one or more episodes to download instead of the download
- * button always grabbing whichever episode the backend resolves for a bare
- * movie-level request. Selection is keyed as "S{season}E{episode}" so it
- * survives switching seasons within the sheet.
- *
- * Deliberately does NOT show an upfront total size for the selection: the
- * backend doesn't expose a per-episode file-size field or a cheap way to get
- * one, and firing a HEAD request per episode just to estimate a number would
- * burn through the API's rate limits for a figure that's often wrong anyway
- * (range requests, variable bitrate). Real, accurate sizes already appear per
- * item on the Downloads screen once each one starts.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EpisodeDownloadSheet(
@@ -91,22 +79,22 @@ fun EpisodeDownloadSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 560.dp)
-                .padding(horizontal = 16.dp)
+                .heightIn(max = 600.dp)
+                .padding(horizontal = 20.dp)
         ) {
             Text(
                 text = "Download Episodes",
-                fontSize = 18.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Select one or more episodes to download",
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 color = YoTextMuted
             )
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (seasons.size > 1) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -118,18 +106,18 @@ fun EpisodeDownloadSheet(
                                 .background(if (isSelected) YoPrimaryAmber else YoBaseBackground)
                                 .border(1.dp, if (isSelected) YoPrimaryAmber else YoBorder, RoundedCornerShape(20.dp))
                                 .clickable { selectedSeason = s }
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = "Season $s",
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isSelected) YoBaseBackground else YoTextPrimary
                             )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
             }
 
             val selectableKeysThisSeason = remember(visibleEpisodes, downloadStatusByEpisodeKey) {
@@ -144,13 +132,13 @@ fun EpisodeDownloadSheet(
             ) {
                 Text(
                     text = if (selectedKeys.isEmpty()) "No episodes selected" else "${selectedKeys.size} selected",
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     color = YoTextMuted
                 )
                 if (selectableKeysThisSeason.isNotEmpty()) {
                     Text(
                         text = if (allSelected) "Deselect all" else "Select all",
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = YoPrimaryAmber,
                         modifier = Modifier.clickable {
@@ -161,11 +149,11 @@ fun EpisodeDownloadSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp)
             ) {
                 items(visibleEpisodes, key = { episodeKey(it) }) { ep ->
@@ -177,7 +165,7 @@ fun EpisodeDownloadSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(YoBaseBackground)
                             .then(
                                 if (isLocked) Modifier
@@ -185,7 +173,7 @@ fun EpisodeDownloadSheet(
                                     selectedKeys = if (isChecked) selectedKeys - key else selectedKeys + key
                                 }
                             )
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
@@ -201,10 +189,10 @@ fun EpisodeDownloadSheet(
                                 uncheckedColor = YoTextMuted
                             )
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "E${ep.eNum} · ${ep.title ?: "Episode ${ep.eNum}"}",
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = YoTextPrimary,
                             maxLines = 1,
@@ -214,7 +202,7 @@ fun EpisodeDownloadSheet(
                         if (existingStatus != null) {
                             Text(
                                 text = statusLabel(existingStatus),
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = YoTextMuted
                             )
@@ -223,28 +211,28 @@ fun EpisodeDownloadSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Button(
                 onClick = { onDownloadSelected(episodes.filter { episodeKey(it) in selectedKeys }) },
                 enabled = selectedKeys.isNotEmpty(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
-                    .padding(bottom = 20.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .height(54.dp)
+                    .padding(bottom = 24.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = YoPrimaryAmber,
                     contentColor = YoBaseBackground
                 )
             ) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(22.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = if (selectedKeys.isEmpty()) "Select episodes"
                            else "Download ${selectedKeys.size} episode${if (selectedKeys.size > 1) "s" else ""}",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 16.sp
                 )
             }
         }

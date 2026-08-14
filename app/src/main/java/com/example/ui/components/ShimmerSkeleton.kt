@@ -49,12 +49,6 @@ fun ShimmerSkeleton(
     )
 
     val transition = rememberInfiniteTransition(label = "shimmer")
-    // Sweeps a fixed-width band across the surface at constant speed — the
-    // previous version stretched the gradient out from a fixed corner each
-    // cycle instead, which reads as the shimmer "growing" rather than
-    // sweeping, and looks noticeably different (worse) on wide vs. narrow
-    // skeletons since the same animated range produced very different
-    // apparent speeds depending on element size.
     val translateAnim = transition.animateFloat(
         initialValue = -600f,
         targetValue = 600f,
@@ -91,18 +85,18 @@ fun MovieCardSkeleton(
                 .aspectRatio(2f / 3f),
             shapeRadius = 12.dp
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         ShimmerSkeleton(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
-                .height(12.dp),
+                .height(14.dp),
             shapeRadius = 4.dp
         )
         Spacer(modifier = Modifier.height(4.dp))
         ShimmerSkeleton(
             modifier = Modifier
                 .fillMaxWidth(0.5f)
-                .height(10.dp),
+                .height(12.dp),
             shapeRadius = 4.dp
         )
     }
@@ -141,21 +135,21 @@ fun MovieRailSkeleton(
         ) {
             ShimmerSkeleton(
                 modifier = Modifier
-                    .width(120.dp)
-                    .height(18.dp),
+                    .width(130.dp)
+                    .height(20.dp),
                 shapeRadius = 4.dp
             )
             ShimmerSkeleton(
                 modifier = Modifier
-                    .width(50.dp)
-                    .height(14.dp),
+                    .width(60.dp)
+                    .height(16.dp),
                 shapeRadius = 4.dp
             )
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(5) {
                 MovieCardSkeleton(widthDp = 108.dp)
@@ -178,18 +172,18 @@ fun TranslatorRailSkeleton(
         ) {
             ShimmerSkeleton(
                 modifier = Modifier
-                    .width(110.dp)
-                    .height(18.dp),
+                    .width(120.dp)
+                    .height(20.dp),
                 shapeRadius = 4.dp
             )
             ShimmerSkeleton(
                 modifier = Modifier
-                    .width(50.dp)
-                    .height(14.dp),
+                    .width(60.dp)
+                    .height(16.dp),
                 shapeRadius = 4.dp
             )
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -197,14 +191,14 @@ fun TranslatorRailSkeleton(
             items(6) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ShimmerSkeleton(
-                        modifier = Modifier.size(60.dp),
-                        shapeRadius = 30.dp
+                        modifier = Modifier.size(66.dp),
+                        shapeRadius = 33.dp
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     ShimmerSkeleton(
                         modifier = Modifier
-                            .width(50.dp)
-                            .height(10.dp),
+                            .width(60.dp)
+                            .height(12.dp),
                         shapeRadius = 3.dp
                     )
                 }
@@ -220,34 +214,29 @@ fun HomeSkeleton(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Spotlight Card Skeleton
         item {
             Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                 ShimmerSkeleton(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(190.dp),
-                    shapeRadius = 18.dp
+                        .height(200.dp),
+                    shapeRadius = 20.dp
                 )
             }
         }
 
-        // Translators Skeleton Rail
         item {
             TranslatorRailSkeleton()
         }
 
-        // Popular Movies Rail
         item {
             MovieRailSkeleton()
         }
 
-        // Latest Releases Rail
         item {
             MovieRailSkeleton()
         }
     }
 }
-
