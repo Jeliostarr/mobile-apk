@@ -57,7 +57,12 @@ jobs:
           fi
           echo "Confirmed: ./debug.keystore exists."
 
-      # 🔥 KEY CHANGE: clean before building
+      # 🔥 NEW: Force removal of all generated sources to ensure a fresh compile
+      - name: Remove previous build artifacts
+        run: |
+          echo "Removing app/build directory to force regeneration..."
+          rm -rf app/build
+
       - name: Build debug APK (clean + assemble)
         run: gradle clean :app:assembleDebug --stacktrace --no-daemon
 
