@@ -92,7 +92,7 @@ fun YoCinemaLogoPlaceholder(
             painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
             contentDescription = "YOCINEMA Logo",
             modifier = Modifier
-                .size(50.dp)
+                .size(48.dp)
                 .clip(CircleShape)
         )
     }
@@ -239,7 +239,7 @@ fun PosterCard(
 
         Text(
             text = movie.title,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = YoTextPrimary,
             maxLines = 1,
@@ -249,7 +249,7 @@ fun PosterCard(
         if (!movie.genre.isNull_orBlank()) {
             Text(
                 text = movie.genre!!,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = YoTextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -267,12 +267,12 @@ fun PosterCard(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
                             tint = YoPrimaryAmber,
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(11.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = movie.imdbRating!!,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = YoTextPrimary
                         )
@@ -281,7 +281,7 @@ fun PosterCard(
                 if (movie.duration != null && movie.duration > 0) {
                     Text(
                         text = com.example.data.model.formatDuration(movie.duration),
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = YoTextMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -440,7 +440,7 @@ fun EpisodeCard(
 
         Text(
             text = episode.title ?: "Episode ${episode.eNum}",
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = YoTextPrimary,
             maxLines = 1,
