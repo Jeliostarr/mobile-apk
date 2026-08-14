@@ -22,6 +22,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -33,7 +34,6 @@ import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
-import com.example.ui.theme.YoTextPrimary
 
 sealed class BottomTab(
     val route: String,
@@ -76,23 +76,23 @@ fun BottomNavBar(
                 icon = {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
                             .background(if (isSelected) YoPrimaryAmber.copy(alpha = 0.15f) else YoSurface),
-                        contentAlignment = androidx.compose.ui.Alignment.Center
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
                             contentDescription = tab.title,
                             tint = if (isSelected) YoPrimaryAmber else YoTextMuted,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
                 label = {
                     Text(
                         text = tab.title,
-                        fontSize = 12.sp,
+                        fontSize = 10.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) YoPrimaryAmber else YoTextMuted
                     )
