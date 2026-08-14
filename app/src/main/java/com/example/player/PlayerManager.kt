@@ -296,11 +296,14 @@ class PlayerManager(
             try {
                 _isReconnecting.value = false
                 val uri = Uri.parse(url)
-                val isLocalFile = url.startsWith("/") || url.startsWith("file://") || uri.scheme == null || uri.scheme == "file" || java.io.File(url).exists()
+                val isLocalFile = url.startsWith("/") || url.startsWith("file://") || uri.scheme == "content" || uri.scheme == null || uri.scheme == "file" || java.io.File(url).exists()
                 val metadata = buildMetadata()
 
                 val mediaSource: MediaSource = if (isLocalFile) {
-                    val fileUri = if (url.startsWith("/")) Uri.fromFile(java.io.File(url)) else uri
+                    // content:// (MediaStore/public Downloads) and file:// URIs are
+                    // already resolvable as-is; only a bare path like "/storage/..."
+                    // needs converting to a file:// Uri first.
+                    val fileUri = if (uri.scheme == null && url.startsWith("/")) Uri.fromFile(java.io.File(url)) else uri
                     val localItem = MediaItem.Builder().setUri(fileUri).setMediaMetadata(metadata).build()
                     androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
                         .createMediaSource(localItem)
