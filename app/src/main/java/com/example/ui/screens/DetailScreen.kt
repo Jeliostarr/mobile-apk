@@ -1009,10 +1009,41 @@ fun InlineEmbedTrailerPlayer(trailerUrl: String, embedUrl: String) {
                         settings.mediaPlaybackRequiresUserGesture = false
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
+                        // Android WebView's default UA flags itself as a
+                        // WebView (contains "; wv)"), and YouTube's embed
+                        // endpoint treats that differently than a normal
+                        // mobile browser tab — commonly serves a rejection
+                        // ("Video player configuration error") instead of
+                        // the player. Presenting as a normal Chrome mobile
+                        // UA is the standard workaround.
+                        settings.userAgentString =
+                            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+                            "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                         setBackgroundColor(android.graphics.Color.BLACK)
                         android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         webChromeClient = android.webkit.WebChromeClient()
                         webViewClient = object : android.webkit.WebViewClient() {
+                            // If the embed rejects and shows YouTube's own error
+                            // page (e.g. "Video player configuration error"), that
+                            // page contains a real link ("Watch video on YouTube").
+                            // With no override, tapping it just navigates this same
+                            // small embedded WebView to the full youtube.com site —
+                            // technically "working" but squeezed into a 16:9 box.
+                            // Any navigation away from the embed URL itself should
+                            // hand off to a real browser/YouTube app instead.
+                            override fun shouldOverrideUrlLoading(
+                                view: android.webkit.WebView?,
+                                request: android.webkit.WebResourceRequest?
+                            ): Boolean {
+                                val target = request?.url?.toString() ?: return false
+                                if (target == embedUrl) return false // the initial embed load itself
+                                return try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                                    true // handled externally, don't load it in this WebView
+                                } catch (e: Exception) {
+                                    false
+                                }
+                            }
                             // onPageFinished fires as soon as navigation completes — but
                             // "completed" can mean YouTube's own error page loaded (e.g.
                             // embedding disabled for that video), which paints white.
