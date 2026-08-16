@@ -1013,6 +1013,38 @@ fun InlineEmbedTrailerPlayer(trailerUrl: String, embedUrl: String) {
                         android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         webChromeClient = android.webkit.WebChromeClient()
                         webViewClient = object : android.webkit.WebViewClient() {
+                            // onPageFinished fires as soon as navigation completes — but
+                            // "completed" can mean YouTube's own error page loaded (e.g.
+                            // embedding disabled for that video), which paints white.
+                            // Hiding the spinner on onPageFinished alone reveals that
+                            // white flash underneath. onPageCommitVisible (API 23+, safe
+                            // here since minSdk 24) fires only once real pixels have
+                            // actually been painted to the screen, so the spinner stays
+                            // up until there's genuinely something to look at.
+                            override fun onPageCommitVisible(view: android.webkit.WebView?, url: String?) {
+                                isLoading = false
+                                // Content check for the case onPageCommitVisible/
+                                // onPageFinished can't catch: YouTube's own embed
+                                // page loading "successfully" but showing its own
+                                // white error card (e.g. "playback on other
+                                // websites has been disabled by the video owner").
+                                // A working embed injects a real <video> element;
+                                // give it a moment to settle, then check.
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    try {
+                                        view?.evaluateJavascript(
+                                            "(function(){return !!document.querySelector('video');})();"
+                                        ) { result ->
+                                            if (result == "false") {
+                                                loadFailed = true
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        // WebView may have been destroyed (user collapsed
+                                        // the trailer / navigated away) before this fired.
+                                    }
+                                }, 2500)
+                            }
                             override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
                                 isLoading = false
                             }
