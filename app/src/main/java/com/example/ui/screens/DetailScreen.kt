@@ -96,6 +96,8 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -203,9 +205,22 @@ fun DetailScreen(
                 movie = cached
                 isLoading = false
             }
-            val m = repository.getMovieDetail(movieId)
+
+            // getMovieDetail and getRelatedMovies both only need movieId —
+            // no reason to wait for detail before starting related. Episodes
+            // stays sequential after detail resolves since it's conditional
+            // on m.isSeries, which we don't know until then; fetching it
+            // speculatively for every movie would waste a call on every
+            // non-series title just to save latency on series ones.
+            val (m, related) = coroutineScope {
+                val detailDeferred = async { repository.getMovieDetail(movieId) }
+                val relatedDeferred = async { repository.getRelatedMovies(movieId) }
+                detailDeferred.await() to relatedDeferred.await()
+            }
+
             if (m != null) {
                 movie = m
+                relatedMovies = related
                 if (m.isSeries) {
                     val rawEps = repository.getMovieEpisodes(movieId)
                     val allEps = if (rawEps.isNotEmpty()) rawEps else m.episodes.orEmpty()
@@ -215,7 +230,6 @@ fun DetailScreen(
                         selectedSeasonNumber = seasons.first()
                     }
                 }
-                relatedMovies = repository.getRelatedMovies(movieId)
             } else {
                 if (movie == null) {
                     errorState = "Failed to load movie details. Please try again."
@@ -763,17 +777,48 @@ fun extractYouTubeId(url: String): String? {
             Uri.parse(url).getQueryParameter("v")
         } else if (url.contains("youtube.com/embed/")) {
             url.substringAfter("youtube.com/embed/").substringBefore("?").substringBefore("&")
+        } else if (url.contains("youtube.com/shorts/")) {
+            url.substringAfter("youtube.com/shorts/").substringBefore("?").substringBefore("&")
         } else null
     } catch (e: Exception) {
         null
     }
 }
 
-private fun isExternallyEmbeddableTrailer(url: String): Boolean =
-    url.contains("youtube", ignoreCase = true) ||
-        url.contains("youtu.be", ignoreCase = true) ||
-        url.contains("vimeo", ignoreCase = true) ||
-        url.contains("dailymotion", ignoreCase = true)
+/**
+ * Builds a real, directly-navigable embed URL — mirrors the website's
+ * embedUrl() in WatchDialog.tsx exactly. This is what actually gets loaded
+ * (via webView.loadUrl, a genuine navigation), not wrapped in synthetic HTML.
+ * Returns null for anything that isn't a known embeddable platform, in which
+ * case the caller falls back to the authenticated/hosted player.
+ */
+private fun buildEmbedUrl(url: String): String? {
+    return try {
+        val uri = Uri.parse(url)
+        val host = uri.host?.removePrefix("www.")?.lowercase() ?: return null
+        when {
+            host == "youtu.be" -> {
+                val id = uri.pathSegments.firstOrNull()?.substringBefore("?")
+                id?.let { "https://www.youtube.com/embed/$it?autoplay=1&rel=0&playsinline=1" }
+            }
+            host.contains("youtube.com") -> {
+                val id = extractYouTubeId(url)
+                id?.let { "https://www.youtube.com/embed/$it?autoplay=1&rel=0&playsinline=1" }
+            }
+            host.contains("vimeo.com") -> {
+                val id = uri.pathSegments.lastOrNull()
+                id?.let { "https://player.vimeo.com/video/$it?autoplay=1" }
+            }
+            host.contains("dailymotion.com") -> {
+                val id = url.substringAfter("/video/", "").substringBefore("_").ifBlank { null }
+                id?.let { "https://www.dailymotion.com/embed/video/$it?autoplay=1" }
+            }
+            else -> null
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
 
 @Composable
 fun InlineTrailerSection(
@@ -785,7 +830,7 @@ fun InlineTrailerSection(
     repository: YocinemaRepository
 ) {
     val ytId = remember(trailerUrl) { extractYouTubeId(trailerUrl) }
-    val isEmbeddable = remember(trailerUrl) { isExternallyEmbeddableTrailer(trailerUrl) }
+    val embedUrl = remember(trailerUrl) { buildEmbedUrl(trailerUrl) }
 
     Column {
         Text(
@@ -841,8 +886,8 @@ fun InlineTrailerSection(
 
         if (expanded) {
             Spacer(modifier = Modifier.height(14.dp))
-            if (isEmbeddable) {
-                InlineYouTubePlayer(trailerUrl = trailerUrl, ytId = ytId)
+            if (embedUrl != null) {
+                InlineEmbedTrailerPlayer(trailerUrl = trailerUrl, embedUrl = embedUrl)
             } else {
                 InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
             }
@@ -920,9 +965,9 @@ fun InlineAuthenticatedTrailerPlayer(trailerUrl: String, repository: YocinemaRep
 }
 
 @Composable
-fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
-    var isLoading by remember { mutableStateOf(true) }
-    var loadFailed by remember { mutableStateOf(false) }
+fun InlineEmbedTrailerPlayer(trailerUrl: String, embedUrl: String) {
+    var isLoading by remember(embedUrl) { mutableStateOf(true) }
+    var loadFailed by remember(embedUrl) { mutableStateOf(false) }
     val context = LocalContext.current
 
     Box(
@@ -933,7 +978,7 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        if (ytId == null || loadFailed) {
+        if (loadFailed) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                 Text("Couldn't play the trailer here.", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(10.dp))
@@ -942,7 +987,7 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
                         try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl))) } catch (e: Exception) { }
                     }
                 ) {
-                    Text("Watch on YouTube", color = Color.White, fontSize = 14.sp)
+                    Text("Watch externally", color = Color.White, fontSize = 14.sp)
                 }
             }
         } else {
@@ -954,6 +999,10 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
             }
             androidx.compose.ui.viewinterop.AndroidView(
                 factory = { ctx ->
+                    // Third-party cookies must be explicitly enabled — off by
+                    // default since API 21 — or YouTube's consent/session
+                    // cookies get silently blocked and playback just hangs.
+                    android.webkit.CookieManager.getInstance().setAcceptCookie(true)
                     android.webkit.WebView(ctx).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
@@ -961,6 +1010,7 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
                         setBackgroundColor(android.graphics.Color.BLACK)
+                        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         webChromeClient = android.webkit.WebChromeClient()
                         webViewClient = object : android.webkit.WebViewClient() {
                             override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
@@ -977,17 +1027,16 @@ fun InlineYouTubePlayer(trailerUrl: String, ytId: String?) {
                                 }
                             }
                         }
-                        val html = """
-                            <html><head>
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                            <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;}
-                            iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}</style>
-                            </head><body>
-                            <iframe src="https://www.youtube.com/embed/$ytId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1"
-                            allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
-                            </body></html>
-                        """.trimIndent()
-                        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
+                        // Navigate straight to the real embed URL — same as
+                        // the website's <iframe src="..."> — instead of
+                        // wrapping it in a synthetic loadDataWithBaseURL host
+                        // page. That synthetic-page trick is what was
+                        // breaking playback: the WebView never actually
+                        // navigates to youtube.com, so referrer/consent/
+                        // postMessage checks the real embed player relies on
+                        // don't line up, and it silently hangs instead of
+                        // erroring — nothing for onReceivedError to catch.
+                        loadUrl(embedUrl)
                         webView = this
                     }
                 },

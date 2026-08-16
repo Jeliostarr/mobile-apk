@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import com.example.data.model.FacetsResponse
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
 import com.example.data.model.isNull_orEmpty
@@ -308,12 +309,30 @@ fun HomeScreen(
                 isLoading = true
             }
             try {
-                val pop = repository.getMovies(sort = "popular", limit = 15)
-                val lat = repository.getMovies(sort = "latest", limit = 15)
-                val ser = repository.getMovies(type = "series", limit = 15)
-                val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
+                // These four don't depend on each other — they were being
+                // fetched one after another (four full round trips before
+                // the genre batch even started), which was the main reason
+                // cold loads felt slow. Launching all four up front and
+                // awaiting them after means the wait is bounded by the
+                // slowest single call instead of the sum of all four.
+                lateinit var pop: List<Movie>
+                lateinit var lat: List<Movie>
+                lateinit var ser: List<Movie>
+                lateinit var facets: FacetsResponse
 
-                val facets = repository.getFacets()
+                coroutineScope {
+                    val popDeferred = async { repository.getMovies(sort = "popular", limit = 15) }
+                    val latDeferred = async { repository.getMovies(sort = "latest", limit = 15) }
+                    val serDeferred = async { repository.getMovies(type = "series", limit = 15) }
+                    val facetsDeferred = async { repository.getFacets() }
+
+                    pop = popDeferred.await()
+                    lat = latDeferred.await()
+                    ser = serDeferred.await()
+                    facets = facetsDeferred.await()
+                }
+
+                val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
                 val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
 
                 val genreResults = coroutineScope {
