@@ -76,6 +76,9 @@ data class SportsMatchDetailResponse(
 )
 
 enum class SportsFilter(val apiValue: String, val label: String) {
+    // ALL isn't a single backend call — the screen fetches live + upcoming
+    // in parallel and merges them (live first). apiValue is unused for ALL.
+    ALL("all", "All"),
     LIVE("live", "Live"),
     UPCOMING("upcoming", "Upcoming"),
     ENDED("ended", "Ended")
