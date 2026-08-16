@@ -325,3 +325,44 @@ fun SportsListSkeleton(
         }
     }
 }
+
+/** Section header for grouped Live/Upcoming lists — same accent-bar + bold
+ * title language as HomeScreen's RailHeader, plus an item-count pill since
+ * there's no "view all" action to put in that spot here. */
+@Composable
+fun SportsSectionHeader(
+    title: String,
+    count: Int,
+    accentColor: Color = YoPrimaryAmber
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(18.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(accentColor)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = YoTextPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(YoSurface)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Text(text = count.toString(), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = YoTextMuted)
+        }
+    }
+}
