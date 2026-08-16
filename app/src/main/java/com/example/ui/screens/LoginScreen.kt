@@ -54,7 +54,7 @@ import com.example.ui.components.ModernLoader
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoDestructive
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -126,10 +126,10 @@ fun LoginScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(12.dp, RoundedCornerShape(24.dp), clip = false)
-                    .clip(RoundedCornerShape(24.dp))
+                    .shadow(12.dp, RoundedCornerShape(26.dp), clip = false)
+                    .clip(RoundedCornerShape(26.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(24.dp))   // border now works
+                    .border(1.dp, YoBorder, RoundedCornerShape(26.dp))   // border now works
                     .padding(20.dp)
             ) {
                 Column(
@@ -146,7 +146,7 @@ fun LoginScreen(
                             Icon(
                                 imageVector = Icons.Default.Key,
                                 contentDescription = null,
-                                tint = YoPrimaryAmber
+                                tint = YoPrimaryViolet
                             )
                         },
                         trailingIcon = {
@@ -165,15 +165,15 @@ fun LoginScreen(
                                 Icon(
                                     imageVector = Icons.Default.ContentPaste,
                                     contentDescription = "Paste",
-                                    tint = YoPrimaryAmber
+                                    tint = YoPrimaryViolet
                                 )
                             }
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = YoPrimaryAmber,
+                            focusedBorderColor = YoPrimaryViolet,
                             unfocusedBorderColor = YoBorder,
                             focusedContainerColor = YoBaseBackground,
                             unfocusedContainerColor = YoBaseBackground,
@@ -217,9 +217,9 @@ fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = YoPrimaryAmber,
+                            containerColor = YoPrimaryViolet,
                             contentColor = YoBaseBackground
                         )
                     ) {
@@ -244,7 +244,7 @@ fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextPrimary)
                     ) {

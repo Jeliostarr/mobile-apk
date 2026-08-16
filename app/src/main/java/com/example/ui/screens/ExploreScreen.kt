@@ -38,7 +38,7 @@ import com.example.ui.components.MovieGridSkeleton
 import com.example.ui.components.PosterCard
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -128,14 +128,14 @@ fun ExploreScreen(
                     onClick = { selectedType = tOpt },
                     label = { Text(tOpt, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = YoPrimaryAmber,
+                        selectedContainerColor = YoPrimaryViolet,
                         selectedLabelColor = YoBaseBackground,
                         containerColor = YoSurface,
                         labelColor = YoTextMuted
                     ),
                     border = FilterChipDefaults.filterChipBorder(
                         borderColor = YoBorder,
-                        selectedBorderColor = YoPrimaryAmber,
+                        selectedBorderColor = YoPrimaryViolet,
                         enabled = true,
                         selected = isSelected
                     )
@@ -151,13 +151,13 @@ fun ExploreScreen(
                     label = { Text("Sort: ${sortOpt.replaceFirstChar { it.uppercase() }}", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = YoSurfaceVariant,
-                        selectedLabelColor = YoPrimaryAmber,
+                        selectedLabelColor = YoPrimaryViolet,
                         containerColor = YoSurface,
                         labelColor = YoTextMuted
                     ),
                     border = FilterChipDefaults.filterChipBorder(
-                        borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
-                        selectedBorderColor = YoPrimaryAmber,
+                        borderColor = if (isSelected) YoPrimaryViolet else YoBorder,
+                        selectedBorderColor = YoPrimaryViolet,
                         enabled = true,
                         selected = isSelected
                     )
@@ -187,14 +187,14 @@ fun ExploreScreen(
                     onClick = { selectedGenre = g },
                     label = { Text(g, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
-                        selectedLabelColor = YoPrimaryAmber,
+                        selectedContainerColor = YoPrimaryViolet.copy(alpha = 0.2f),
+                        selectedLabelColor = YoPrimaryViolet,
                         containerColor = YoSurface,
                         labelColor = YoTextMuted
                     ),
                     border = FilterChipDefaults.filterChipBorder(
-                        borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
-                        selectedBorderColor = YoPrimaryAmber,
+                        borderColor = if (isSelected) YoPrimaryViolet else YoBorder,
+                        selectedBorderColor = YoPrimaryViolet,
                         enabled = true,
                         selected = isSelected
                     )
@@ -225,14 +225,14 @@ fun ExploreScreen(
                         onClick = { selectedVj = vj },
                         label = { Text(vj, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
-                            selectedLabelColor = YoPrimaryAmber,
+                            selectedContainerColor = YoPrimaryViolet.copy(alpha = 0.2f),
+                            selectedLabelColor = YoPrimaryViolet,
                             containerColor = YoSurface,
                             labelColor = YoTextMuted
                         ),
                         border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
-                            selectedBorderColor = YoPrimaryAmber,
+                            borderColor = if (isSelected) YoPrimaryViolet else YoBorder,
+                            selectedBorderColor = YoPrimaryViolet,
                             enabled = true,
                             selected = isSelected
                         )
@@ -264,14 +264,14 @@ fun ExploreScreen(
                         onClick = { selectedYear = yr },
                         label = { Text(yr, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = YoPrimaryAmber.copy(alpha = 0.2f),
-                            selectedLabelColor = YoPrimaryAmber,
+                            selectedContainerColor = YoPrimaryViolet.copy(alpha = 0.2f),
+                            selectedLabelColor = YoPrimaryViolet,
                             containerColor = YoSurface,
                             labelColor = YoTextMuted
                         ),
                         border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
-                            selectedBorderColor = YoPrimaryAmber,
+                            borderColor = if (isSelected) YoPrimaryViolet else YoBorder,
+                            selectedBorderColor = YoPrimaryViolet,
                             enabled = true,
                             selected = isSelected
                         )

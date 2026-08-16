@@ -51,8 +51,8 @@ import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.RequestDialog
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
-import com.example.ui.theme.YoSuccessGreen
+import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoSuccess
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -252,7 +252,7 @@ fun FilmographyRow(
             modifier = Modifier
                 .width(55.dp)
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(YoSurfaceVariant)
         ) {
             SubcomposeAsyncImage(
@@ -287,15 +287,15 @@ fun FilmographyRow(
             if (isAvailable) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(YoSuccessGreen.copy(alpha = 0.2f))
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(YoSuccess.copy(alpha = 0.2f))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = "AVAILABLE ON YOCINEMA",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = YoSuccessGreen
+                        color = YoSuccess
                     )
                 }
             } else {
@@ -306,7 +306,7 @@ fun FilmographyRow(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(YoPrimaryAmber)
+                            .background(YoPrimaryViolet)
                             .clickable { showRequestDialog = true }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {

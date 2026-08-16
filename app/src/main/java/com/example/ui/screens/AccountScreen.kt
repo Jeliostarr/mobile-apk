@@ -71,7 +71,7 @@ import com.example.ui.components.RequestDialog
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoDestructive
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -135,7 +135,7 @@ fun AccountScreen(
                         modifier = Modifier
                             .size(50.dp)
                             .clip(CircleShape)
-                            .background(YoPrimaryAmber),
+                            .background(YoPrimaryViolet),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -170,7 +170,7 @@ fun AccountScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(YoSurfaceVariant)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -180,7 +180,7 @@ fun AccountScreen(
                             Icon(
                                 imageVector = Icons.Default.Key,
                                 contentDescription = null,
-                                tint = YoPrimaryAmber,
+                                tint = YoPrimaryViolet,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -217,7 +217,7 @@ fun AccountScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(42.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, YoDestructive.copy(alpha = 0.5f)),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = YoDestructive)
                     ) {
@@ -231,9 +231,9 @@ fun AccountScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = YoPrimaryAmber,
+                            containerColor = YoPrimaryViolet,
                             contentColor = YoBaseBackground
                         )
                     ) {
@@ -255,7 +255,7 @@ fun AccountScreen(
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = YoPrimaryAmber,
+                containerColor = YoPrimaryViolet,
                 contentColor = YoBaseBackground
             )
         ) {
@@ -274,11 +274,11 @@ fun AccountScreen(
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = YoSurface,
-            contentColor = YoPrimaryAmber,
+            contentColor = YoPrimaryViolet,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryAmber
+                    color = YoPrimaryViolet
                 )
             }
         ) {
@@ -359,7 +359,7 @@ fun WatchlistRow(
             modifier = Modifier
                 .width(55.dp)
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(YoSurfaceVariant)
         ) {
             AsyncImage(
@@ -422,7 +422,7 @@ fun HistoryRow(
             modifier = Modifier
                 .width(55.dp)
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(YoSurfaceVariant)
         ) {
             AsyncImage(
@@ -436,7 +436,7 @@ fun HistoryRow(
                     .align(Alignment.Center)
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(YoPrimaryAmber),
+                    .background(YoPrimaryViolet),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -463,7 +463,7 @@ fun HistoryRow(
                 Text(
                     text = "S${item.seasonNumber} E${item.episodeNumber}${if (!item.episodeTitle.isNull_orBlank()) " · ${item.episodeTitle}" else ""}",
                     fontSize = 12.sp,
-                    color = YoPrimaryAmber
+                    color = YoPrimaryViolet
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))

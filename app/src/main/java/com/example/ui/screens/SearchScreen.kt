@@ -56,7 +56,7 @@ import com.example.ui.components.MovieGridSkeleton
 import com.example.ui.components.VJBadgeChip
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -171,9 +171,9 @@ fun SearchScreen(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = YoPrimaryAmber,
+                    focusedBorderColor = YoPrimaryViolet,
                     unfocusedBorderColor = YoBorder,
                     focusedContainerColor = YoSurface,
                     unfocusedContainerColor = YoSurface,
@@ -196,14 +196,14 @@ fun SearchScreen(
                     onClick = { selectedFilter = filter },
                     label = { Text(filter, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = YoPrimaryAmber,
+                        selectedContainerColor = YoPrimaryViolet,
                         selectedLabelColor = YoBaseBackground,
                         containerColor = YoSurface,
                         labelColor = YoTextMuted
                     ),
                     border = FilterChipDefaults.filterChipBorder(
                         borderColor = YoBorder,
-                        selectedBorderColor = YoPrimaryAmber,
+                        selectedBorderColor = YoPrimaryViolet,
                         enabled = true,
                         selected = isSelected
                     )
@@ -225,13 +225,13 @@ fun SearchScreen(
                     label = { Text("Sort: $sortOpt", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = YoSurfaceVariant,
-                        selectedLabelColor = YoPrimaryAmber,
+                        selectedLabelColor = YoPrimaryViolet,
                         containerColor = YoBaseBackground,
                         labelColor = YoTextMuted
                     ),
                     border = FilterChipDefaults.filterChipBorder(
-                        borderColor = if (isSelected) YoPrimaryAmber else YoBorder,
-                        selectedBorderColor = YoPrimaryAmber,
+                        borderColor = if (isSelected) YoPrimaryViolet else YoBorder,
+                        selectedBorderColor = YoPrimaryViolet,
                         enabled = true,
                         selected = isSelected
                     )
@@ -304,10 +304,10 @@ fun SearchResultRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(4.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
             .clickable { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -316,7 +316,7 @@ fun SearchResultRow(
             modifier = Modifier
                 .width(70.dp)
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(YoSurfaceVariant)
         ) {
             SubcomposeAsyncImage(
@@ -352,7 +352,7 @@ fun SearchResultRow(
                 Text(
                     text = movie.genre!!,
                     fontSize = 12.sp,
-                    color = YoPrimaryAmber,
+                    color = YoPrimaryViolet,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

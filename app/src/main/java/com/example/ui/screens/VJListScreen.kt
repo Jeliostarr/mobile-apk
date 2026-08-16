@@ -41,7 +41,8 @@ import androidx.compose.ui.unit.sp
 import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoAccentCyan
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -102,10 +103,10 @@ fun VJListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .shadow(4.dp, RoundedCornerShape(16.dp), clip = false)
-                        .clip(RoundedCornerShape(16.dp))
+                        .shadow(4.dp, RoundedCornerShape(18.dp), clip = false)
+                        .clip(RoundedCornerShape(18.dp))
                         .background(YoSurface)
-                        .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
+                        .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
                         .clickable { onVJClick(vjName) }
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
@@ -115,7 +116,11 @@ fun VJListScreen(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(CircleShape)
-                                .background(YoPrimaryAmber),
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.linearGradient(
+                                        listOf(YoPrimaryViolet, YoAccentCyan)
+                                    )
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(

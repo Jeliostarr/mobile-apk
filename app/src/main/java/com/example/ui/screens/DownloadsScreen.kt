@@ -57,7 +57,7 @@ import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoDestructive
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -95,11 +95,11 @@ fun DownloadsScreen(
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = YoSurface,
-            contentColor = YoPrimaryAmber,
+            contentColor = YoPrimaryViolet,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryAmber
+                    color = YoPrimaryViolet
                 )
             }
         ) {
@@ -210,17 +210,17 @@ fun ActiveDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(3.dp, RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(3.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .size(52.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(YoBorder)
         ) {
             if (!download.posterUrl.isNullOrBlank()) {
@@ -276,8 +276,8 @@ fun ActiveDownloadRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = YoPrimaryAmber,
+                    .clip(RoundedCornerShape(6.dp)),
+                color = YoPrimaryViolet,
                 trackColor = YoBorder
             )
 
@@ -308,7 +308,7 @@ fun ActiveDownloadRow(
                     text = statusText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isDownloading) YoPrimaryAmber else YoTextMuted,
+                    color = if (isDownloading) YoPrimaryViolet else YoTextMuted,
                     maxLines = 1,
                     softWrap = false
                 )
@@ -320,11 +320,11 @@ fun ActiveDownloadRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isDownloading) {
                 IconButton(onClick = onPause) {
-                    Icon(Icons.Default.Pause, contentDescription = "Pause", tint = YoPrimaryAmber)
+                    Icon(Icons.Default.Pause, contentDescription = "Pause", tint = YoPrimaryViolet)
                 }
             } else if (isPaused) {
                 IconButton(onClick = onResume) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Resume", tint = YoPrimaryAmber)
+                    Icon(Icons.Default.Refresh, contentDescription = "Resume", tint = YoPrimaryViolet)
                 }
             }
 
@@ -344,10 +344,10 @@ fun CompletedDownloadRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(3.dp, RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(3.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
             .clickable { onPlay() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -355,7 +355,7 @@ fun CompletedDownloadRow(
         Box(
             modifier = Modifier
                 .size(60.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(YoBorder)
         ) {
             if (!download.posterUrl.isNullOrBlank()) {
@@ -367,13 +367,13 @@ fun CompletedDownloadRow(
                 )
             } else {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(YoPrimaryAmber.copy(alpha = 0.2f)),
+                    modifier = Modifier.fillMaxSize().background(YoPrimaryViolet.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = YoPrimaryAmber,
+                        tint = YoPrimaryViolet,
                         modifier = Modifier.size(32.dp)
                     )
                 }

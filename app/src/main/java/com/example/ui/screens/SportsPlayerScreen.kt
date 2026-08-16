@@ -72,7 +72,7 @@ import com.example.data.model.SportsStream
 import com.example.repository.SportsRepository
 import com.example.ui.components.LiveBadge
 import com.example.ui.theme.YoBaseBackground
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 
@@ -221,7 +221,7 @@ fun SportsPlayerScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
                         onClick = onBackClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = YoPrimaryAmber, contentColor = Color.Black)
+                        colors = ButtonDefaults.buttonColors(containerColor = YoPrimaryViolet, contentColor = Color.Black)
                     ) {
                         Text("Go Back")
                     }
@@ -231,7 +231,7 @@ fun SportsPlayerScreen(
 
         if (loadError == null && isBuffering && playerError == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = YoPrimaryAmber)
+                CircularProgressIndicator(color = YoPrimaryViolet)
             }
         }
 
@@ -321,7 +321,7 @@ fun SportsPlayerScreen(
                             .size(76.dp)
                             .shadow(12.dp, CircleShape, clip = false)
                             .clip(CircleShape)
-                            .background(YoPrimaryAmber)
+                            .background(YoPrimaryViolet)
                             .clickable(enabled = !isBuffering) {
                                 if (isPlaying) exoPlayer.pause() else exoPlayer.play()
                             },

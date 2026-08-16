@@ -41,7 +41,7 @@ import com.example.ui.components.ModernLoader
 import com.example.ui.components.MovieGridSkeleton
 import com.example.ui.components.PosterCard
 import com.example.ui.theme.YoBaseBackground
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -108,11 +108,11 @@ fun VJCatalogueScreen(
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = YoSurface,
-            contentColor = YoPrimaryAmber,
+            contentColor = YoPrimaryViolet,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryAmber
+                    color = YoPrimaryViolet
                 )
             }
         ) {

@@ -48,7 +48,7 @@ import com.example.ui.components.MatchCard
 import com.example.ui.components.SportsListSkeleton
 import com.example.ui.components.SportsSectionHeader
 import com.example.ui.theme.YoBaseBackground
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -139,7 +139,7 @@ fun SportsScreen(
             Icon(
                 imageVector = Icons.Filled.SportsSoccer,
                 contentDescription = null,
-                tint = YoPrimaryAmber,
+                tint = YoPrimaryViolet,
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -183,7 +183,7 @@ fun SportsScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(if (isSelected) YoPrimaryAmber else YoSurface)
+                        .background(if (isSelected) YoPrimaryViolet else YoSurface)
                         .clickable { selectedFilter = filter }
                         .padding(horizontal = 18.dp, vertical = 9.dp)
                 ) {
@@ -249,7 +249,7 @@ fun SportsScreen(
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
                             "Tap to retry",
-                            color = YoPrimaryAmber,
+                            color = YoPrimaryViolet,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clickable { refreshTick++ }
@@ -284,7 +284,7 @@ fun SportsScreen(
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Clear the \"$selectedLeague\" filter",
-                                color = YoPrimaryAmber,
+                                color = YoPrimaryViolet,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.clickable { selectedLeague = null }

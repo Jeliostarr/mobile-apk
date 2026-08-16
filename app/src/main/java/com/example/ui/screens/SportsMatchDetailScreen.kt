@@ -46,7 +46,7 @@ import com.example.repository.SportsRepository
 import com.example.ui.components.LiveBadge
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -105,7 +105,7 @@ fun SportsMatchDetailScreen(
         when {
             isLoading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = YoPrimaryAmber)
+                    CircularProgressIndicator(color = YoPrimaryViolet)
                 }
             }
             loadError != null -> {
@@ -120,7 +120,7 @@ fun SportsMatchDetailScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         "Tap to retry",
-                        color = YoPrimaryAmber,
+                        color = YoPrimaryViolet,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { refreshTick++ }
@@ -197,7 +197,7 @@ fun SportsMatchDetailScreen(
                                 Column(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) YoPrimaryAmber else YoSurface)
+                                        .background(if (isSelected) YoPrimaryViolet else YoSurface)
                                         .clickable { selectedStream = stream }
                                         .padding(horizontal = 16.dp, vertical = 10.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
@@ -227,7 +227,7 @@ fun SportsMatchDetailScreen(
                             },
                             enabled = selectedStream != null,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = YoPrimaryAmber,
+                                containerColor = YoPrimaryViolet,
                                 contentColor = Color.Black
                             ),
                             modifier = Modifier.fillMaxWidth().height(52.dp)
@@ -261,7 +261,7 @@ fun SportsMatchDetailScreen(
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     "Refresh",
-                                    color = YoPrimaryAmber,
+                                    color = YoPrimaryViolet,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.clickable { refreshTick++ }

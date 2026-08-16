@@ -73,7 +73,7 @@ import com.example.data.model.Movie
 import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 
@@ -276,7 +276,7 @@ fun PlayerScreen(
                     Button(
                         onClick = { onBackClick() },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = YoPrimaryAmber,
+                            containerColor = YoPrimaryViolet,
                             contentColor = YoBaseBackground
                         )
                     ) {
@@ -352,7 +352,7 @@ fun PlayerScreen(
                         Box {
                             Row(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(18.dp))
                                     .background(Color.Black.copy(alpha = 0.6f))
                                     .clickable { showSpeedMenu = true }
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -398,7 +398,7 @@ fun PlayerScreen(
                                 .size(76.dp)
                                 .shadow(12.dp, CircleShape, clip = false)
                                 .clip(CircleShape)
-                                .background(YoPrimaryAmber)
+                                .background(YoPrimaryViolet)
                                 .clickable(enabled = !isBuffering) {
                                     if (isPlaying) playerManager.exoPlayer.pause() else playerManager.exoPlayer.play()
                                 },
@@ -445,8 +445,8 @@ fun PlayerScreen(
                                 isDragging = false
                             },
                             colors = SliderDefaults.colors(
-                                thumbColor = YoPrimaryAmber,
-                                activeTrackColor = YoPrimaryAmber,
+                                thumbColor = YoPrimaryViolet,
+                                activeTrackColor = YoPrimaryViolet,
                                 inactiveTrackColor = Color.White.copy(alpha = 0.25f)
                             ),
                             modifier = Modifier.fillMaxWidth().height(28.dp)
@@ -503,7 +503,7 @@ private fun ControlIconButton(
 }
 
 @Composable
-private fun SpinningLoader(color: Color = YoPrimaryAmber, size: androidx.compose.ui.unit.Dp = 36.dp) {
+private fun SpinningLoader(color: Color = YoPrimaryViolet, size: androidx.compose.ui.unit.Dp = 36.dp) {
     androidx.compose.material3.CircularProgressIndicator(
         modifier = Modifier.size(size),
         color = color,
