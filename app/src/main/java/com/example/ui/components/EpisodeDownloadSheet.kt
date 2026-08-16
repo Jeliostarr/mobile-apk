@@ -47,7 +47,7 @@ import com.example.data.local.DownloadEntity
 import com.example.data.model.Episode
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -108,10 +108,10 @@ fun EpisodeDownloadSheet(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(24.dp))
-                                .background(if (isSelected) YoPrimaryAmber else YoSurfaceVariant)
+                                .background(if (isSelected) YoPrimaryViolet else YoSurfaceVariant)
                                 .border(
                                     1.dp,
-                                    if (isSelected) YoPrimaryAmber else YoBorder,
+                                    if (isSelected) YoPrimaryViolet else YoBorder,
                                     RoundedCornerShape(24.dp)
                                 )
                                 .clickable { selectedSeason = s }
@@ -148,7 +148,7 @@ fun EpisodeDownloadSheet(
                         text = if (allSelected) "Deselect all" else "Select all",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = YoPrimaryAmber,
+                        color = YoPrimaryViolet,
                         modifier = Modifier.clickable {
                             selectedKeys = if (allSelected) selectedKeys - selectableKeysThisSeason
                                            else selectedKeys + selectableKeysThisSeason
@@ -193,7 +193,7 @@ fun EpisodeDownloadSheet(
                             },
                             enabled = !isLocked,
                             colors = CheckboxDefaults.colors(
-                                checkedColor = YoPrimaryAmber,
+                                checkedColor = YoPrimaryViolet,
                                 uncheckedColor = YoTextMuted
                             )
                         )
@@ -211,14 +211,14 @@ fun EpisodeDownloadSheet(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(YoPrimaryAmber.copy(alpha = 0.15f))
+                                    .background(YoPrimaryViolet.copy(alpha = 0.15f))
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = statusLabel(existingStatus),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = YoPrimaryAmber
+                                    color = YoPrimaryViolet
                                 )
                             }
                         }
@@ -235,10 +235,10 @@ fun EpisodeDownloadSheet(
                     .fillMaxWidth()
                     .height(54.dp)
                     .padding(bottom = 24.dp)
-                    .shadow(8.dp, RoundedCornerShape(14.dp), clip = false),
-                shape = RoundedCornerShape(14.dp),
+                    .shadow(8.dp, RoundedCornerShape(18.dp), clip = false),
+                shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = YoPrimaryAmber,
+                    containerColor = YoPrimaryViolet,
                     contentColor = YoBaseBackground,
                     disabledContainerColor = YoSurfaceVariant,
                     disabledContentColor = YoTextMuted

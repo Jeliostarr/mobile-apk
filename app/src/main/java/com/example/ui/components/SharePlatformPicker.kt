@@ -85,7 +85,7 @@ fun SharePlatformPicker(
                     .size(16.dp)
             )
             Text(
-                text = "Opens our community chat — paste your message and send it.",
+                text = "Paste your message and send it in the chat.",
                 fontSize = 12.sp,
                 color = YoTextMuted
             )
@@ -105,13 +105,13 @@ private fun PlatformButton(
     Row(
         modifier = modifier
             .height(56.dp)
-            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(4.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
             .background(if (enabled) color.copy(alpha = 0.15f) else Color.Transparent)
             .border(
                 1.5.dp,
                 if (enabled) color.copy(alpha = 0.5f) else YoTextMuted.copy(alpha = 0.2f),
-                RoundedCornerShape(14.dp)
+                RoundedCornerShape(18.dp)
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp),

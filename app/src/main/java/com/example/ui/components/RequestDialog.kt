@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -60,12 +60,12 @@ fun RequestDialog(onDismiss: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.MovieFilter, contentDescription = null, tint = YoPrimaryAmber)
+                Icon(imageVector = Icons.Default.MovieFilter, contentDescription = null, tint = YoPrimaryViolet)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Request a movie or series", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = YoTextPrimary)
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text("Tell us what you're looking for — we'll pick it up in the chat.", fontSize = 13.sp, color = YoTextMuted)
+            Text("Tell us what you're looking for we'll pick it up in the chat.", fontSize = 13.sp, color = YoTextMuted)
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -77,9 +77,9 @@ fun RequestDialog(onDismiss: () -> Unit) {
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 14.sp, color = YoTextPrimary),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = YoPrimaryAmber,
+                    focusedBorderColor = YoPrimaryViolet,
                     unfocusedBorderColor = YoBorder,
-                    cursorColor = YoPrimaryAmber
+                    cursorColor = YoPrimaryViolet
                 )
             )
 
@@ -88,15 +88,15 @@ fun RequestDialog(onDismiss: () -> Unit) {
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                placeholder = { Text("Any details (optional) — year, VJ, language…", fontSize = 13.sp) },
+                placeholder = { Text("Any details (optional) year, VJ, Title…", fontSize = 13.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 3,
                 textStyle = TextStyle(fontSize = 14.sp, color = YoTextPrimary),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = YoPrimaryAmber,
+                    focusedBorderColor = YoPrimaryViolet,
                     unfocusedBorderColor = YoBorder,
-                    cursorColor = YoPrimaryAmber
+                    cursorColor = YoPrimaryViolet
                 )
             )
 

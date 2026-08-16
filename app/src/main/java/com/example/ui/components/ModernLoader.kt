@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.ui.theme.YoAccentCyan
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 
 @Composable
 fun ModernLoader(
@@ -41,14 +43,16 @@ fun ModernLoader(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(size)) {
-            // Background track
             drawCircle(
                 color = YoBorder,
                 style = Stroke(width = strokeWidth.toPx())
             )
-            // Animated amber arc
+            // Violet→cyan sweep instead of a flat arc — same motif as
+            // LoadingScreen's ring, so every loading state in the app reads
+            // as one consistent system rather than each screen inventing
+            // its own spinner.
             drawArc(
-                color = YoPrimaryAmber,
+                brush = Brush.sweepGradient(listOf(YoPrimaryViolet, YoAccentCyan, YoPrimaryViolet)),
                 startAngle = rotation.value,
                 sweepAngle = 120f,
                 useCenter = false,

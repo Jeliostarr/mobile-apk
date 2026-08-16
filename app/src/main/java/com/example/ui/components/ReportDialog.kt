@@ -39,14 +39,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import com.example.util.buildReportMessage
 
 private val REASONS = listOf(
-    "Video won't play",
+    "Video doesn't play",
     "Wrong movie or episode",
     "No sound / bad audio",
     "Poor video quality",
@@ -80,7 +80,7 @@ fun ReportDialog(
                 .padding(horizontal = 20.dp, vertical = 24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = YoPrimaryAmber)
+                Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = YoPrimaryViolet)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Report a problem", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = YoTextPrimary)
             }
@@ -98,10 +98,10 @@ fun ReportDialog(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (selected) YoPrimaryAmber.copy(alpha = 0.18f) else YoSurface)
+                            .background(if (selected) YoPrimaryViolet.copy(alpha = 0.18f) else YoSurface)
                             .border(
                                 1.dp,
-                                if (selected) YoPrimaryAmber else YoBorder,
+                                if (selected) YoPrimaryViolet else YoBorder,
                                 RoundedCornerShape(20.dp)
                             )
                             .clickable { reason = if (selected) null else r }
@@ -111,7 +111,7 @@ fun ReportDialog(
                             text = r,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (selected) YoPrimaryAmber else YoTextMuted
+                            color = if (selected) YoPrimaryViolet else YoTextMuted
                         )
                     }
                 }
@@ -122,15 +122,15 @@ fun ReportDialog(
             OutlinedTextField(
                 value = details,
                 onValueChange = { details = it },
-                placeholder = { Text("Add any details (optional) — e.g. which episode, at what time…", fontSize = 13.sp) },
+                placeholder = { Text("Add any details (optional) e.g. which episode, at what time…", fontSize = 13.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 3,
                 textStyle = TextStyle(fontSize = 14.sp, color = YoTextPrimary),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = YoPrimaryAmber,
+                    focusedBorderColor = YoPrimaryViolet,
                     unfocusedBorderColor = YoBorder,
-                    cursorColor = YoPrimaryAmber
+                    cursorColor = YoPrimaryViolet
                 )
             )
 

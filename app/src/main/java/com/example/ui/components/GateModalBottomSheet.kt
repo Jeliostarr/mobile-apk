@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -59,7 +59,7 @@ fun GateModalBottomSheet(
             Icon(
                 imageVector = Icons.Default.Key,
                 contentDescription = null,
-                tint = YoPrimaryAmber,
+                tint = YoPrimaryViolet,
                 modifier = Modifier.size(56.dp)
             )
 
@@ -92,9 +92,9 @@ fun GateModalBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = YoPrimaryAmber,
+                    containerColor = YoPrimaryViolet,
                     contentColor = YoBaseBackground
                 )
             ) {
@@ -115,7 +115,7 @@ fun GateModalBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(18.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = YoTextPrimary

@@ -1,6 +1,8 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,9 +51,11 @@ import com.example.data.model.CastMember
 import com.example.data.model.Episode
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
+import com.example.ui.theme.YoAccentCyan
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoRatingGold
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -67,6 +71,35 @@ private fun Modifier.pressScaleClickable(onClick: () -> Unit): Modifier {
             scaleX = scale
             scaleY = scale
         }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick
+        )
+}
+
+/**
+ * Same press-scale as pressScaleClickable, plus a hairline border that
+ * glows violet while pressed. Used only where a border already exists
+ * (poster cards) — the glow reads as "responsive surface," not just a
+ * generic ripple, without adding a new visual language of its own.
+ */
+@Composable
+private fun Modifier.pressGlowClickable(onClick: () -> Unit): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, label = "pressScale")
+    val borderColor by animateColorAsState(
+        targetValue = if (isPressed) YoPrimaryViolet.copy(alpha = 0.55f) else Color.Transparent,
+        animationSpec = tween(180),
+        label = "pressGlow"
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .border(1.5.dp, borderColor, RoundedCornerShape(18.dp))
         .clickable(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
@@ -107,10 +140,10 @@ fun SpotlightCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(8.dp, RoundedCornerShape(20.dp), clip = false)
-            .clip(RoundedCornerShape(20.dp))
+            .shadow(8.dp, RoundedCornerShape(26.dp), clip = false)
+            .clip(RoundedCornerShape(26.dp))
             .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(26.dp))
             .pressScaleClickable(onClick)
             .padding(14.dp)
     ) {
@@ -121,8 +154,8 @@ fun SpotlightCard(
                 modifier = Modifier
                     .width(110.dp)
                     .aspectRatio(2f / 3f)
-                    .shadow(6.dp, RoundedCornerShape(14.dp), clip = false)
-                    .clip(RoundedCornerShape(14.dp))
+                    .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
+                    .clip(RoundedCornerShape(18.dp))
                     .background(YoSurfaceVariant)
             ) {
                 SubcomposeAsyncImage(
@@ -156,7 +189,7 @@ fun SpotlightCard(
                         text = movie.genre!!,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = YoPrimaryAmber,
+                        color = YoPrimaryViolet,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -198,15 +231,15 @@ fun PosterCard(
 
     Column(
         modifier = containerModifier
-            .pressScaleClickable(onClick)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .shadow(6.dp, RoundedCornerShape(14.dp), clip = false)
-                .clip(RoundedCornerShape(14.dp))
+                .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
+                .clip(RoundedCornerShape(18.dp))
                 .background(YoSurfaceVariant)
+                .pressGlowClickable(onClick)
         ) {
             SubcomposeAsyncImage(
                 model = movie.displayPosterUrl,
@@ -266,7 +299,7 @@ fun PosterCard(
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = YoPrimaryAmber,
+                            tint = YoRatingGold,
                             modifier = Modifier.size(11.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
@@ -280,7 +313,7 @@ fun PosterCard(
                 }
                 if (movie.duration != null && movie.duration > 0) {
                     Text(
-                        text = com.example.data.model.formatDuration(movie.duration),
+                        text = formatDuration(movie.duration),
                         fontSize = 10.sp,
                         color = YoTextMuted,
                         maxLines = 1,
@@ -304,7 +337,7 @@ fun VJBadgeChip(vjName: String, onImage: Boolean = false) {
             text = "VJ $vjName".uppercase(),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            color = if (onImage) YoPrimaryAmber else YoTextPrimary
+            color = if (onImage) YoAccentCyan else YoTextPrimary
         )
     }
 }
@@ -330,7 +363,7 @@ fun VJChip(
             modifier = Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(YoPrimaryAmber),
+                .background(Brush.linearGradient(listOf(YoPrimaryViolet, YoAccentCyan))),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -366,8 +399,8 @@ fun EpisodeCard(
             modifier = Modifier
                 .width(200.dp)
                 .aspectRatio(16f / 9f)
-                .shadow(6.dp, RoundedCornerShape(14.dp), clip = false)
-                .clip(RoundedCornerShape(14.dp))
+                .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
+                .clip(RoundedCornerShape(18.dp))
                 .background(YoSurfaceVariant)
         ) {
             SubcomposeAsyncImage(
@@ -417,7 +450,7 @@ fun EpisodeCard(
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = YoPrimaryAmber,
+                    tint = YoPrimaryViolet,
                     modifier = Modifier.size(28.dp)
                 )
             }

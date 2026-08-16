@@ -41,7 +41,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.SportsLeague
 import com.example.data.model.SportsMatch
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -86,7 +86,7 @@ fun LeagueChip(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(if (isSelected) YoPrimaryAmber else YoSurface)
+            .background(if (isSelected) YoPrimaryViolet else YoSurface)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -201,11 +201,11 @@ fun MatchCard(
                         Icon(
                             imageVector = Icons.Filled.PlayCircle,
                             contentDescription = "Stream available",
-                            tint = YoPrimaryAmber,
+                            tint = YoPrimaryViolet,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Watch", color = YoPrimaryAmber, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Watch", color = YoPrimaryViolet, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -333,7 +333,7 @@ fun SportsListSkeleton(
 fun SportsSectionHeader(
     title: String,
     count: Int,
-    accentColor: Color = YoPrimaryAmber
+    accentColor: Color = YoPrimaryViolet
 ) {
     Row(
         modifier = Modifier
