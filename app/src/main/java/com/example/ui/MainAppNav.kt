@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BottomTab
@@ -31,6 +32,9 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.SearchScreen
+import com.example.ui.screens.SportsMatchDetailScreen
+import com.example.ui.screens.SportsPlayerScreen
+import com.example.ui.screens.SportsScreen
 import com.example.ui.screens.VJCatalogueScreen
 import com.example.ui.screens.VJListScreen
 import com.example.ui.theme.YoBaseBackground
@@ -58,12 +62,18 @@ sealed class Screen {
     ) : Screen()
     data class VJCatalogue(val vjName: String) : Screen()
     data class CastDetail(val castId: String) : Screen()
+
+    // ── Sports ──
+    object SportsHome : Screen()
+    data class SportsDetail(val matchId: String) : Screen()
+    data class SportsPlayer(val matchId: String, val streamId: Int? = null) : Screen()
 }
 
 @Composable
 fun MainAppNav() {
     val context = LocalContext.current
     val repository = remember { YocinemaRepository(context) }
+    val sportsRepository = remember { SportsRepository(repository.api) }
 
     val initialScreen = if (repository.isLoggedIn()) Screen.Home else Screen.Login
     val screenBackStack = remember { mutableStateListOf<Screen>(initialScreen) }
@@ -91,7 +101,7 @@ fun MainAppNav() {
     }
 
     val showBottomNav = when (currentScreen) {
-        is Screen.Home, is Screen.Explore, is Screen.Downloads, is Screen.Account -> true
+        is Screen.Home, is Screen.Explore, is Screen.Downloads, is Screen.Account, is Screen.SportsHome -> true
         else -> false
     }
 
@@ -100,6 +110,7 @@ fun MainAppNav() {
         is Screen.Explore -> "explore"
         is Screen.Downloads -> "downloads"
         is Screen.Account -> "account"
+        is Screen.SportsHome -> "sports"
         else -> currentTab.route
     }
 
@@ -118,6 +129,7 @@ fun MainAppNav() {
                         currentTab = tab
                         val targetScreen = when (tab) {
                             BottomTab.Home -> Screen.Home
+                            BottomTab.Sports -> Screen.SportsHome
                             BottomTab.Explore -> Screen.Explore()
                             BottomTab.Downloads -> Screen.Downloads
                             BottomTab.Account -> Screen.Account
@@ -280,6 +292,34 @@ fun MainAppNav() {
                             repository = repository,
                             onBackClick = { navigateBack() },
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) }
+                        )
+                    }
+
+                    // ── Sports ──
+                    is Screen.SportsHome -> {
+                        SportsScreen(
+                            sportsRepository = sportsRepository,
+                            onMatchClick = { matchId -> navigateTo(Screen.SportsDetail(matchId)) }
+                        )
+                    }
+
+                    is Screen.SportsDetail -> {
+                        SportsMatchDetailScreen(
+                            matchId = screen.matchId,
+                            sportsRepository = sportsRepository,
+                            onBackClick = { navigateBack() },
+                            onWatch = { matchId, streamId ->
+                                navigateTo(Screen.SportsPlayer(matchId = matchId, streamId = streamId))
+                            }
+                        )
+                    }
+
+                    is Screen.SportsPlayer -> {
+                        SportsPlayerScreen(
+                            matchId = screen.matchId,
+                            initialStreamId = screen.streamId,
+                            sportsRepository = sportsRepository,
+                            onBackClick = { navigateBack() }
                         )
                     }
                 }
