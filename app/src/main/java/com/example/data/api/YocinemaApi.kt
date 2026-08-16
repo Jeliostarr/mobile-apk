@@ -90,4 +90,22 @@ interface YocinemaApi {
     suspend fun mintStreamToken(
         @Path("id") movieId: String
     ): Response<StreamTokenResponse>
+
+    // ─── Sports (football, live from Nova — nothing stored server-side) ───
+
+    @GET("api/v1/sports/leagues")
+    suspend fun getSportsLeagues(): Response<ResponseBody>
+
+    @GET("api/v1/sports/matches")
+    suspend fun getSportsMatches(
+        @Query("status") status: String = "all", // live | upcoming | ended | all
+        @Query("league") league: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 24
+    ): Response<ResponseBody>
+
+    @GET("api/v1/sports/matches/{id}")
+    suspend fun getSportsMatchDetail(
+        @Path("id") matchId: String
+    ): Response<ResponseBody>
 }
