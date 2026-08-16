@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,21 +46,32 @@ import com.example.repository.SportsRepository
 import com.example.ui.components.LeagueChip
 import com.example.ui.components.MatchCard
 import com.example.ui.components.SportsListSkeleton
+import com.example.ui.components.SportsSectionHeader
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 @Composable
 fun SportsScreen(
     sportsRepository: SportsRepository,
     onMatchClick: (matchId: String) -> Unit
 ) {
-    var selectedFilter by remember { mutableStateOf(SportsFilter.LIVE) }
+    // Defaults to ALL (live + upcoming combined) so the screen is never
+    // empty just because nothing happens to be live right now — a live-only
+    // filter is still one tap away.
+    var selectedFilter by remember { mutableStateOf(SportsFilter.ALL) }
     var selectedLeague by remember { mutableStateOf<String?>(null) }
     var leagues by remember { mutableStateOf<List<SportsLeague>>(emptyList()) }
+
+    // Populated for the ALL view (sectioned). Single-status views use `matches` instead.
+    var liveMatches by remember { mutableStateOf<List<SportsMatch>>(emptyList()) }
+    var upcomingMatches by remember { mutableStateOf<List<SportsMatch>>(emptyList()) }
     var matches by remember { mutableStateOf<List<SportsMatch>>(emptyList()) }
+
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var refreshTick by remember { mutableStateOf(0) }
@@ -71,15 +83,44 @@ fun SportsScreen(
     LaunchedEffect(selectedFilter, selectedLeague, refreshTick) {
         isLoading = true
         loadError = null
-        val response = sportsRepository.getMatches(
-            status = selectedFilter.apiValue,
-            league = selectedLeague,
-            limit = 30
-        )
-        matches = response.matches
-        if (!response.success && response.matches.isEmpty()) {
+
+        fun applyLeagueFilter(list: List<SportsMatch>): List<SportsMatch> {
+            val needle = selectedLeague?.lowercase() ?: return list
+            return list.filter { (it.league?.name ?: "").lowercase() == needle }
+        }
+
+        try {
+            if (selectedFilter == SportsFilter.ALL) {
+                val (liveResp, upcomingResp) = coroutineScope {
+                    val liveDeferred = async { sportsRepository.getMatches(status = "live", limit = 30) }
+                    val upcomingDeferred = async { sportsRepository.getMatches(status = "upcoming", limit = 30) }
+                    liveDeferred.await() to upcomingDeferred.await()
+                }
+                liveMatches = applyLeagueFilter(liveResp.matches)
+                upcomingMatches = applyLeagueFilter(upcomingResp.matches)
+                    .sortedBy { it.kickoff ?: "" }
+                matches = emptyList()
+
+                if (!liveResp.success && !upcomingResp.success) {
+                    loadError = "Couldn't load matches — check your connection and try again."
+                }
+            } else {
+                val response = sportsRepository.getMatches(
+                    status = selectedFilter.apiValue,
+                    league = selectedLeague,
+                    limit = 30
+                )
+                matches = response.matches
+                liveMatches = emptyList()
+                upcomingMatches = emptyList()
+                if (!response.success && response.matches.isEmpty()) {
+                    loadError = "Couldn't load matches — check your connection and try again."
+                }
+            }
+        } catch (e: Exception) {
             loadError = "Couldn't load matches — check your connection and try again."
         }
+
         isLoading = false
     }
 
@@ -102,13 +143,29 @@ fun SportsScreen(
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Sports",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                color = YoTextPrimary,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Sports",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    color = YoTextPrimary
+                )
+                val totalCount = if (selectedFilter == SportsFilter.ALL) {
+                    liveMatches.size + upcomingMatches.size
+                } else {
+                    matches.size
+                }
+                if (!isLoading && totalCount > 0) {
+                    Text(
+                        text = if (liveMatches.isNotEmpty() && selectedFilter == SportsFilter.ALL)
+                            "${liveMatches.size} live now"
+                        else
+                            "$totalCount match${if (totalCount == 1) "" else "es"}",
+                        fontSize = 12.sp,
+                        color = YoTextMuted
+                    )
+                }
+            }
             IconButton(onClick = { refreshTick++ }) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = YoTextMuted)
             }
@@ -134,7 +191,7 @@ fun SportsScreen(
                         text = filter.label,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isSelected) androidx.compose.ui.graphics.Color.Black else YoTextMuted
+                        color = if (isSelected) Color.Black else YoTextMuted
                     )
                 }
             }
@@ -170,6 +227,12 @@ fun SportsScreen(
 
         // Content
         Box(modifier = Modifier.fillMaxSize()) {
+            val isEmpty = if (selectedFilter == SportsFilter.ALL) {
+                liveMatches.isEmpty() && upcomingMatches.isEmpty()
+            } else {
+                matches.isEmpty()
+            }
+
             when {
                 isLoading -> {
                     SportsListSkeleton()
@@ -193,7 +256,7 @@ fun SportsScreen(
                         )
                     }
                 }
-                matches.isEmpty() -> {
+                isEmpty -> {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -208,6 +271,7 @@ fun SportsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = when (selectedFilter) {
+                                SportsFilter.ALL -> "No live or upcoming matches right now"
                                 SportsFilter.LIVE -> "No matches live right now"
                                 SportsFilter.UPCOMING -> "No upcoming matches found"
                                 SportsFilter.ENDED -> "No finished matches yet"
@@ -216,6 +280,46 @@ fun SportsScreen(
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
                         )
+                        if (selectedLeague != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Clear the \"$selectedLeague\" filter",
+                                color = YoPrimaryAmber,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable { selectedLeague = null }
+                            )
+                        }
+                    }
+                }
+                selectedFilter == SportsFilter.ALL -> {
+                    // Live first, sectioned, exactly as requested.
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (liveMatches.isNotEmpty()) {
+                            item(key = "header-live") {
+                                SportsSectionHeader(title = "Live Now", count = liveMatches.size)
+                            }
+                            items(liveMatches, key = { "live-${it.id}" }) { match ->
+                                MatchCard(match = match, onClick = { onMatchClick(match.id.toString()) })
+                            }
+                        }
+                        if (upcomingMatches.isNotEmpty()) {
+                            item(key = "header-upcoming") {
+                                Spacer(modifier = Modifier.height(if (liveMatches.isNotEmpty()) 8.dp else 0.dp))
+                                SportsSectionHeader(
+                                    title = "Upcoming",
+                                    count = upcomingMatches.size,
+                                    accentColor = YoTextMuted
+                                )
+                            }
+                            items(upcomingMatches, key = { "upcoming-${it.id}" }) { match ->
+                                MatchCard(match = match, onClick = { onMatchClick(match.id.toString()) })
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
                     }
                 }
                 else -> {

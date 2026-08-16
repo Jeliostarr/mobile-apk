@@ -181,7 +181,9 @@ fun SportsMatchDetailScreen(
 
                     Spacer(modifier = Modifier.height(36.dp))
 
-                    if (streams.isNotEmpty()) {
+                    val canWatch = match?.live == true && streams.isNotEmpty()
+
+                    if (canWatch) {
                         Text(
                             text = "Choose quality",
                             color = YoTextPrimary,
@@ -233,7 +235,7 @@ fun SportsMatchDetailScreen(
                             Icon(Icons.Filled.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (match?.live == true) "Watch Live" else "Watch",
+                                text = "Watch Live",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
