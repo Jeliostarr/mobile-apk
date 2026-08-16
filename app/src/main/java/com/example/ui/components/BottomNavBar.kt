@@ -91,7 +91,7 @@ fun BottomNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(66.dp)
+                .height(78.dp)
                 .clip(RoundedCornerShape(26.dp))
                 .background(YoSurface.copy(alpha = 0.92f))
                 .border(1.dp, YoBorder, RoundedCornerShape(26.dp)),
@@ -136,7 +136,7 @@ private fun NavTabItem(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
     ) {
         Box(
             modifier = Modifier

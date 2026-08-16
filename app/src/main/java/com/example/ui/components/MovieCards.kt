@@ -281,7 +281,7 @@ fun PosterCard(
 
         if (!movie.genre.isNull_orBlank()) {
             Text(
-                text = movie.genre!!,
+                text = movie.genre!!.split(",").first().trim(),
                 fontSize = 11.sp,
                 color = YoTextMuted,
                 maxLines = 1,
