@@ -58,10 +58,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner   // <-- FIXED: added
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView        // <-- FIXED: added
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.CastMember
 import com.example.data.model.Episode
@@ -99,6 +101,8 @@ import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+
+// YouTube imports – using the direct dependency
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
@@ -887,6 +891,7 @@ fun InlineYouTubeNativePlayer(videoId: String) {
         }
     )
 }
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun InlineAuthenticatedTrailerPlayer(trailerUrl: String, repository: YocinemaRepository) {
