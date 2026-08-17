@@ -107,6 +107,8 @@ dependencies {
   implementation(libs.androidx.security.crypto)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
+  // YouTube library – direct dependency to avoid version-catalog issues
+  implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)
 
