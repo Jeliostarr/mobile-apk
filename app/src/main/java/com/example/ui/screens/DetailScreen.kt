@@ -819,7 +819,6 @@ private fun buildEmbedUrl(url: String): String? {
 }
 
 @Composable
-@Composable
 fun InlineTrailerSection(
     trailerUrl: String,
     movieTitle: String,
