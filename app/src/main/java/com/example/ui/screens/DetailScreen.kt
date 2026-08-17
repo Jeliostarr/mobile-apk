@@ -99,8 +99,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 // YouTube imports
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -828,32 +830,85 @@ fun InlineTrailerSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         when {
-            ytId != null -> InlineYouTubeNativePlayer(videoId = ytId)
+            ytId != null -> InlineYouTubeNativePlayer(
+                videoId = ytId,
+                movieTitle = movieTitle,
+                posterFallbackUrl = posterFallbackUrl
+            )
             embedUrl != null -> InlineEmbedTrailerPlayer(trailerUrl = trailerUrl, embedUrl = embedUrl)
             else -> InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
         }
     }
 }
 
+/**
+ * Inline YouTube trailer.
+ *
+ * IMPORTANT: automatic initialization is disabled on purpose. The IFrame player must be
+ * initialized with an explicit `origin`, otherwise YouTube rejects every embed with
+ * "This video is unavailable" (error 150 / 152). If a specific video really is not
+ * embeddable, `onError` triggers the poster + "Watch on YouTube" fallback below.
+ */
 @Composable
-fun InlineYouTubeNativePlayer(videoId: String) {
+fun InlineYouTubeNativePlayer(
+    videoId: String,
+    movieTitle: String,
+    posterFallbackUrl: String?
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var embedBlocked by remember(videoId) { mutableStateOf(false) }
+    val watchUrl = remember(videoId) { "https://www.youtube.com/watch?v=$videoId" }
 
-    val playerView = remember {
+    if (embedBlocked) {
+        YouTubeFallbackCard(
+            movieTitle = movieTitle,
+            thumbnailUrl = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+            posterFallbackUrl = posterFallbackUrl,
+            onOpen = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl)))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Couldn't open YouTube", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+        return
+    }
+
+    val playerView = remember(videoId) {
         YouTubePlayerView(context).apply {
+            // Must be set before the view is attached / initialized.
+            enableAutomaticInitialization = false
             lifecycleOwner.lifecycle.addObserver(this)
         }
     }
 
-    DisposableEffect(Unit) {
-        playerView.addYouTubePlayerListener(
-            object : AbstractYouTubePlayerListener() {
-                override fun onReady(youTubePlayer: YouTubePlayer) {
-                    youTubePlayer.loadVideo(videoId, 0f)
-                }
+    DisposableEffect(videoId) {
+        val listener = object : AbstractYouTubePlayerListener() {
+            override fun onReady(youTubePlayer: YouTubePlayer) {
+                youTubePlayer.loadVideo(videoId, 0f)
             }
-        )
+
+            override fun onError(
+                youTubePlayer: YouTubePlayer,
+                error: PlayerConstants.PlayerError
+            ) {
+                // VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER / NOT_FOUND / INVALID_PARAMETER_IN_REQUEST
+                embedBlocked = true
+            }
+        }
+
+        val options = IFramePlayerOptions.Builder()
+            .controls(1)
+            .rel(0)
+            .ivLoadPolicy(3)
+            .ccLoadPolicy(0)
+            .origin("https://www.youtube.com")
+            .build()
+
+        playerView.initialize(listener, /* handleNetworkEvents = */ true, options)
+
         onDispose {
             playerView.release()
         }
@@ -866,6 +921,80 @@ fun InlineYouTubeNativePlayer(videoId: String) {
             .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(16.dp))
     )
+}
+
+@Composable
+private fun YouTubeFallbackCard(
+    movieTitle: String,
+    thumbnailUrl: String,
+    posterFallbackUrl: String?,
+    onOpen: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(YoSurface)
+            .clickable { onOpen() },
+        contentAlignment = Alignment.Center
+    ) {
+        SubcomposeAsyncImage(
+            model = thumbnailUrl,
+            contentDescription = "$movieTitle trailer",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+            error = {
+                if (posterFallbackUrl != null) {
+                    SubcomposeAsyncImage(
+                        model = posterFallbackUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize().background(YoSurface))
+                }
+            }
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.7f))
+                    )
+                )
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(CircleShape)
+                    .background(YoPrimaryAmber),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Watch trailer on YouTube",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
