@@ -121,7 +121,7 @@ fun DetailScreen(
     var errorState by remember { mutableStateOf<String?>(null) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showGateSheet by remember { mutableStateOf(false) }
-    var trailerExpanded by remember { mutableStateOf(false) }
+    // (trailer visibility state removed — InlineTrailerSection renders directly now)
     var showDownloadStartedDialog by remember { mutableStateOf(false) }
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var selectedSeasonNumber by remember { mutableStateOf(1) }
@@ -549,8 +549,6 @@ fun DetailScreen(
                                     trailerUrl = m.trailerUrl!!,
                                     movieTitle = m.title,
                                     posterFallbackUrl = m.cover ?: m.poster ?: m.displayPosterUrl,
-                                    expanded = trailerExpanded,
-                                    onToggle = { trailerExpanded = !trailerExpanded },
                                     repository = repository
                                 )
                             }
@@ -821,12 +819,11 @@ private fun buildEmbedUrl(url: String): String? {
 }
 
 @Composable
+@Composable
 fun InlineTrailerSection(
     trailerUrl: String,
     movieTitle: String,
     posterFallbackUrl: String?,
-    expanded: Boolean,
-    onToggle: () -> Unit,
     repository: YocinemaRepository
 ) {
     val ytId = remember(trailerUrl) { extractYouTubeId(trailerUrl) }
@@ -841,58 +838,53 @@ fun InlineTrailerSection(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        Box(
-            modifier = Modifier
-                .width(180.dp)
-                .aspectRatio(16f / 9f)
-                .shadow(elevation = 6.dp, shape = RoundedCornerShape(14.dp), clip = false)
-                .clip(RoundedCornerShape(14.dp))
-                .background(YoSurfaceVariant)
-                .then(
-                    if (expanded) Modifier.border(2.dp, YoPrimaryAmber, RoundedCornerShape(14.dp)) else Modifier
-                )
-                .clickable { onToggle() }
-        ) {
-            SubcomposeAsyncImage(
-                model = if (ytId != null) "https://img.youtube.com/vi/$ytId/hqdefault.jpg" else posterFallbackUrl,
-                contentDescription = "$movieTitle trailer",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                loading = { YoCinemaLogoPlaceholder() },
-                error = { YoCinemaLogoPlaceholder() }
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.25f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (expanded) YoPrimaryAmber else Color.Black.copy(alpha = 0.6f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = if (expanded) YoBaseBackground else Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-
-        if (expanded) {
-            Spacer(modifier = Modifier.height(14.dp))
-            if (embedUrl != null) {
-                InlineEmbedTrailerPlayer(trailerUrl = trailerUrl, embedUrl = embedUrl)
-            } else {
-                InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
-            }
+        // No tap-to-load gate — the player renders directly, same as a
+        // normal streaming app's detail screen. For YouTube this is a real
+        // native player (proper origin/referrer handshake via the official
+        // IFrame Player API, wrapped by androidyoutubeplayer), not the
+        // WebView-iframe hack that kept getting silently rejected.
+        when {
+            ytId != null -> InlineYouTubeNativePlayer(videoId = ytId)
+            embedUrl != null -> InlineEmbedTrailerPlayer(trailerUrl = trailerUrl, embedUrl = embedUrl)
+            else -> InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
         }
     }
+}
+
+/**
+ * Real YouTube playback via the official IFrame Player API, wrapped by the
+ * androidyoutubeplayer library — NOT a WebView.loadUrl() to a raw embed
+ * URL. That distinction is the whole fix: a bare WebView never completes
+ * the origin/referrer/postMessage handshake YouTube's player expects, which
+ * is what kept surfacing as "Video player configuration error" or a stuck
+ * blank/white view no matter how the WebView itself was configured.
+ *
+ * Requires: implementation(libs.youtube.player) — see setup notes.
+ */
+@Composable
+fun InlineYouTubeNativePlayer(videoId: String) {
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(16.dp)),
+        factory = { ctx ->
+            com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayerView(ctx).apply {
+                lifecycleOwner.lifecycle.addObserver(this)
+                addYouTubePlayerListener(object :
+                    com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
+                    override fun onReady(
+                        youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+                    ) {
+                        youTubePlayer.loadVideo(videoId, 0f)
+                    }
+                })
+            }
+        },
+        onRelease = { view -> view.release() }
+    )
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
