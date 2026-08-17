@@ -99,6 +99,9 @@ import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -862,30 +865,28 @@ fun InlineTrailerSection(
  */
 @Composable
 fun InlineYouTubeNativePlayer(videoId: String) {
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    androidx.compose.ui.viewinterop.AndroidView(
+    AndroidView(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(16.dp)),
-        factory = { ctx ->
-            com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayerView(ctx).apply {
+        factory = { context ->
+            YouTubePlayerView(context).apply {
                 lifecycleOwner.lifecycle.addObserver(this)
-                addYouTubePlayerListener(object :
-                    com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
-                    override fun onReady(
-                        youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
-                    ) {
-                        youTubePlayer.loadVideo(videoId, 0f)
+
+                addYouTubePlayerListener(
+                    object : AbstractYouTubePlayerListener() {
+                        override fun onReady(youTubePlayer: YouTubePlayer) {
+                            youTubePlayer.loadVideo(videoId, 0f)
+                        }
                     }
-                })
+                )
             }
-        },
-        onRelease = { view -> view.release() }
+        }
     )
 }
-
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun InlineAuthenticatedTrailerPlayer(trailerUrl: String, repository: YocinemaRepository) {
