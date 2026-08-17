@@ -44,6 +44,7 @@ googleid = "1.1.1"
 media3 = "1.5.1"
 work = "2.10.0"
 securityCrypto = "1.1.0-alpha06"
+youtubePlayer = "12.1.0"
 
 
 [libraries]
@@ -106,6 +107,7 @@ androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.re
 androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+youtube-player = { group = "com.pierfrancescosoffritti.androidyoutubeplayer", name = "core", version.ref = "youtubePlayer" }
 
 
 [plugins]
