@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -710,7 +709,7 @@ fun DetailScreen(
             }
         }
 
-        // Dialogs and sheets (unchanged)
+        // Dialogs and sheets
         if (showReportDialog) {
             ReportDialog(
                 movieId = movieId,
@@ -786,12 +785,10 @@ fun extractYouTubeId(url: String): String? {
 }
 
 private fun buildEmbedUrl(url: String): String? {
-    // First, try to get a YouTube ID and build an embed URL.
     val ytId = extractYouTubeId(url)
     if (ytId != null) {
         return "https://www.youtube.com/embed/$ytId?autoplay=1&rel=0&playsinline=1"
     }
-    // If not YouTube, try other platforms.
     return try {
         val uri = Uri.parse(url)
         val host = uri.host?.removePrefix("www.")?.lowercase() ?: return null
@@ -840,26 +837,40 @@ fun InlineTrailerSection(
 
 @Composable
 fun InlineYouTubeNativePlayer(videoId: String) {
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Keep a stable reference to the view
+    val playerView = remember {
+        YouTubePlayerView(context).apply {
+            lifecycleOwner.lifecycle.addObserver(this)
+        }
+    }
+
+    // Initialize the player once
+    DisposableEffect(Unit) {
+        playerView.addYouTubePlayerListener(
+            object : AbstractYouTubePlayerListener() {
+                override fun onReady(youTubePlayer: YouTubePlayer) {
+                    youTubePlayer.loadVideo(videoId, 0f)
+                }
+
+                override fun onError(youTubePlayer: YouTubePlayer, error: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerError) {
+                    android.util.Log.e("YouTubePlayer", "Error: ${error.name}")
+                }
+            }
+        )
+        onDispose {
+            playerView.release()
+        }
+    }
+
     AndroidView(
+        factory = { playerView },
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(16.dp)),
-        factory = { context ->
-            YouTubePlayerView(context).apply {
-                lifecycleOwner.lifecycle.addObserver(this)
-
-                addYouTubePlayerListener(
-                    object : AbstractYouTubePlayerListener() {
-                        override fun onReady(youTubePlayer: YouTubePlayer) {
-                            youTubePlayer.loadVideo(videoId, 0f)
-                        }
-                    }
-                )
-            }
-        }
+            .clip(RoundedCornerShape(16.dp))
     )
 }
 
