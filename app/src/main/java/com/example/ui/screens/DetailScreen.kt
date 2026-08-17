@@ -98,7 +98,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-// YouTube library imports
+// YouTube imports
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
@@ -758,7 +758,7 @@ fun DetailScreen(
     }
 }
 
-// ====== Improved YouTube ID extraction ======
+// ====== Helper functions ======
 
 fun extractYouTubeId(url: String): String? {
     return try {
@@ -840,23 +840,17 @@ fun InlineYouTubeNativePlayer(videoId: String) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Keep a stable reference to the view
     val playerView = remember {
         YouTubePlayerView(context).apply {
             lifecycleOwner.lifecycle.addObserver(this)
         }
     }
 
-    // Initialize the player once
     DisposableEffect(Unit) {
         playerView.addYouTubePlayerListener(
             object : AbstractYouTubePlayerListener() {
                 override fun onReady(youTubePlayer: YouTubePlayer) {
                     youTubePlayer.loadVideo(videoId, 0f)
-                }
-
-                override fun onError(youTubePlayer: YouTubePlayer, error: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerError) {
-                    android.util.Log.e("YouTubePlayer", "Error: ${error.name}")
                 }
             }
         )
