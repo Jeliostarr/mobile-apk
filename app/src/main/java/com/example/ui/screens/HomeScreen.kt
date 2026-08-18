@@ -24,6 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
@@ -70,6 +73,7 @@ import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
+import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.async
@@ -105,7 +109,7 @@ fun HeroSliderPager(
             pageSpacing = 12.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(230.dp)
         ) { page ->
             val movie = movies[page]
             Box(
@@ -562,12 +566,30 @@ fun RailHeader(
             )
         }
 
-        IconButton(onClick = onViewAllClick, modifier = Modifier.size(32.dp)) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(YoSurfaceVariant)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = LocalIndication.current,
+                    onClick = onViewAllClick
+                )
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = "See all",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = YoTextMuted
+            )
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "View All",
                 tint = YoTextMuted,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }

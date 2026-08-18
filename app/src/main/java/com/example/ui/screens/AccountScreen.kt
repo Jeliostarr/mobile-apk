@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Logout
@@ -266,6 +267,31 @@ fun AccountScreen(
 
         if (showRequestDialog) {
             RequestDialog(onDismiss = { showRequestDialog = false })
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // App version
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = YoTextMuted.copy(alpha = 0.6f),
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "YOCINEMA v1.0.0",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = YoTextMuted.copy(alpha = 0.6f)
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

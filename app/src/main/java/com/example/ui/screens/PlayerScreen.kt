@@ -32,6 +32,13 @@ import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import com.example.data.model.Episode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +81,7 @@ import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 
@@ -88,7 +96,7 @@ private fun formatTime(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
-@OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     movieId: String,
@@ -113,6 +121,14 @@ fun PlayerScreen(
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+
+    // Mutable current position within the series — lets "Play Next" and
+    // the episode picker advance playback in place without needing the
+    // caller/nav graph to re-launch this screen with new args.
+    var currentSeasonNum by remember { mutableStateOf(seasonNum) }
+    var currentEpNum by remember { mutableStateOf(epNum) }
+    var episodesList by remember { mutableStateOf<List<Episode>>(emptyList()) }
+    var showEpisodesSheet by remember { mutableStateOf(false) }
 
     val isPlaying by playerManager.isPlaying.collectAsState()
     val isBuffering by playerManager.isBuffering.collectAsState()
@@ -141,7 +157,7 @@ fun PlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    LaunchedEffect(movieId, seasonNum, epNum, localFilePath) {
+    LaunchedEffect(movieId, currentSeasonNum, currentEpNum, localFilePath) {
         loadError = null
         try {
             val apiKey = repository.tokenManager.getApiKey()
@@ -153,11 +169,11 @@ fun PlayerScreen(
 
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
-                playerManager.playMedia(movieId, localFilePath, seasonNum, epNum, initialPosMs, title = "Offline Download")
+                playerManager.playMedia(movieId, localFilePath, currentSeasonNum, currentEpNum, initialPosMs, title = "Offline Download")
                 return@LaunchedEffect
             }
 
-            val downloadId = if (seasonNum != null && epNum != null) "${movieId}_S${seasonNum}E${epNum}" else movieId
+            val downloadId = if (currentSeasonNum != null && currentEpNum != null) "${movieId}_S${currentSeasonNum}E${currentEpNum}" else movieId
             val downloadedEntity = repository.downloadDao.getDownloadById(downloadId)
             val downloadedFile = downloadedEntity?.localFilePath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
 
@@ -165,7 +181,7 @@ fun PlayerScreen(
                 Log.d(TAG, "Playing from local file: ${downloadedEntity.localFilePath}")
                 movie = Movie(id = movieId, title = downloadedEntity.title)
                 playerManager.playMedia(
-                    movieId, downloadedEntity.localFilePath, seasonNum, epNum, initialPosMs,
+                    movieId, downloadedEntity.localFilePath, currentSeasonNum, currentEpNum, initialPosMs,
                     title = downloadedEntity.title,
                     posterUrl = downloadedEntity.posterUrl
                 )
@@ -186,8 +202,18 @@ fun PlayerScreen(
             }
             movie = m
 
+            if (m.isSeries) {
+                try {
+                    val rawEps = repository.getMovieEpisodes(movieId)
+                    episodesList = (if (rawEps.isNotEmpty()) rawEps else m.episodes.orEmpty())
+                        .sortedWith(compareBy({ it.sNum ?: 1 }, { it.eNum ?: 1 }))
+                } catch (e: Exception) {
+                    Log.d(TAG, "Episode list fetch skipped: ${e.message}")
+                }
+            }
+
             Log.d(TAG, "Getting play URL")
-            val url = repository.getPlayUrl(m, seasonNum, epNum)
+            val url = repository.getPlayUrl(m, currentSeasonNum, currentEpNum)
             if (url.isBlank()) {
                 loadError = "Play URL is empty – the video may be unavailable."
                 Log.e(TAG, "Play URL is blank")
@@ -196,7 +222,7 @@ fun PlayerScreen(
             Log.d(TAG, "Play URL: $url")
 
             playerManager.playMedia(
-                movieId, url, seasonNum, epNum, initialPosMs,
+                movieId, url, currentSeasonNum, currentEpNum, initialPosMs,
                 title = m.title,
                 posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
             )
@@ -216,8 +242,20 @@ fun PlayerScreen(
     val displayTitle = movie?.title ?: "YOCINEMA"
     val displaySubtitle = listOfNotNull(
         movie?.genre,
-        if (seasonNum != null && epNum != null) "S$seasonNum · E$epNum" else null
+        if (currentSeasonNum != null && currentEpNum != null) "S$currentSeasonNum · E$currentEpNum" else null
     ).joinToString(" · ").ifBlank { null }
+
+    // Next episode in the same season, if one exists — powers "Play Next"
+    val nextEpisode = remember(episodesList, currentSeasonNum, currentEpNum) {
+        if (currentSeasonNum == null || currentEpNum == null) {
+            null
+        } else {
+            episodesList
+                .filter { it.sNum == currentSeasonNum }
+                .sortedBy { it.eNum ?: 0 }
+                .firstOrNull { (it.eNum ?: 0) > currentEpNum!! }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -349,6 +387,16 @@ fun PlayerScreen(
                             }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
+
+                        if (movie?.isSeries == true && episodesList.isNotEmpty()) {
+                            ControlIconButton(
+                                icon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                                contentDescription = "Episodes",
+                                onClick = { showEpisodesSheet = true }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
                         Box {
                             Row(
                                 modifier = Modifier
@@ -422,6 +470,18 @@ fun PlayerScreen(
                             size = 52.dp,
                             onClick = { playerManager.exoPlayer.seekTo((playerManager.exoPlayer.currentPosition + 10_000).coerceAtMost(durationMs)) }
                         )
+
+                        if (nextEpisode != null) {
+                            ControlIconButton(
+                                icon = Icons.Default.SkipNext,
+                                contentDescription = "Play Next Episode",
+                                size = 52.dp,
+                                onClick = {
+                                    currentSeasonNum = nextEpisode.sNum
+                                    currentEpNum = nextEpisode.eNum
+                                }
+                            )
+                        }
                     }
 
                     // Bottom scrim + seek bar
@@ -477,6 +537,93 @@ fun PlayerScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Episode picker — modern bottom sheet, all parts of the series
+        // with the currently playing one highlighted; tap to jump.
+        if (showEpisodesSheet) {
+            val sheetState = rememberModalBottomSheetState()
+            ModalBottomSheet(
+                onDismissRequest = { showEpisodesSheet = false },
+                sheetState = sheetState,
+                containerColor = YoSurface
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(
+                        text = "Episodes",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Select an episode to jump to",
+                        color = YoTextMuted,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp)
+                    ) {
+                        items(episodesList) { ep ->
+                            val isCurrent = ep.sNum == currentSeasonNum && ep.eNum == currentEpNum
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (isCurrent) YoPrimaryViolet.copy(alpha = 0.18f) else Color.Transparent)
+                                    .clickable {
+                                        currentSeasonNum = ep.sNum
+                                        currentEpNum = ep.eNum
+                                        showEpisodesSheet = false
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isCurrent) YoPrimaryViolet else Color.White.copy(alpha = 0.08f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isCurrent) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "${ep.eNum}",
+                                            color = YoTextMuted,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "S${ep.sNum} · E${ep.eNum}" + (ep.title?.let { " — $it" } ?: ""),
+                                        color = if (isCurrent) YoPrimaryViolet else Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }

@@ -258,6 +258,15 @@ fun LoginScreen(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Text(
+                    text = "v1.0.0",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = YoTextMuted.copy(alpha = 0.5f)
+                )
             }
         }
     }

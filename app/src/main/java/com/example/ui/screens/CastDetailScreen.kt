@@ -47,6 +47,7 @@ import com.example.data.model.CastDetail
 import com.example.data.model.FilmographyItem
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
+import com.example.ui.components.CastDetailSkeleton
 import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.RequestDialog
 import com.example.ui.theme.YoBaseBackground
@@ -102,12 +103,7 @@ fun CastDetailScreen(
         }
 
         if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                ModernLoader()
-            }
+            CastDetailSkeleton()
         } else if (castDetail == null) {
             Box(
                 modifier = Modifier.fillMaxSize(),

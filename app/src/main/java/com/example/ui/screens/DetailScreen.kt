@@ -84,6 +84,7 @@ import com.example.ui.components.EpisodeCard
 import com.example.ui.components.EpisodeDownloadSheet
 import com.example.ui.components.GateModalBottomSheet
 import com.example.ui.components.ModernLoader
+import com.example.ui.components.DetailSkeleton
 import com.example.ui.components.PosterCard
 import com.example.ui.components.ReportDialog
 import com.example.ui.components.VJBadgeChip
@@ -256,12 +257,7 @@ fun DetailScreen(
     ) {
         when {
             isLoading && movie == null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ModernLoader()
-                }
+                DetailSkeleton()
             }
             errorState != null && movie == null -> {
                 Column(
@@ -293,12 +289,14 @@ fun DetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 32.dp)
                 ) {
-                    // Backdrop
+                    // Backdrop — fixed height (not a strict 16:9 crop) so the
+                    // hero image reads as a full backdrop rather than a
+                    // half-cropped poster
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
+                                .height(300.dp)
                         ) {
                             SubcomposeAsyncImage(
                                 model = m.heroImage ?: m.cover ?: m.poster ?: m.displayPosterUrl,

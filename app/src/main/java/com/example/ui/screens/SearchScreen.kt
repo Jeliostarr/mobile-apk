@@ -70,66 +70,63 @@ fun SearchScreen(
     onMovieClick: (String) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
+    var allMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var selectedFilter by remember { mutableStateOf("All") }
     var selectedSort by remember { mutableStateOf("Popularity") }
-    var isSearching by remember { mutableStateOf(false) }
+    var isLoadingCatalogue by remember { mutableStateOf(true) }
 
-    LaunchedEffect(query, selectedFilter, selectedSort) {
-        if (query.trim().isBlank()) {
-            searchResults = emptyList()
-            isSearching = false
-            return@LaunchedEffect
-        }
-
-        isSearching = true
-        delay(300)
-
+    // Fetch the catalogue once. Everything after this is filtered
+    // locally so results update instantly on every keystroke instead
+    // of round-tripping to the server per character.
+    LaunchedEffect(Unit) {
         try {
-            val typeParam = when (selectedFilter) {
-                "Movies" -> "movie"
-                "Series" -> "series"
-                else -> null
-            }
-            val vjParam = if (selectedFilter == "VJs") query.trim() else null
-            val sortParam = when (selectedSort) {
-                "Popularity" -> "popular"
-                "Latest Release" -> "latest"
-                "Rating" -> "rating"
-                "Featured" -> "featured"
-                else -> "popular"
-            }
-
-            var res = repository.getMovies(
-                search = query.trim(),
-                type = typeParam,
-                vj = vjParam,
-                sort = sortParam,
-                limit = 40
-            )
-
-            if (selectedFilter == "VJs") {
-                res = res.filter { !it.vjName.isNull_orEmpty() }
-            } else if (selectedFilter == "Movies") {
-                res = res.filter { !it.isSeries }
-            } else if (selectedFilter == "Series") {
-                res = res.filter { it.isSeries }
-            }
-
-            res = when (selectedSort) {
-                "Latest Release" -> res.sortedByDescending { it.releaseDate ?: "" }
-                "Rating" -> res.sortedByDescending { it.imdbRating?.toFloatOrNull() ?: 0f }
-                "Popularity" -> res.sortedByDescending { it.imdbRatingCount ?: 0 }
-                else -> res
-            }
-
-            searchResults = res
+            allMovies = repository.getMovies(limit = 500)
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
-            isSearching = false
+            isLoadingCatalogue = false
         }
     }
+
+    LaunchedEffect(query, selectedFilter, selectedSort, allMovies) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) {
+            searchResults = emptyList()
+            return@LaunchedEffect
+        }
+
+        // Small debounce so fast typing doesn't thrash recomposition —
+        // this is a UI smoothing delay only, not a network wait.
+        delay(120)
+
+        val needle = trimmed.lowercase()
+
+        var res = allMovies.filter { movie ->
+            val titleMatch = movie.title.lowercase().contains(needle)
+            val vjMatch = movie.vjName?.lowercase()?.contains(needle) == true
+            val genreMatch = movie.genre?.lowercase()?.contains(needle) == true
+            titleMatch || vjMatch || genreMatch
+        }
+
+        res = when (selectedFilter) {
+            "Movies" -> res.filter { !it.isSeries }
+            "Series" -> res.filter { it.isSeries }
+            "VJs" -> res.filter { !it.vjName.isNull_orEmpty() }
+            else -> res
+        }
+
+        res = when (selectedSort) {
+            "Latest Release" -> res.sortedByDescending { it.releaseDate ?: "" }
+            "Rating" -> res.sortedByDescending { it.imdbRating?.toFloatOrNull() ?: 0f }
+            "Popularity" -> res.sortedByDescending { it.imdbRatingCount ?: 0 }
+            else -> res
+        }
+
+        searchResults = res
+    }
+
+    val isSearching = isLoadingCatalogue && query.isNotBlank()
 
     Column(
         modifier = Modifier
@@ -156,6 +153,7 @@ fun SearchScreen(
                 value = query,
                 onValueChange = { query = it },
                 placeholder = { Text("Search titles, genres, VJs...", color = YoTextMuted, fontSize = 13.sp) },
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = YoTextPrimary),
                 singleLine = true,
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -168,9 +166,12 @@ fun SearchScreen(
                         }
                     }
                 },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp),
+                // No forced height — Material's natural OutlinedTextField
+                // height (~56dp) is what prevents ascender/descender
+                // clipping. The old 48dp fixed height was too short for
+                // the text style + internal content padding, which is
+                // what was cutting off letter tops.
+                modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(18.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = YoPrimaryViolet,
