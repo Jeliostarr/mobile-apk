@@ -34,10 +34,15 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Episode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,7 +86,6 @@ import com.example.player.PlayerManager
 import com.example.repository.YocinemaRepository
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoPrimaryViolet
-import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 
@@ -541,89 +545,127 @@ fun PlayerScreen(
             }
         }
 
-        // Episode picker — modern bottom sheet, all parts of the series
-        // with the currently playing one highlighted; tap to jump.
-        if (showEpisodesSheet) {
-            val sheetState = rememberModalBottomSheetState()
-            ModalBottomSheet(
-                onDismissRequest = { showEpisodesSheet = false },
-                sheetState = sheetState,
-                containerColor = YoSurface
+        // Episode panel — docked to the right edge like a TV-style side
+        // rail, not a bottom sheet. Slides in over the video, current
+        // episode highlighted, thumbnail + episode number + title per row.
+        AnimatedVisibility(
+            visible = showEpisodesSheet,
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(360.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.92f))
+                        )
+                    )
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = {} // absorb taps so they don't pass through to the seek gesture
+                    )
             ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 20.dp, bottom = 20.dp, start = 20.dp, end = 16.dp)
+                ) {
                     Text(
                         text = "Episodes",
                         color = Color.White,
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Select an episode to jump to",
-                        color = YoTextMuted,
-                        fontSize = 13.sp
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(360.dp)
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         items(episodesList) { ep ->
                             val isCurrent = ep.sNum == currentSeasonNum && ep.eNum == currentEpNum
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(if (isCurrent) YoPrimaryViolet.copy(alpha = 0.18f) else Color.Transparent)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isCurrent) YoPrimaryViolet.copy(alpha = 0.22f) else Color.Transparent)
                                     .clickable {
                                         currentSeasonNum = ep.sNum
                                         currentEpNum = ep.eNum
                                         showEpisodesSheet = false
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isCurrent) YoPrimaryViolet else Color.White.copy(alpha = 0.08f)),
-                                    contentAlignment = Alignment.Center
+                                        .width(96.dp)
+                                        .aspectRatio(16f / 9f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.08f))
                                 ) {
+                                    SubcomposeAsyncImage(
+                                        model = ep.getDisplayStill(movieId),
+                                        contentDescription = ep.title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                        loading = { YoCinemaLogoPlaceholder() },
+                                        error = { YoCinemaLogoPlaceholder() }
+                                    )
                                     if (isCurrent) {
-                                        Icon(
-                                            imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = null,
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    } else {
-                                        Text(
-                                            text = "${ep.eNum}",
-                                            color = YoTextMuted,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(alpha = 0.35f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
                                 }
+
                                 Spacer(modifier = Modifier.width(12.dp))
+
                                 Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isCurrent) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = YoPrimaryViolet,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        Text(
+                                            text = "Episode ${ep.eNum}",
+                                            color = if (isCurrent) YoPrimaryViolet else YoTextMuted,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "S${ep.sNum} · E${ep.eNum}" + (ep.title?.let { " — $it" } ?: ""),
-                                        color = if (isCurrent) YoPrimaryViolet else Color.White,
+                                        text = ep.title ?: "Episode ${ep.eNum}",
+                                        color = Color.White,
                                         fontSize = 14.sp,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                        maxLines = 1,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }

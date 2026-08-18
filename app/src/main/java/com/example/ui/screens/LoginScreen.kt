@@ -258,17 +258,20 @@ fun LoginScreen(
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Text(
-                    text = "v1.0.0",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = YoTextMuted.copy(alpha = 0.5f)
-                )
             }
         }
+
+        // Version — anchored to the true bottom of the screen, independent
+        // of the centered content column above (which can grow/shrink).
+        Text(
+            text = "v1.0.0",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = YoTextMuted.copy(alpha = 0.5f),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 20.dp)
+        )
     }
 }
 

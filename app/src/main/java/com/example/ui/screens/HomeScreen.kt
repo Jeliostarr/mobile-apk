@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.filled.Bookmark
@@ -109,7 +110,7 @@ fun HeroSliderPager(
             pageSpacing = 12.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(230.dp)
+                .height(280.dp)
         ) { page ->
             val movie = movies[page]
             Box(
@@ -305,6 +306,12 @@ fun HomeScreen(
     var vjsList by remember { mutableStateOf(repository.cachedVjsList) }
     var isLoading by remember { mutableStateOf(popularMovies.isEmpty() && latestMovies.isEmpty()) }
 
+    // Hero carousel needs the same rich payload Detail screen uses
+    // (heroImage/cover + full description) — the list endpoint that
+    // populates popularMovies/latestMovies returns a lighter shape
+    // without those fields, which is why the hero was blank before.
+    var heroMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -370,6 +377,36 @@ fun HomeScreen(
         }
     }
 
+    // Fetch full detail (heroImage/cover + description) for just the
+    // handful of movies shown in the hero carousel — same call Detail
+    // screen makes, so the hero uses the identical image and has a
+    // description to show. Re-runs only when the underlying light list
+    // actually changes (not on every recomposition).
+    LaunchedEffect(popularMovies, latestMovies) {
+        val lightHeroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
+        if (lightHeroList.isEmpty()) return@LaunchedEffect
+
+        val alreadyEnriched = heroMovies.map { it.id } == lightHeroList.map { it.id }
+        if (alreadyEnriched) return@LaunchedEffect
+
+        try {
+            val enriched = coroutineScope {
+                lightHeroList.map { light ->
+                    async {
+                        try {
+                            repository.getMovieDetail(light.id) ?: light
+                        } catch (e: Exception) {
+                            light
+                        }
+                    }
+                }.awaitAll()
+            }
+            heroMovies = enriched
+        } catch (e: Exception) {
+            heroMovies = lightHeroList
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -390,7 +427,7 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                val heroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
+                val heroList = heroMovies.ifEmpty { latestMovies.take(5).ifEmpty { popularMovies.take(5) } }
                 if (heroList.isNotEmpty()) {
                     item {
                         HeroSliderPager(
@@ -566,30 +603,23 @@ fun RailHeader(
             )
         }
 
-        Row(
+        Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
+                .size(34.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(YoSurfaceVariant)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = LocalIndication.current,
                     onClick = onViewAllClick
-                )
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "See all",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = YoTextMuted
-            )
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.Default.MoreHoriz,
                 contentDescription = "View All",
                 tint = YoTextMuted,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }
