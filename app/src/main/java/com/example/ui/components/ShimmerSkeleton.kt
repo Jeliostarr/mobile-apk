@@ -240,3 +240,122 @@ fun HomeSkeleton(
         }
     }
 }
+
+/**
+ * Full-screen skeleton for DetailScreen's initial load: mirrors the real
+ * layout (backdrop → title block → action row → synopsis lines → cast
+ * rail) so the shimmer reads as "this content is arriving" instead of a
+ * generic spinner.
+ */
+@Composable
+fun DetailSkeleton(
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            ShimmerSkeleton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                shapeRadius = 0.dp
+            )
+        }
+
+        item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+                ShimmerSkeleton(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(24.dp),
+                    shapeRadius = 6.dp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ShimmerSkeleton(
+                    modifier = Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(14.dp),
+                    shapeRadius = 4.dp
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ShimmerSkeleton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shapeRadius = 12.dp
+                    )
+                    ShimmerSkeleton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shapeRadius = 12.dp
+                    )
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+                ShimmerSkeleton(
+                    modifier = Modifier.fillMaxWidth().height(14.dp),
+                    shapeRadius = 4.dp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ShimmerSkeleton(
+                    modifier = Modifier.fillMaxWidth().height(14.dp),
+                    shapeRadius = 4.dp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ShimmerSkeleton(
+                    modifier = Modifier.fillMaxWidth(0.6f).height(14.dp),
+                    shapeRadius = 4.dp
+                )
+            }
+        }
+
+        item {
+            TranslatorRailSkeleton()
+        }
+    }
+}
+
+/**
+ * Skeleton for CastDetailScreen's initial load: avatar + name + bio lines.
+ */
+@Composable
+fun CastDetailSkeleton(
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ShimmerSkeleton(
+            modifier = Modifier.size(110.dp),
+            shapeRadius = 55.dp
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        ShimmerSkeleton(
+            modifier = Modifier
+                .fillMaxWidth(0.5f)
+                .height(20.dp),
+            shapeRadius = 6.dp
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        ShimmerSkeleton(
+            modifier = Modifier.fillMaxWidth().height(14.dp),
+            shapeRadius = 4.dp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ShimmerSkeleton(
+            modifier = Modifier.fillMaxWidth().height(14.dp),
+            shapeRadius = 4.dp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ShimmerSkeleton(
+            modifier = Modifier.fillMaxWidth(0.7f).height(14.dp),
+            shapeRadius = 4.dp
+        )
+    }
+}

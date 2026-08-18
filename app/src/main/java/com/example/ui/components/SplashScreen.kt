@@ -35,9 +35,14 @@ import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
+/**
+ * Splash screen with logo animation, tagline, loader, and app version.
+ * Duration: 2.8 seconds for a polished first impression.
+ */
 @Composable
 fun SplashScreen(
-    onSplashFinished: () -> Unit
+    onSplashFinished: () -> Unit,
+    appVersion: String = "1.0.0"  // Pass from BuildConfig.VERSION_NAME
 ) {
     var startAnim by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -53,7 +58,7 @@ fun SplashScreen(
 
     LaunchedEffect(Unit) {
         startAnim = true
-        kotlinx.coroutines.delay(1600)
+        kotlinx.coroutines.delay(2800)  // Extended from 1600ms to 2800ms
         onSplashFinished()
     }
 
@@ -101,6 +106,17 @@ fun SplashScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             ModernLoader(size = 36.dp, strokeWidth = 3.dp)
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // App version display
+            Text(
+                text = "v$appVersion",
+                color = YoTextMuted.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.5.sp
+            )
         }
     }
 }

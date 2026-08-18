@@ -91,10 +91,10 @@ fun BottomNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(78.dp)
-                .clip(RoundedCornerShape(26.dp))
+                .height(86.dp)
+                .clip(RoundedCornerShape(28.dp))
                 .background(YoSurface.copy(alpha = 0.92f))
-                .border(1.dp, YoBorder, RoundedCornerShape(26.dp)),
+                .border(1.dp, YoBorder, RoundedCornerShape(28.dp)),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -136,11 +136,11 @@ private fun NavTabItem(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(42.dp)
                 .clip(CircleShape)
                 .background(pillColor),
             contentAlignment = Alignment.Center
@@ -149,7 +149,7 @@ private fun NavTabItem(
                 imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
                 contentDescription = tab.title,
                 tint = iconColor,
-                modifier = Modifier.size(21.dp)
+                modifier = Modifier.size(23.dp)
             )
             if (isSelected) {
                 Box(
@@ -162,7 +162,7 @@ private fun NavTabItem(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(3.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = tab.title,
             fontSize = 10.sp,
