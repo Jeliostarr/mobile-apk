@@ -271,37 +271,6 @@ fun PosterCard(
                 }
             }
 
-            // ── RATING BADGE (top-right) ──
-            if (!movie.imdbRating.isNull_orBlank()) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = YoRatingGold,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = movie.imdbRating!!,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = YoTextPrimary
-                        )
-                    }
-                }
-            }
-
             // ── MOVIE/SERIES TYPE BADGE (top-left) ──
             Box(
                 modifier = Modifier
@@ -335,26 +304,36 @@ fun PosterCard(
             overflow = TextOverflow.Ellipsis
         )
 
-        // First genre only (not ratings — they're now on the poster)
-        if (!movie.genre.isNull_orBlank()) {
-            Text(
-                text = movie.genre!!.split(",").first().trim(),
-                fontSize = 11.sp,
-                color = YoTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        // First genre + duration on one row, opposite ends
+        val firstGenre = movie.genre?.split(",")?.first()?.trim()
+        val durationText = if (movie.duration != null && movie.duration > 0) formatDuration(movie.duration) else null
 
-        // Duration display only (ratings moved to overlay)
-        if (movie.duration != null && movie.duration > 0) {
-            Text(
-                text = formatDuration(movie.duration),
-                fontSize = 10.sp,
-                color = YoTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        if (firstGenre != null || durationText != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (firstGenre != null) {
+                    Text(
+                        text = firstGenre,
+                        fontSize = 11.sp,
+                        color = YoTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+                if (durationText != null) {
+                    Text(
+                        text = durationText,
+                        fontSize = 10.sp,
+                        color = YoTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }

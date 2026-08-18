@@ -221,7 +221,7 @@ fun HomeSkeleton(
                 ShimmerSkeleton(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(280.dp),
                     shapeRadius = 20.dp
                 )
             }
