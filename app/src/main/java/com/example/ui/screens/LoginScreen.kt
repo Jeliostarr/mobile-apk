@@ -104,7 +104,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Welcome to YOCINEMA",
+                text = "YOCINEMA MOVIES",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = YoTextPrimary
@@ -113,7 +113,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Enter your API key to unlock unlimited streaming",
+                text = "Enter your API key to continue",
                 fontSize = 14.sp,
                 color = YoTextMuted,
                 textAlign = TextAlign.Center,
