@@ -2,52 +2,32 @@ package com.example.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.R
 
 // ─────────────────────────────────────────────────────────────
-// Sora (headings/titles/numbers) + Manrope (body/labels/meta) is
-// the intended pairing — tight tracking on display sizes, generous
-// line-height on body. This file ships with a SYSTEM FONT FALLBACK
-// so it compiles and looks intentional with zero new dependencies.
-// Swap in real Sora/Manrope by uncommenting the Google Fonts block
-// below once you've added the dependency to your version catalog —
-// nothing else in the app needs to change, every screen reads
-// `Typography` by name, not by font family.
+// Sora (headings/titles/numbers) + Manrope (body/labels/meta).
+// Bundled as local .ttf resources in res/font/ — no Play Services
+// Font Provider dependency, works offline, no cert array setup.
+//
+// Place these files in app/src/main/res/font/ before building:
+//   sora_semibold.ttf, sora_bold.ttf
+//   manrope_regular.ttf, manrope_medium.ttf, manrope_semibold.ttf
 // ─────────────────────────────────────────────────────────────
-
-/*
-// 1. Add to libs.versions.toml under [libraries]:
-//    androidx-ui-text-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts", version = "1.7.5" }
-// 2. In build.gradle.kts:
-//    implementation(libs.androidx.ui.text.google.fonts)
-// 3. Uncomment below and replace the FontFamily.Default assignments
-//    for SoraFamily / ManropeFamily further down this file.
-
-import androidx.compose.ui.text.googlefonts.Font
-import androidx.compose.ui.text.googlefonts.GoogleFont
-
-private val fontProvider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
-)
 
 private val SoraFamily = FontFamily(
-    Font(GoogleFont("Sora"), fontProvider, FontWeight.Normal),
-    Font(GoogleFont("Sora"), fontProvider, FontWeight.SemiBold),
-    Font(GoogleFont("Sora"), fontProvider, FontWeight.Bold)
+    Font(R.font.sora_semibold, FontWeight.SemiBold),
+    Font(R.font.sora_bold, FontWeight.Bold)
 )
-private val ManropeFamily = FontFamily(
-    Font(GoogleFont("Manrope"), fontProvider, FontWeight.Normal),
-    Font(GoogleFont("Manrope"), fontProvider, FontWeight.Medium),
-    Font(GoogleFont("Manrope"), fontProvider, FontWeight.SemiBold)
-)
-*/
 
-private val SoraFamily = FontFamily.Default
-private val ManropeFamily = FontFamily.Default
+private val ManropeFamily = FontFamily(
+    Font(R.font.manrope_regular, FontWeight.Normal),
+    Font(R.font.manrope_medium, FontWeight.Medium),
+    Font(R.font.manrope_semibold, FontWeight.SemiBold)
+)
 
 val Typography = Typography(
     displaySmall = TextStyle(
