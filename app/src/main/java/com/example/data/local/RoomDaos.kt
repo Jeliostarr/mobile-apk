@@ -44,6 +44,7 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads ORDER BY updatedAt DESC")
     fun getAllDownloads(): Flow<List<DownloadEntity>>
 
+    // ✅ Explicitly includes PAUSED so paused downloads stay in the active tab
     @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING', 'PAUSED') ORDER BY updatedAt DESC")
     fun getActiveDownloads(): Flow<List<DownloadEntity>>
 
@@ -72,7 +73,6 @@ interface DownloadDao {
     suspend fun deleteDownload(downloadId: String)
 }
 
-// ========== ADD THIS MISSING DAO ==========
 @Dao
 interface MovieCacheDao {
     @Query("SELECT * FROM movie_cache WHERE movieId = :movieId LIMIT 1")
