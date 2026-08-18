@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +67,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val TAG = "DownloadsScreen"
+
 @Composable
 fun DownloadsScreen(
     repository: YocinemaRepository,
@@ -127,12 +130,18 @@ fun DownloadsScreen(
                         ActiveDownloadRow(
                             download = item,
                             onPause = {
+                                Log.d(TAG, "Pausing download: ${item.downloadId}")
                                 androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
                                 scope.launch {
                                     repository.downloadDao.updateStatus(item.downloadId, DownloadEntity.STATUS_PAUSED)
+                                    // Verify status after update
+                                    val updated = repository.downloadDao.getDownloadById(item.downloadId)
+                                    Log.d(TAG, "Status after pause: ${updated?.status}")
+                                    // Optionally force a refresh by calling getActiveDownloads again (not needed, but for debugging)
                                 }
                             },
                             onResume = {
+                                Log.d(TAG, "Resuming download: ${item.downloadId}")
                                 scope.launch {
                                     val movie = repository.getMovieDetail(item.movieId) ?: return@launch
                                     startDownloadWorker(
@@ -144,6 +153,7 @@ fun DownloadsScreen(
                                 }
                             },
                             onCancel = {
+                                Log.d(TAG, "Cancelling download: ${item.downloadId}")
                                 androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(item.downloadId)
                                 item.tempFilePath?.let { path ->
                                     try { java.io.File(path).delete() } catch (_: Exception) {}

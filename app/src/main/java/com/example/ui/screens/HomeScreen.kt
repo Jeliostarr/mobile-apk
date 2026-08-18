@@ -304,17 +304,28 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
+        // 1. Show cached data instantly if available
+        val cachedPop = repository.cachedPopularMovies
+        val cachedLat = repository.cachedLatestMovies
+        val cachedSer = repository.cachedSeriesList
+        val cachedGenres = repository.cachedGenreMovies
+        val cachedVjs = repository.cachedVjsList
+
+        if (cachedPop.isNotEmpty() || cachedLat.isNotEmpty()) {
+            popularMovies = cachedPop
+            latestMovies = cachedLat
+            seriesList = cachedSer
+            genreMovies = cachedGenres
+            vjsList = cachedVjs
+            isLoading = false
+        } else {
+            isLoading = true
+        }
+
+        // 2. Fetch fresh data in the background
         scope.launch {
-            if (popularMovies.isEmpty()) {
-                isLoading = true
-            }
             try {
-                // These four don't depend on each other — they were being
-                // fetched one after another (four full round trips before
-                // the genre batch even started), which was the main reason
-                // cold loads felt slow. Launching all four up front and
-                // awaiting them after means the wait is bounded by the
-                // slowest single call instead of the sum of all four.
+                // Parallel fetch of the four independent sources
                 lateinit var pop: List<Movie>
                 lateinit var lat: List<Movie>
                 lateinit var ser: List<Movie>
@@ -360,8 +371,8 @@ fun HomeScreen(
                 repository.cachedFacets = facets
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
-                isLoading = false
+                // On error, if we already showed cached data, keep it; otherwise show empty.
+                if (isLoading) isLoading = false
             }
         }
     }

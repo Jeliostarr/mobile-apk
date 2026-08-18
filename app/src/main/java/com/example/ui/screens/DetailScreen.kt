@@ -56,7 +56,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -98,12 +97,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-// YouTube imports
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+// YouTube imports – no longer needed, we use WebView for all YouTube embeds.
+// import com.pierfrancescosoffritti.androidyoutubeplayer... (removed)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -801,7 +796,7 @@ private fun buildEmbedUrl(url: String): String? {
             }
             host.contains("dailymotion.com") -> {
                 val id = url.substringAfter("/video/", "").substringBefore("_").ifBlank { null }
-                id?.let { "https://www.dailymotion.com/embed/video/$it?autoplay=1" }
+                id?.let { "https://www.dailymotion.com/embed/video/$id?autoplay=1" }
             }
             else -> null
         }
@@ -830,98 +825,20 @@ fun InlineTrailerSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         when {
-            ytId != null -> InlineYouTubeNativePlayer(
-                videoId = ytId,
-                movieTitle = movieTitle,
-                posterFallbackUrl = posterFallbackUrl
-            )
+            // For YouTube, always use the embed WebView (more reliable)
+            ytId != null -> {
+                val finalEmbedUrl = "https://www.youtube.com/embed/$ytId?autoplay=1&rel=0&playsinline=1"
+                InlineEmbedTrailerPlayer(trailerUrl = trailerUrl, embedUrl = finalEmbedUrl)
+            }
+            // Other embeddable platforms (Vimeo, Dailymotion)
             embedUrl != null -> InlineEmbedTrailerPlayer(trailerUrl = trailerUrl, embedUrl = embedUrl)
+            // Fallback: play through ExoPlayer with authentication
             else -> InlineAuthenticatedTrailerPlayer(trailerUrl = trailerUrl, repository = repository)
         }
     }
 }
 
-/**
- * Inline YouTube trailer.
- *
- * IMPORTANT: automatic initialization is disabled on purpose. The IFrame player must be
- * initialized with an explicit `origin`, otherwise YouTube rejects every embed with
- * "This video is unavailable" (error 150 / 152). If a specific video really is not
- * embeddable, `onError` triggers the poster + "Watch on YouTube" fallback below.
- */
-@Composable
-fun InlineYouTubeNativePlayer(
-    videoId: String,
-    movieTitle: String,
-    posterFallbackUrl: String?
-) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var embedBlocked by remember(videoId) { mutableStateOf(false) }
-    val watchUrl = remember(videoId) { "https://www.youtube.com/watch?v=$videoId" }
-
-    if (embedBlocked) {
-        YouTubeFallbackCard(
-            movieTitle = movieTitle,
-            thumbnailUrl = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
-            posterFallbackUrl = posterFallbackUrl,
-            onOpen = {
-                try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl)))
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Couldn't open YouTube", Toast.LENGTH_SHORT).show()
-                }
-            }
-        )
-        return
-    }
-
-    val playerView = remember(videoId) {
-        YouTubePlayerView(context).apply {
-            // Must be set before the view is attached / initialized.
-            enableAutomaticInitialization = false
-            lifecycleOwner.lifecycle.addObserver(this)
-        }
-    }
-
-    DisposableEffect(videoId) {
-        val listener = object : AbstractYouTubePlayerListener() {
-            override fun onReady(youTubePlayer: YouTubePlayer) {
-                youTubePlayer.loadVideo(videoId, 0f)
-            }
-
-            override fun onError(
-                youTubePlayer: YouTubePlayer,
-                error: PlayerConstants.PlayerError
-            ) {
-                // VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER / NOT_FOUND / INVALID_PARAMETER_IN_REQUEST
-                embedBlocked = true
-            }
-        }
-
-        val options = IFramePlayerOptions.Builder()
-            .controls(1)
-            .rel(0)
-            .ivLoadPolicy(3)
-            .ccLoadPolicy(0)
-            .origin("https://www.youtube.com")
-            .build()
-
-        playerView.initialize(listener, /* handleNetworkEvents = */ true, options)
-
-        onDispose {
-            playerView.release()
-        }
-    }
-
-    AndroidView(
-        factory = { playerView },
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(16.dp))
-    )
-}
+// REMOVED InlineYouTubeNativePlayer – no longer needed.
 
 @Composable
 private fun YouTubeFallbackCard(
