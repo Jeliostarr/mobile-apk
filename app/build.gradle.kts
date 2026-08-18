@@ -103,6 +103,7 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.hls)
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.media3.session)
+  implementation("androidx.media3:media3-datasource-okhttp:1.4.0")
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.androidx.security.crypto)
   implementation(libs.converter.moshi)
