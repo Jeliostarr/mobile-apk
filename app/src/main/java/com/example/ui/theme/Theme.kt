@@ -30,8 +30,7 @@ private val YoColorScheme = darkColorScheme(
     onError = YoTextPrimary
 )
 
-// Neon Night shape scale — softer than the previous 4/8/14/18/24, and used
-// consistently rather than ad-hoc RoundedCornerShape() calls per screen.
+// Neon Night shape scale — softer corners, used consistently
 private val Shapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(12.dp),
@@ -39,6 +38,25 @@ private val Shapes = Shapes(
     large = RoundedCornerShape(26.dp),
     extraLarge = RoundedCornerShape(34.dp)
 )
+
+// ─────────────────────────────────────────────────────────────
+// Animation & Interaction Durations — for smooth, consistent feel
+// ─────────────────────────────────────────────────────────────
+object YoAnimationDurations {
+    const val QUICK = 150       // fast taps, presses
+    const val SHORT = 200       // standard interactions
+    const val MEDIUM = 300      // transitions between states
+    const val LONG = 500        // entrance/exit animations
+    const val SPLASH = 2800     // splash screen duration
+}
+
+object YoElevationScale {
+    const val NONE = 0
+    const val TOUCH_PRESSED = 2
+    const val CARD_IDLE = 4
+    const val CARD_HOVER = 6
+    const val MODAL = 12
+}
 
 @Composable
 fun YocinemaTheme(
