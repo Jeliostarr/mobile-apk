@@ -97,9 +97,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-// YouTube imports – no longer needed, we use WebView for all YouTube embeds.
-// import com.pierfrancescosoffritti.androidyoutubeplayer... (removed)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
@@ -838,8 +835,6 @@ fun InlineTrailerSection(
     }
 }
 
-// REMOVED InlineYouTubeNativePlayer – no longer needed.
-
 @Composable
 private fun YouTubeFallbackCard(
     movieTitle: String,
@@ -1016,27 +1011,50 @@ fun InlineEmbedTrailerPlayer(trailerUrl: String, embedUrl: String) {
                     webView?.destroy()
                 }
             }
-            androidx.compose.ui.viewinterop.AndroidView(
+
+            AndroidView(
                 factory = { ctx ->
-                    android.webkit.CookieManager.getInstance().setAcceptCookie(true)
                     android.webkit.WebView(ctx).apply {
+                        // Enable JavaScript and DOM storage
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.mediaPlaybackRequiresUserGesture = false
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
-                        settings.userAgentString =
-                            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
-                            "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                        settings.setSupportZoom(false)
+                        settings.builtInZoomControls = false
+                        // Use a modern user agent to avoid YouTube blocking
+                        settings.userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                         setBackgroundColor(android.graphics.Color.BLACK)
-                        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                        webChromeClient = android.webkit.WebChromeClient()
+                        // Allow mixed content if needed
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        // Enable hardware acceleration
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.HONEYCOMB) {
+                            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                        }
+
+                        webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onProgressChanged(view: android.webkit.WebView?, newProgress: Int) {
+                                if (newProgress == 100) {
+                                    isLoading = false
+                                }
+                            }
+                            // Allow fullscreen video if needed (optional)
+                            override fun onShowCustomView(view: android.view.View?, callback: android.webkit.WebChromeClient.CustomViewCallback?) {
+                                // Not implemented – we don't need fullscreen for trailers
+                            }
+                            override fun onHideCustomView() {
+                                // Not implemented
+                            }
+                        }
+
                         webViewClient = object : android.webkit.WebViewClient() {
                             override fun shouldOverrideUrlLoading(
                                 view: android.webkit.WebView?,
                                 request: android.webkit.WebResourceRequest?
                             ): Boolean {
                                 val target = request?.url?.toString() ?: return false
+                                // Allow only the embed URL, open everything else externally
                                 if (target == embedUrl) return false
                                 return try {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
@@ -1045,44 +1063,35 @@ fun InlineEmbedTrailerPlayer(trailerUrl: String, embedUrl: String) {
                                     false
                                 }
                             }
-                            override fun onPageCommitVisible(view: android.webkit.WebView?, url: String?) {
-                                isLoading = false
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    try {
-                                        view?.evaluateJavascript(
-                                            "(function(){return !!document.querySelector('video');})();"
-                                        ) { result ->
-                                            if (result == "false") {
-                                                loadFailed = true
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        // ignore
-                                    }
-                                }, 2500)
-                            }
+
                             override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                // Once the page loads, check if a video element exists (optional)
+                                // but we'll rely on progress change.
                                 isLoading = false
                             }
+
                             override fun onReceivedError(
                                 view: android.webkit.WebView?,
                                 request: android.webkit.WebResourceRequest?,
                                 error: android.webkit.WebResourceError?
                             ) {
-                                if (request?.isForMainFrame != false) {
+                                if (request?.isForMainFrame == true) {
                                     isLoading = false
                                     loadFailed = true
                                 }
                             }
                         }
+
+                        // Load the embed URL
                         loadUrl(embedUrl)
                         webView = this
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
+
             if (isLoading) {
-                CircularProgressIndicator(color = YoPrimaryAmber)
+                CircularProgressIndicator(color = YoPrimaryAmber, modifier = Modifier.size(48.dp))
             }
         }
     }
