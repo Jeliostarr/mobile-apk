@@ -12,6 +12,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.DownloadEntity
 import com.example.repository.YocinemaRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -119,7 +120,17 @@ class DownloadWorker(
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                 if (isStopped) {
                     outputStream.close()
-                    downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
+                    // NonCancellable: by the time isStopped is true, this
+                    // Worker's Job has already been cancelled (that's how
+                    // WorkManager signals stop). A plain suspend DB call
+                    // here would throw CancellationException immediately
+                    // and never actually write PAUSED — which is exactly
+                    // why pause was making downloads vanish instead of
+                    // pausing. NonCancellable lets this one write complete
+                    // regardless.
+                    withContext(NonCancellable) {
+                        downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
+                    }
                     return@withContext Result.retry()
                 }
 
@@ -136,7 +147,9 @@ class DownloadWorker(
                     // PAUSED write and silently overwrite it, making pause look broken.
                     if (isStopped) {
                         outputStream.close()
-                        downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
+                        withContext(NonCancellable) {
+                            downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
+                        }
                         return@withContext Result.retry()
                     }
                     val speed = (bytesSinceLastUpdate * 1000) / delta
@@ -163,6 +176,15 @@ class DownloadWorker(
 
             Result.success()
 
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // This is the pause/cancel path (WorkManager cancels the Job,
+            // which surfaces here as CancellationException). The isStopped
+            // branch above already wrote PAUSED via NonCancellable before
+            // this could even be thrown. Do NOT treat this as a failure —
+            // that was the bug: catching this as a generic Exception and
+            // writing STATUS_FAILED silently overwrote PAUSED, which is
+            // why paused downloads were disappearing from the Active tab.
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
