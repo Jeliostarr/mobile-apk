@@ -427,7 +427,7 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                val heroList = heroMovies.ifEmpty { latestMovies.take(5).ifEmpty { popularMovies.take(5) } }
+                val heroList = heroMovies.ifEmpty { latestMovies.take(10).ifEmpty { popularMovies.take(10) } }
                 if (heroList.isNotEmpty()) {
                     item {
                         HeroSliderPager(
