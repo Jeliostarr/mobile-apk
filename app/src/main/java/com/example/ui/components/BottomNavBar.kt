@@ -58,7 +58,7 @@ sealed class BottomTab(
     object Sports : BottomTab("sports", "Sports", Icons.Filled.SportsSoccer, Icons.Outlined.SportsSoccer)
     object Explore : BottomTab("explore", "Explore", Icons.Filled.Explore, Icons.Outlined.Explore)
     object Downloads : BottomTab("downloads", "Downloads", Icons.Filled.Download, Icons.Outlined.Download)
-    object Account : BottomTab("account", "Account", Icons.Filled.Person, Icons.Outlined.Person)
+    object Account : BottomTab("account", "Me", Icons.Filled.Person, Icons.Outlined.Person)
 }
 
 /**
@@ -76,7 +76,6 @@ fun BottomNavBar(
 ) {
     val tabs = listOf(
         BottomTab.Home,
-        BottomTab.Sports,
         BottomTab.Explore,
         BottomTab.Downloads,
         BottomTab.Account
