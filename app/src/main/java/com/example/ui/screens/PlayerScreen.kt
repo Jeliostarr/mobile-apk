@@ -133,6 +133,15 @@ fun PlayerScreen(
     var currentEpNum by remember { mutableStateOf(epNum) }
     var episodesList by remember { mutableStateOf<List<Episode>>(emptyList()) }
     var showEpisodesSheet by remember { mutableStateOf(false) }
+    // hasLoadedOnce: lets the load effect skip the redundant full
+    // getMovieDetail()/getMovieEpisodes() network round trip on every
+    // episode switch — that redundant fetch was the actual cause of
+    // "Play Next" feeling unresponsive.
+    var hasLoadedOnce by remember { mutableStateOf(false) }
+    // isSwitchingEpisode: flips true the instant the user taps Play Next
+    // or picks an episode, so there's immediate visual feedback before
+    // the (now much shorter) network work even starts.
+    var isSwitchingEpisode by remember { mutableStateOf(false) }
 
     val isPlaying by playerManager.isPlaying.collectAsState()
     val isBuffering by playerManager.isBuffering.collectAsState()
@@ -174,6 +183,8 @@ fun PlayerScreen(
             if (!localFilePath.isNullOrBlank()) {
                 movie = Movie(id = movieId, title = "Offline Download")
                 playerManager.playMedia(movieId, localFilePath, currentSeasonNum, currentEpNum, initialPosMs, title = "Offline Download")
+                hasLoadedOnce = true
+                isSwitchingEpisode = false
                 return@LaunchedEffect
             }
 
@@ -194,6 +205,32 @@ fun PlayerScreen(
                 } catch (e: Exception) {
                     Log.d(TAG, "Metadata refresh skipped (likely offline): ${e.message}")
                 }
+                hasLoadedOnce = true
+                isSwitchingEpisode = false
+                return@LaunchedEffect
+            }
+
+            // FAST PATH — switching episodes of a series that's already
+            // loaded. Skips getMovieDetail()/getMovieEpisodes() entirely
+            // (nothing about the movie or episode list changed, only which
+            // episode is playing) and goes straight to resolving the new
+            // play URL. This is what makes Play Next feel instant instead
+            // of re-running the whole initial-load pipeline.
+            val alreadyLoadedMovie = movie
+            if (hasLoadedOnce && alreadyLoadedMovie != null && alreadyLoadedMovie.id == movieId) {
+                Log.d(TAG, "Fast episode switch — skipping detail/episode refetch")
+                val url = repository.getPlayUrl(alreadyLoadedMovie, currentSeasonNum, currentEpNum)
+                if (url.isBlank()) {
+                    loadError = "Play URL is empty – the video may be unavailable."
+                    isSwitchingEpisode = false
+                    return@LaunchedEffect
+                }
+                playerManager.playMedia(
+                    movieId, url, currentSeasonNum, currentEpNum, 0L, // a newly-selected episode always starts fresh, not at the previous episode's position
+                    title = alreadyLoadedMovie.title,
+                    posterUrl = alreadyLoadedMovie.cover ?: alreadyLoadedMovie.poster ?: alreadyLoadedMovie.displayPosterUrl
+                )
+                isSwitchingEpisode = false
                 return@LaunchedEffect
             }
 
@@ -202,6 +239,7 @@ fun PlayerScreen(
             if (m == null) {
                 loadError = "Movie not found. Please check your connection."
                 Log.e(TAG, "getMovieDetail returned null")
+                isSwitchingEpisode = false
                 return@LaunchedEffect
             }
             movie = m
@@ -221,6 +259,7 @@ fun PlayerScreen(
             if (url.isBlank()) {
                 loadError = "Play URL is empty – the video may be unavailable."
                 Log.e(TAG, "Play URL is blank")
+                isSwitchingEpisode = false
                 return@LaunchedEffect
             }
             Log.d(TAG, "Play URL: $url")
@@ -230,9 +269,12 @@ fun PlayerScreen(
                 title = m.title,
                 posterUrl = m.cover ?: m.poster ?: m.displayPosterUrl
             )
+            hasLoadedOnce = true
+            isSwitchingEpisode = false
         } catch (e: Throwable) {
             Log.e(TAG, "Fatal error while loading movie", e)
             loadError = "Failed to start playback: ${e.message ?: "unknown error"}"
+            isSwitchingEpisode = false
         }
     }
 
@@ -396,7 +438,7 @@ fun PlayerScreen(
                             ControlIconButton(
                                 icon = Icons.AutoMirrored.Filled.PlaylistPlay,
                                 contentDescription = "Episodes",
-                                onClick = { showEpisodesSheet = true }
+                                onClick = { showEpisodesSheet = !showEpisodesSheet }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                         }
@@ -481,8 +523,11 @@ fun PlayerScreen(
                                 contentDescription = "Play Next Episode",
                                 size = 52.dp,
                                 onClick = {
-                                    currentSeasonNum = nextEpisode.sNum
-                                    currentEpNum = nextEpisode.eNum
+                                    if (!isSwitchingEpisode) {
+                                        isSwitchingEpisode = true
+                                        currentSeasonNum = nextEpisode.sNum
+                                        currentEpNum = nextEpisode.eNum
+                                    }
                                 }
                             )
                         }
@@ -545,6 +590,26 @@ fun PlayerScreen(
             }
         }
 
+        // Immediate acknowledgement for Play Next / episode picks — shows
+        // the instant isSwitchingEpisode flips true (same frame as the
+        // tap), well before the new stream is actually ready. This is
+        // what makes the switch feel instant instead of "did that even
+        // register?"
+        if (isSwitchingEpisode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = YoPrimaryViolet,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+        }
+
         // Episode panel — docked to the right edge like a TV-style side
         // rail, not a bottom sheet. Slides in over the video, current
         // episode highlighted, thumbnail + episode number + title per row.
@@ -566,7 +631,13 @@ fun PlayerScreen(
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = {} // absorb taps so they don't pass through to the seek gesture
+                        // Tapping the panel (anywhere that isn't an episode
+                        // row, which has its own clickable and consumes the
+                        // tap first) now dismisses it — same "tap to
+                        // dismiss" behavior as the video controls, instead
+                        // of just swallowing the tap and leaving the panel
+                        // stuck open with no way to close it.
+                        onClick = { showEpisodesSheet = false }
                     )
             ) {
                 Column(
@@ -594,9 +665,12 @@ fun PlayerScreen(
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(if (isCurrent) YoPrimaryViolet.copy(alpha = 0.22f) else Color.Transparent)
                                     .clickable {
-                                        currentSeasonNum = ep.sNum
-                                        currentEpNum = ep.eNum
-                                        showEpisodesSheet = false
+                                        if (!isSwitchingEpisode) {
+                                            isSwitchingEpisode = true
+                                            showEpisodesSheet = false
+                                            currentSeasonNum = ep.sNum
+                                            currentEpNum = ep.eNum
+                                        }
                                     }
                                     .padding(horizontal = 10.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
