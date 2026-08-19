@@ -44,8 +44,12 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads ORDER BY updatedAt DESC")
     fun getAllDownloads(): Flow<List<DownloadEntity>>
 
-    // ✅ Explicitly includes PAUSED so paused downloads stay in the active tab
-    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING', 'PAUSED') ORDER BY updatedAt DESC")
+    // ✅ Explicitly includes PAUSED so paused downloads stay in the active tab.
+    // Ordered by rowid (insertion order) instead of updatedAt — updatedAt
+    // changes on every progress tick, which was reshuffling the list
+    // every second while multiple downloads ran. rowid never changes for
+    // an existing row, so each download stays put once it starts.
+    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING', 'PAUSED') ORDER BY rowid ASC")
     fun getActiveDownloads(): Flow<List<DownloadEntity>>
 
     @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' ORDER BY updatedAt DESC")
