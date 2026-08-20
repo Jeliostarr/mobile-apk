@@ -89,7 +89,9 @@ import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoAccentCyan
+import com.example.ui.theme.YoRatingGold
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -273,7 +275,7 @@ fun DetailScreen(
                     Button(
                         onClick = { onBackClick() },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = YoPrimaryAmber,
+                            containerColor = YoPrimaryViolet,
                             contentColor = YoBaseBackground
                         )
                     ) {
@@ -361,7 +363,7 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = if (isWatchlisted) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                                         contentDescription = "Watchlist",
-                                        tint = if (isWatchlisted) YoPrimaryAmber else YoTextPrimary
+                                        tint = if (isWatchlisted) YoPrimaryViolet else YoTextPrimary
                                     )
                                 }
 
@@ -437,7 +439,7 @@ fun DetailScreen(
                                         Icon(
                                             imageVector = Icons.Default.Star,
                                             contentDescription = null,
-                                            tint = YoPrimaryAmber,
+                                            tint = YoRatingGold,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -473,7 +475,7 @@ fun DetailScreen(
                                     text = m.genre!!,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = YoPrimaryAmber
+                                    color = YoAccentCyan
                                 )
                             }
 
@@ -494,7 +496,7 @@ fun DetailScreen(
                                         .height(48.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = YoPrimaryAmber,
+                                        containerColor = YoPrimaryViolet,
                                         contentColor = YoBaseBackground
                                     )
                                 ) {
@@ -553,7 +555,7 @@ fun DetailScreen(
                                         text = if (isSynopsisExpanded) "SHOW LESS" else "MORE...",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = YoPrimaryAmber,
+                                        color = YoPrimaryViolet,
                                         modifier = Modifier
                                             .clickable { isSynopsisExpanded = !isSynopsisExpanded }
                                             .padding(vertical = 4.dp)
@@ -588,8 +590,8 @@ fun DetailScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(20.dp))
-                                                    .background(if (isSelected) YoPrimaryAmber else YoSurface)
-                                                    .border(1.dp, if (isSelected) YoPrimaryAmber else YoBorder, RoundedCornerShape(20.dp))
+                                                    .background(if (isSelected) YoPrimaryViolet else YoSurface)
+                                                    .border(1.dp, if (isSelected) YoPrimaryViolet else YoBorder, RoundedCornerShape(20.dp))
                                                     .clickable { selectedSeasonNumber = seasonNum }
                                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                                             ) {
@@ -735,7 +737,7 @@ fun DetailScreen(
                 confirmButton = {
                     androidx.compose.material3.Button(
                         onClick = { showDownloadStartedDialog = false },
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = YoPrimaryAmber, contentColor = YoBaseBackground)
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = YoPrimaryViolet, contentColor = YoBaseBackground)
                     ) {
                         Text("OK", fontWeight = FontWeight.Bold)
                     }

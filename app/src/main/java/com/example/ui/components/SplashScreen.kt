@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.YoBaseBackground
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
@@ -87,7 +87,7 @@ fun SplashScreen(
 
             Text(
                 text = "YOCINEMA",
-                color = YoPrimaryAmber,
+                color = YoPrimaryViolet,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp
