@@ -111,6 +111,8 @@ dependencies {
   implementation(libs.firebase.ai)
   // YouTube library – direct dependency to avoid version-catalog issues
   implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
+  // Gates copying the API key behind biometrics/device lock — see BiometricCopyHelper.kt
+  implementation("androidx.biometric:biometric:1.2.0")
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)
 
