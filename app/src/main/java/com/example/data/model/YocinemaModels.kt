@@ -285,9 +285,25 @@ data class KeyInfo(
         }
 }
 
+/**
+ * index.js applies a global `wrapResponse` middleware to every route, which
+ * — going by how MeResponse already had to handle it — wraps the route's
+ * own res.json({...}) inside an outer {success, data: {...}} envelope. The
+ * keys.js route itself calls `res.json({ keys })`, so the real payload is
+ * `{ data: { keys: [...] } }`, not a bare `{ keys: [...] }`. [actualKeys]
+ * is what the repository/UI should read, not [keys] directly.
+ */
 @JsonClass(generateAdapter = true)
 data class KeysResponse(
-    val keys: List<KeyInfo>? = emptyList()
+    val keys: List<KeyInfo>? = null,
+    val data: KeysDataWrapper? = null
+) {
+    val actualKeys: List<KeyInfo> get() = keys ?: data?.keys ?: emptyList()
+}
+
+@JsonClass(generateAdapter = true)
+data class KeysDataWrapper(
+    val keys: List<KeyInfo>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -303,11 +319,24 @@ data class KeyUsage(
     val dailyLimit: Int? = 0
 )
 
+/** Same envelope situation as [KeysResponse] — see that doc comment. */
 @JsonClass(generateAdapter = true)
 data class UsageResponse(
-    val series: List<UsagePoint>? = emptyList(),
-    val perKey: List<KeyUsage>? = emptyList(),
-    val totalToday: Int? = 0
+    val series: List<UsagePoint>? = null,
+    val perKey: List<KeyUsage>? = null,
+    val totalToday: Int? = null,
+    val data: UsageDataWrapper? = null
+) {
+    val actualSeries: List<UsagePoint> get() = series ?: data?.series ?: emptyList()
+    val actualPerKey: List<KeyUsage> get() = perKey ?: data?.perKey ?: emptyList()
+    val actualTotalToday: Int get() = totalToday ?: data?.totalToday ?: 0
+}
+
+@JsonClass(generateAdapter = true)
+data class UsageDataWrapper(
+    val series: List<UsagePoint>? = null,
+    val perKey: List<KeyUsage>? = null,
+    val totalToday: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
