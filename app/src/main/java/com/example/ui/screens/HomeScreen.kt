@@ -72,8 +72,7 @@ import com.example.ui.components.VJChip
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryViolet
-import com.example.ui.theme.YoRatingGold
+import com.example.ui.theme.YoPrimaryAmber
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -169,7 +168,7 @@ fun HeroSliderPager(
                                 Icon(
                                     imageVector = Icons.Default.Star,
                                     contentDescription = null,
-                                    tint = YoRatingGold,
+                                    tint = YoPrimaryAmber,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -229,7 +228,7 @@ fun HeroSliderPager(
                             modifier = Modifier.height(36.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = YoPrimaryViolet,
+                                containerColor = YoPrimaryAmber,
                                 contentColor = YoBaseBackground
                             ),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
@@ -280,7 +279,7 @@ fun HeroSliderPager(
                             .padding(2.dp)
                             .size(if (isSelected) 9.dp else 7.dp)
                             .clip(CircleShape)
-                            .background(if (isSelected) YoPrimaryViolet else YoBorder)
+                            .background(if (isSelected) YoPrimaryAmber else YoBorder)
                     )
                 }
             }
@@ -311,11 +310,23 @@ fun HomeScreen(
     // (heroImage/cover + full description) — the list endpoint that
     // populates popularMovies/latestMovies returns a lighter shape
     // without those fields, which is why the hero was blank before.
-    var heroMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    // Seeded from the repository cache so a revisit doesn't blank the
+    // carousel out and silently re-fetch 5 movie details in the background.
+    var heroMovies by remember { mutableStateOf(repository.cachedHeroMovies) }
 
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
+        // This used to run the full fetch burst unconditionally on every
+        // single composition of HomeScreen — i.e. every time the Home tab
+        // was reopened, even seconds after the last visit — which is the
+        // main reason it felt slow "every open". Now it's skipped entirely
+        // once a fresh cache exists; the screen just paints from cache
+        // instantly with zero network calls.
+        if (repository.isHomeCacheFresh()) {
+            return@LaunchedEffect
+        }
+
         scope.launch {
             if (popularMovies.isEmpty()) {
                 isLoading = true
@@ -347,12 +358,27 @@ fun HomeScreen(
                 val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
                 val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
 
+                // Genre rails used to each cost their own network round trip
+                // (one request per genre, fired in parallel) even though
+                // pop+lat+series had usually already pulled in most of the
+                // catalog's popular titles. Building each rail from that
+                // in-memory pool first — and only falling back to a network
+                // call on the rare genre with nothing in the pool — cuts
+                // this from "N extra requests every load" to "close to zero"
+                // on a typical catalog, which is most of what was making
+                // cold loads slow.
                 val genreResults = coroutineScope {
                     allGenres.map { genre ->
                         async {
-                            genre to repository.getMovies(genre = genre, limit = 15).ifEmpty {
-                                allMoviesPool.filter { it.genre?.contains(genre, ignoreCase = true) == true }
+                            val fromPool = allMoviesPool.filter {
+                                it.genre?.contains(genre, ignoreCase = true) == true
                             }
+                            val movies = if (fromPool.size >= 5) {
+                                fromPool.take(15)
+                            } else {
+                                repository.getMovies(genre = genre, limit = 15).ifEmpty { fromPool }
+                            }
+                            genre to movies
                         }
                     }.awaitAll()
                 }.filter { (_, movies) -> movies.isNotEmpty() }
@@ -370,6 +396,7 @@ fun HomeScreen(
                 repository.cachedGenreMovies = genreResults
                 repository.cachedVjsList = vjsList
                 repository.cachedFacets = facets
+                repository.markHomeCacheFresh()
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -382,7 +409,9 @@ fun HomeScreen(
     // handful of movies shown in the hero carousel — same call Detail
     // screen makes, so the hero uses the identical image and has a
     // description to show. Re-runs only when the underlying light list
-    // actually changes (not on every recomposition).
+    // actually changes (not on every recomposition) — the ID comparison
+    // below is what makes a revisit with a fresh cache a no-op, since
+    // heroMovies is now seeded from the repository cache too.
     LaunchedEffect(popularMovies, latestMovies) {
         val lightHeroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
         if (lightHeroList.isEmpty()) return@LaunchedEffect
@@ -403,6 +432,7 @@ fun HomeScreen(
                 }.awaitAll()
             }
             heroMovies = enriched
+            repository.cachedHeroMovies = enriched
         } catch (e: Exception) {
             heroMovies = lightHeroList
         }
@@ -532,7 +562,7 @@ fun HomeSearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = YoPrimaryViolet,
+                tint = YoPrimaryAmber,
                 modifier = Modifier.size(20.dp)
             )
 
@@ -549,7 +579,7 @@ fun HomeSearchBar(
                 Icon(
                     imageVector = Icons.Default.Bookmark,
                     contentDescription = "Watchlist",
-                    tint = YoPrimaryViolet,
+                    tint = YoPrimaryAmber,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -558,7 +588,7 @@ fun HomeSearchBar(
                 Icon(
                     imageVector = Icons.Default.Download,
                     contentDescription = "Downloads",
-                    tint = YoPrimaryViolet,
+                    tint = YoPrimaryAmber,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -567,7 +597,7 @@ fun HomeSearchBar(
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Account",
-                    tint = YoPrimaryViolet,
+                    tint = YoPrimaryAmber,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -593,7 +623,7 @@ fun RailHeader(
                     .width(4.dp)
                     .height(18.dp)
                     .clip(CircleShape)
-                    .background(YoPrimaryViolet)
+                    .background(YoPrimaryAmber)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
