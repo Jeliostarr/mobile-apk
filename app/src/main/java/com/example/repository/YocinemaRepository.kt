@@ -60,15 +60,16 @@ class YocinemaRepository(context: Context) {
     val movieCacheDao = db.movieCacheDao()
 
     // Sticky, app-wide "your key has a problem" signal — see ApiKeyIssue.kt.
-    // AuthInterceptor reports into this on every failed authenticated
-    // request; MainAppNav renders ApiKeyIssueDialog whenever it's non-null,
-    // regardless of which screen the failing request came from.
-    private val apiIssueReporter = ApiIssueReporter()
-    val apiKeyIssueFlow: StateFlow<ApiKeyIssue?> = apiIssueReporter.issueFlow
-    fun clearApiKeyIssue() = apiIssueReporter.clear()
+    // ApiIssueReporter is a singleton: AuthInterceptor reports into it on
+    // every failed authenticated request, whether that's this repository's
+    // own OkHttpClient or the separate one YoApplication builds for Coil's
+    // image loading. MainAppNav renders ApiKeyIssueDialog whenever it's
+    // non-null, regardless of which of those the failure came from.
+    val apiKeyIssueFlow: StateFlow<ApiKeyIssue?> = ApiIssueReporter.issueFlow
+    fun clearApiKeyIssue() = ApiIssueReporter.clear()
 
     private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(AuthInterceptor(tokenManager, apiIssueReporter))
+        .addInterceptor(AuthInterceptor(tokenManager))
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
@@ -135,11 +136,11 @@ class YocinemaRepository(context: Context) {
             // This call's own failure is shown inline on LoginScreen already
             // — suppress so the global ApiKeyIssueDialog doesn't also pop up
             // over the login form for the exact same thing.
-            apiIssueReporter.suppressed = true
+            ApiIssueReporter.suppressed = true
             val response = try {
                 api.getAccountMe()
             } finally {
-                apiIssueReporter.suppressed = false
+                ApiIssueReporter.suppressed = false
             }
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()?.actualUser
@@ -257,14 +258,14 @@ class YocinemaRepository(context: Context) {
         tokenManager.saveApiKey(newKey)
         invalidateAccountCache()
         _accountBundle.value = AccountBundle()
-        apiIssueReporter.clear()
+        ApiIssueReporter.clear()
     }
 
     fun logout() {
         tokenManager.clearApiKey()
         invalidateAccountCache()
         _accountBundle.value = AccountBundle()
-        apiIssueReporter.clear()
+        ApiIssueReporter.clear()
     }
 
     private val memoryMovieCache = java.util.concurrent.ConcurrentHashMap<String, List<Movie>>()
