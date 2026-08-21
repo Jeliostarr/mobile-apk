@@ -4,6 +4,8 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 const val BASE_URL = "https://api.yocinema.dpdns.org"
+const val DASHBOARD_URL = "https://dash.yocinema.dpdns.org"
+const val WATCH_WEB_URL = "https://watch.yocinema.dpdns.org"
 
 fun cleanMediaUrl(url: String?): String? {
     if (url == null || url.trim().isEmpty()) return url
@@ -12,6 +14,13 @@ fun cleanMediaUrl(url: String?): String? {
     }.trimEnd('?', '&')
 }
 
+
+/**
+ * NOTE: this is intentionally kept as a real, separately-named extension
+ * (not just an alias for kotlin's own isNullOrEmpty()) — other screens in
+ * the codebase (e.g. HomeScreen.kt) import this exact symbol directly from
+ * com.example.data.model, so removing it breaks their compile.
+ */
 fun String?.isNull_orEmpty(): Boolean = this == null || this.trim().isEmpty()
 
 fun formatDuration(durationVal: Int?): String {
@@ -72,6 +81,39 @@ fun extractYearOnly(dateStr: String?): String {
 
 fun getPublicCoverUrl(movieId: String): String {
     return "$BASE_URL/api/v1/movies/public/cover/$movieId"
+}
+
+/** Formats a small integer amount of Ugandan Shillings for display, e.g. 15000 -> "UGX 15,000". */
+fun formatUgx(amount: Double?): String {
+    if (amount == null) return "UGX 0"
+    val rounded = amount.toLong()
+    val str = rounded.toString()
+    val sb = StringBuilder()
+    for ((i, c) in str.reversed().withIndex()) {
+        if (i != 0 && i % 3 == 0) sb.append(',')
+        sb.append(c)
+    }
+    return "UGX ${sb.reverse()}"
+}
+
+/** Parses a handful of common ISO-ish date formats without pulling in java.time / desugaring requirements. */
+fun parseIsoMillis(dateStr: String?): Long? {
+    if (dateStr.isNullOrBlank()) return null
+    return try {
+        val cleaned = dateStr.trim()
+        val datePart = cleaned.take(10)
+        val parts = datePart.split("-")
+        if (parts.size != 3) return null
+        val year = parts[0].toInt()
+        val month = parts[1].toInt()
+        val day = parts[2].toInt()
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        cal.clear()
+        cal.set(year, month - 1, day, 0, 0, 0)
+        cal.timeInMillis
+    } catch (e: Exception) {
+        null
+    }
 }
 
 @JsonClass(generateAdapter = true)
@@ -159,15 +201,25 @@ data class Episode(
 
     fun getDisplayStill(movieId: String): String {
         val st = cleanMediaUrl(still ?: thumbnail ?: poster)
-        return if (!st.isNull_orEmpty()) st!! else getPublicCoverUrl(movieId)
+        return if (!st.isNullOrEmpty()) st!! else getPublicCoverUrl(movieId)
     }
 }
 
+/**
+ * The logged-in user. [balance] is the wallet balance in UGX — the backend's
+ * `/account/me` returns the full Mongo user document, and `balance` there is
+ * a number, not a string, so this must decode as Double (Moshi will happily
+ * decode `15000` or `15000.0` into a Double either way).
+ */
 @JsonClass(generateAdapter = true)
 data class AccountUser(
+    @Json(name = "_id") val id: String? = null,
     val name: String? = null,
     val email: String? = null,
-    val balance: String? = null
+    val phone: String? = null,
+    val balance: Double? = null,
+    val accountType: String? = null,
+    val status: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -184,14 +236,78 @@ data class MeDataWrapper(
 )
 
 @JsonClass(generateAdapter = true)
-data class KeyInfo(
-    val key: String? = null,
-    val name: String? = null
+data class PlanInfo(
+    val name: String? = null,
+    val dailyLimit: Int? = null,
+    val priceUGX: Int? = null,
+    val duration: Int? = null
 )
+
+/** One of the user's API keys, as returned by GET /api/v1/keys. */
+@JsonClass(generateAdapter = true)
+data class KeyInfo(
+    @Json(name = "_id") val id: String? = null,
+    val key: String? = null,
+    val name: String? = null,
+    val status: String? = null, // active | paused | suspended | revoked | deleted
+    val dailyLimit: Int? = null,
+    val usageToday: Int? = null,
+    val usageTotal: Int? = null,
+    val expiresAt: String? = null,
+    val createdAt: String? = null,
+    val plan: PlanInfo? = null
+) {
+    val isExpired: Boolean
+        get() {
+            val ms = parseIsoMillis(expiresAt) ?: return false
+            // expiresAt is date-only precision here; treat "expires today" as
+            // still valid until the day actually rolls over.
+            return ms + (24 * 60 * 60 * 1000) < System.currentTimeMillis()
+        }
+
+    val isUsedUp: Boolean
+        get() = (dailyLimit ?: 0) > 0 && (usageToday ?: 0) >= (dailyLimit ?: 0)
+
+    val isUsable: Boolean
+        get() = status.equals("active", ignoreCase = true) && !isExpired
+
+    val maskedKey: String
+        get() {
+            val k = key ?: return ""
+            return if (k.length > 10) k.take(6) + "••••••" + k.takeLast(4) else k
+        }
+
+    val usageFraction: Float
+        get() {
+            val limit = dailyLimit ?: 0
+            if (limit <= 0) return 0f
+            return ((usageToday ?: 0).toFloat() / limit.toFloat()).coerceIn(0f, 1f)
+        }
+}
 
 @JsonClass(generateAdapter = true)
 data class KeysResponse(
     val keys: List<KeyInfo>? = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class UsagePoint(
+    val date: String? = null,
+    val count: Int? = 0
+)
+
+@JsonClass(generateAdapter = true)
+data class KeyUsage(
+    val name: String? = null,
+    val usageToday: Int? = 0,
+    val dailyLimit: Int? = 0
+)
+
+@JsonClass(generateAdapter = true)
+data class UsageResponse(
+    val series: List<UsagePoint>? = emptyList(),
+    val perKey: List<KeyUsage>? = emptyList(),
+    val totalToday: Int? = 0
 )
 
 @JsonClass(generateAdapter = true)
