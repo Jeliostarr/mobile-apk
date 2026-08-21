@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -18,8 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
+import com.example.data.api.ApiKeyIssue
+import com.example.data.model.DASHBOARD_URL
 import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
+import com.example.ui.components.ApiKeyIssueDialog
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BottomTab
 import com.example.ui.components.LoadingScreen
@@ -76,6 +82,7 @@ fun MainAppNav() {
     val context = LocalContext.current
     val repository = remember { YocinemaRepository(context) }
     val sportsRepository = remember { SportsRepository(repository.api) }
+    val apiKeyIssue by repository.apiKeyIssueFlow.collectAsState()
 
     val initialScreen = if (repository.isLoggedIn()) Screen.Home else Screen.Login
     val screenBackStack = remember { mutableStateListOf<Screen>(initialScreen) }
@@ -335,5 +342,24 @@ fun MainAppNav() {
                 }
             }
         }
+    }
+
+    apiKeyIssue?.let { issue ->
+        ApiKeyIssueDialog(
+            issue = issue,
+            onSwitchKey = {
+                repository.clearApiKeyIssue()
+                currentTab = BottomTab.Account
+                if (currentScreen !is Screen.Account) {
+                    screenBackStack.clear()
+                    screenBackStack.add(Screen.Account)
+                }
+            },
+            onPurchase = {
+                repository.clearApiKeyIssue()
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DASHBOARD_URL)))
+            },
+            onDismiss = { repository.clearApiKeyIssue() }
+        )
     }
 }
