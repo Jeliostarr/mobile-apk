@@ -29,6 +29,7 @@ import com.example.ui.screens.DetailScreen
 import com.example.ui.screens.DownloadsScreen
 import com.example.ui.screens.ExploreScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.SearchScreen
@@ -49,6 +50,7 @@ sealed class Screen {
         val genre: String? = null
     ) : Screen()
     object Downloads : Screen()
+    object Library : Screen()
     object Account : Screen()
     object Login : Screen()
     object VJList : Screen()
@@ -101,7 +103,7 @@ fun MainAppNav() {
     }
 
     val showBottomNav = when (currentScreen) {
-        is Screen.Home, is Screen.Explore, is Screen.Downloads, is Screen.Account, is Screen.SportsHome -> true
+        is Screen.Home, is Screen.Explore, is Screen.Downloads, is Screen.Library, is Screen.Account, is Screen.SportsHome -> true
         else -> false
     }
 
@@ -109,6 +111,7 @@ fun MainAppNav() {
         is Screen.Home -> "home"
         is Screen.Explore -> "explore"
         is Screen.Downloads -> "downloads"
+        is Screen.Library -> "library"
         is Screen.Account -> "account"
         is Screen.SportsHome -> "sports"
         else -> currentTab.route
@@ -132,6 +135,7 @@ fun MainAppNav() {
                             BottomTab.Sports -> Screen.SportsHome
                             BottomTab.Explore -> Screen.Explore()
                             BottomTab.Downloads -> Screen.Downloads
+                            BottomTab.Library -> Screen.Library
                             BottomTab.Account -> Screen.Account
                         }
                         if (currentScreen != targetScreen) {
@@ -160,8 +164,8 @@ fun MainAppNav() {
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
                             onSearchClick = { navigateTo(Screen.Search()) },
                             onWatchlistClick = {
-                                currentTab = BottomTab.Account
-                                navigateTo(Screen.Account)
+                                currentTab = BottomTab.Library
+                                navigateTo(Screen.Library)
                             },
                             onDownloadsClick = {
                                 currentTab = BottomTab.Downloads
@@ -202,7 +206,13 @@ fun MainAppNav() {
                     is Screen.Account -> {
                         AccountScreen(
                             repository = repository,
-                            onLoginClick = { navigateTo(Screen.Login) },
+                            onLoginClick = { navigateTo(Screen.Login) }
+                        )
+                    }
+
+                    is Screen.Library -> {
+                        LibraryScreen(
+                            repository = repository,
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
                             onPlayHistoryClick = { movieId, seasonNum, epNum, posMs ->
                                 navigateTo(
