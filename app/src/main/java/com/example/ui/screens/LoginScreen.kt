@@ -6,7 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border          // ✅ this was missing
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width   // ✅ ADDED this import
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -72,9 +73,6 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.Abs
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import kotlinx.coroutines.launch
 
-// TODO: replace with your actual tutorial video's ID (the part after
-// "watch?v=" in its YouTube URL) — this placeholder just points at a
-// generic YouTube search for "yocinema" so the button never dead-ends.
 private const val TUTORIAL_YOUTUBE_VIDEO_ID = ""
 private val TUTORIAL_YOUTUBE_URL =
     if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
@@ -85,7 +83,7 @@ private val TUTORIAL_YOUTUBE_URL =
 @Composable
 fun LoginScreen(
     repository: YocinemaRepository,
-    onBackClick: () -> Unit,   // kept for compatibility but button is hidden
+    onBackClick: () -> Unit,
     onLoginSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -117,10 +115,6 @@ fun LoginScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Logo shrunk down to a small badge — most of the screen's
-            // attention now goes to the sign-in card and the tutorial below,
-            // since most of our users are new to APIs and need that more
-            // than a big logo.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
@@ -151,14 +145,13 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Card with input fields
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(12.dp, RoundedCornerShape(26.dp), clip = false)
                     .clip(RoundedCornerShape(26.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(26.dp))   // border now works
+                    .border(1.dp, YoBorder, RoundedCornerShape(26.dp))
                     .padding(20.dp)
             ) {
                 Column(
@@ -211,7 +204,7 @@ fun LoginScreen(
                         )
                     )
 
-                    if (!errorMessage.isNull_orBlank()) {
+                    if (!errorMessage.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = errorMessage!!,
@@ -302,8 +295,6 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(40.dp))
         }
 
-        // Version — anchored to the true bottom of the screen, independent
-        // of the centered content column above (which can grow/shrink).
         Text(
             text = "v1.0.0",
             fontSize = 11.sp,
@@ -316,15 +307,9 @@ fun LoginScreen(
     }
 }
 
-private fun String?.isNull_orBlank(): Boolean = this == null || this.trim().isEmpty()
+// ✅ kept this extension – now used correctly
+private fun String?.isNullOrBlank(): Boolean = this == null || this.trim().isEmpty()
 
-/**
- * Embeds a real YouTube player (the project already depends on
- * androidyoutubeplayer:core) cued to the tutorial video, with a small
- * "Open in YouTube" link below for anyone who'd rather watch full-screen
- * in the YouTube app. If [videoId] hasn't been set yet, falls back to a
- * plain tap-to-open card instead of showing a broken/empty player.
- */
 @Composable
 private fun TutorialCard(videoId: String, onOpenInYouTube: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -353,10 +338,6 @@ private fun TutorialCard(videoId: String, onOpenInYouTube: () -> Unit) {
         Spacer(modifier = Modifier.height(10.dp))
 
         if (videoId.isBlank()) {
-            // No video configured yet — set TUTORIAL_YOUTUBE_VIDEO_ID above
-            // once you have the real tutorial uploaded. Until then, this
-            // just hands off to a YouTube search rather than showing a
-            // player with nothing to play.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
