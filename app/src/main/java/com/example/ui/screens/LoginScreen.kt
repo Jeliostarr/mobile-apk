@@ -7,10 +7,15 @@ import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border          // ✅ this was missing
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -42,13 +48,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.model.DASHBOARD_URL
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
 import com.example.ui.theme.YoBaseBackground
@@ -58,7 +67,20 @@ import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import kotlinx.coroutines.launch
+
+// TODO: replace with your actual tutorial video's ID (the part after
+// "watch?v=" in its YouTube URL) — this placeholder just points at a
+// generic YouTube search for "yocinema" so the button never dead-ends.
+private const val TUTORIAL_YOUTUBE_VIDEO_ID = ""
+private val TUTORIAL_YOUTUBE_URL =
+    if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
+        "https://www.youtube.com/watch?v=$TUTORIAL_YOUTUBE_VIDEO_ID"
+    else
+        "https://www.youtube.com/results?search_query=yocinema+api+key+tutorial"
 
 @Composable
 fun LoginScreen(
@@ -88,39 +110,46 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
-                contentDescription = "YOCINEMA Logo",
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .shadow(24.dp, CircleShape, clip = false)
-            )
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "YOCINEMA MOVIES",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary
-            )
+            // Logo shrunk down to a small badge — most of the screen's
+            // attention now goes to the sign-in card and the tutorial below,
+            // since most of our users are new to APIs and need that more
+            // than a big logo.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
+                    contentDescription = "YOCINEMA Logo",
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .shadow(10.dp, CircleShape, clip = false)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "YOCINEMA",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YoTextPrimary
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = "Enter your API key to continue",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 color = YoTextMuted,
                 textAlign = TextAlign.Center,
-                lineHeight = 20.sp
+                lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Card with input fields
             Box(
@@ -238,7 +267,7 @@ fun LoginScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dash.yocinema.dpdns.org"))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DASHBOARD_URL))
                             context.startActivity(intent)
                         },
                         modifier = Modifier
@@ -259,6 +288,18 @@ fun LoginScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            TutorialCard(
+                videoId = TUTORIAL_YOUTUBE_VIDEO_ID,
+                onOpenInYouTube = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_YOUTUBE_URL))
+                    context.startActivity(intent)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(40.dp))
         }
 
         // Version — anchored to the true bottom of the screen, independent
@@ -276,3 +317,102 @@ fun LoginScreen(
 }
 
 private fun String?.isNull_orBlank(): Boolean = this == null || this.trim().isEmpty()
+
+/**
+ * Embeds a real YouTube player (the project already depends on
+ * androidyoutubeplayer:core) cued to the tutorial video, with a small
+ * "Open in YouTube" link below for anyone who'd rather watch full-screen
+ * in the YouTube app. If [videoId] hasn't been set yet, falls back to a
+ * plain tap-to-open card instead of showing a broken/empty player.
+ */
+@Composable
+private fun TutorialCard(videoId: String, onOpenInYouTube: () -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(10.dp, RoundedCornerShape(20.dp), clip = false)
+            .clip(RoundedCornerShape(20.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
+            .padding(14.dp)
+    ) {
+        Text(
+            text = "New here? Watch the tutorial",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = YoTextPrimary
+        )
+        Text(
+            text = "How to create an account and get your API key",
+            fontSize = 11.sp,
+            color = YoTextMuted
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (videoId.isBlank()) {
+            // No video configured yet — set TUTORIAL_YOUTUBE_VIDEO_ID above
+            // once you have the real tutorial uploaded. Until then, this
+            // just hands off to a YouTube search rather than showing a
+            // player with nothing to play.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF15151A))
+                    .clickable(onClick = onOpenInYouTube),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayCircle,
+                    contentDescription = "Open YouTube",
+                    tint = Color.White,
+                    modifier = Modifier.size(56.dp)
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(14.dp))
+            ) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        YouTubePlayerView(ctx).apply {
+                            lifecycleOwner.lifecycle.addObserver(this)
+                            addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
+                                override fun onReady(youTubePlayer: YouTubePlayer) {
+                                    youTubePlayer.cueVideo(videoId, 0f)
+                                }
+                            })
+                        }
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenInYouTube),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Open in YouTube", fontSize = 11.sp, color = YoTextMuted)
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.OpenInNew,
+                    contentDescription = null,
+                    tint = YoTextMuted,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
+    }
+}

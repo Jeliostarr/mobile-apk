@@ -1,19 +1,15 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,23 +21,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Logout
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.MovieFilter
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,54 +51,73 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import com.example.data.local.HistoryEntity
-import com.example.data.local.WatchlistEntity
-import com.example.data.model.AccountUser
-import com.example.data.model.formatDuration
+import com.example.data.model.DASHBOARD_URL
+import com.example.data.model.KeyInfo
+import com.example.data.model.WATCH_WEB_URL
+import com.example.data.model.formatUgx
+import com.example.repository.AccountBundle
 import com.example.repository.YocinemaRepository
-import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.RequestDialog
+import com.example.ui.theme.YoAccentCyan
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoDestructive
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
+import com.example.ui.theme.YoSuccess
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import com.example.ui.util.BiometricCopyHelper
 import kotlinx.coroutines.launch
+
+// Amber used for the "daily limit used up" status — not assumed to exist as
+// a theme token, so it's defined locally here instead of importing one.
+private val YoWarningAmber = Color(0xFFFFA726)
 
 @Composable
 fun AccountScreen(
     repository: YocinemaRepository,
-    onLoginClick: () -> Unit,
-    onMovieClick: (String) -> Unit,
-    onPlayHistoryClick: (movieId: String, seasonNum: Int?, epNum: Int?, posMs: Long) -> Unit
+    onLoginClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? androidx.fragment.app.FragmentActivity
     val scope = rememberCoroutineScope()
 
     val isLoggedIn by repository.isLoggedInFlow.collectAsState(initial = repository.isLoggedIn())
-    var accountUser by remember { mutableStateOf<AccountUser?>(null) }
-    var selectedTab by remember { mutableStateOf(0) }
 
-    val watchlist by repository.watchlist.collectAsState(initial = emptyList())
-    val history by repository.history.collectAsState(initial = emptyList())
-    val apiKey = repository.tokenManager.getApiKey()
-
+    // Paint instantly from whatever's cached (possibly nothing on a first-ever
+    // open), then silently refresh. This is what stops the screen showing a
+    // full-screen spinner every single time the user taps this tab.
+    var bundle by remember { mutableStateOf(repository.getCachedAccountBundle() ?: AccountBundle()) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var showRequestDialog by remember { mutableStateOf(false) }
+    var switchingKeyId by remember { mutableStateOf<String?>(null) }
+
+    val activeKey = repository.tokenManager.getApiKey()
+
+    suspend fun load(force: Boolean) {
+        if (!repository.isLoggedIn()) return
+        isRefreshing = true
+        bundle = repository.getAccountBundle(forceRefresh = force)
+        isRefreshing = false
+    }
 
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
-            accountUser = repository.getAccountMe()
+            // Instant paint already happened above from cache; this call returns
+            // the cached copy immediately if it's still fresh, or fetches once.
+            load(force = false)
+        } else {
+            bundle = AccountBundle()
         }
     }
 
@@ -110,420 +126,482 @@ fun AccountScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Account & Library",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary
-            )
-        }
-
-        // User Info Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .shadow(8.dp, RoundedCornerShape(18.dp), clip = false)
-                .clip(RoundedCornerShape(18.dp))
-                .background(YoSurface)
-                .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
-                .padding(16.dp)
-        ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(CircleShape)
-                            .background(YoPrimaryViolet),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = YoBaseBackground,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isLoggedIn) (accountUser?.name ?: "YOCINEMA Subscriber") else "Guest Mode",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = YoTextPrimary
-                        )
-                        Text(
-                            text = if (isLoggedIn) (accountUser?.email ?: "API Key Active") else "Enter key for unlimited access",
-                            fontSize = 12.sp,
-                            color = YoTextMuted
-                        )
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Account",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = YoTextPrimary
+                    )
+                    if (isLoggedIn) {
+                        IconButton(onClick = { scope.launch { load(force = true) } }) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = YoPrimaryViolet
+                                )
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = YoTextMuted)
+                            }
+                        }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(14.dp))
+            item {
+                ProfileCard(
+                    isLoggedIn = isLoggedIn,
+                    name = bundle.user?.name,
+                    email = bundle.user?.email,
+                    onLoginClick = onLoginClick,
+                    onLogoutClick = { repository.logout() }
+                )
+            }
 
-                if (isLoggedIn && !apiKey.isNullOrBlank()) {
-                    val maskedKey = apiKey.take(6) + "..." + apiKey.takeLast(4)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(YoSurfaceVariant)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Key,
-                                contentDescription = null,
-                                tint = YoPrimaryViolet,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = maskedKey,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = YoTextPrimary
-                            )
+            if (isLoggedIn) {
+                item {
+                    BalanceCard(
+                        balance = bundle.user?.balance,
+                        onTopUpClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$DASHBOARD_URL/wallet")))
                         }
+                    )
+                }
 
-                        IconButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("YOCINEMA API Key", apiKey)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "API Key copied", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy",
-                                tint = YoTextMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
+                item {
+                    WatchOnWebCard(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(WATCH_WEB_URL)))
                         }
-                    }
+                    )
+                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                item {
+                    Text(
+                        text = "Your API Keys",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = YoTextPrimary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
 
-                    OutlinedButton(
-                        onClick = { repository.logout() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(42.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, YoDestructive.copy(alpha = 0.5f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = YoDestructive)
-                    ) {
-                        Icon(imageVector = Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Log Out", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                if (bundle.keys.isEmpty() && !isRefreshing) {
+                    item {
+                        Text(
+                            text = "No API keys yet — create one from the dashboard.",
+                            fontSize = 12.sp,
+                            color = YoTextMuted,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
                     }
                 } else {
-                    Button(
-                        onClick = onLoginClick,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = YoPrimaryViolet,
-                            contentColor = YoBaseBackground
-                        )
-                    ) {
-                        Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enter API Key", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Request a Movie button
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = { showRequestDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = YoPrimaryViolet,
-                contentColor = YoBaseBackground
-            )
-        ) {
-            Icon(imageVector = Icons.Default.MovieFilter, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Request a Movie or Series", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-
-        if (showRequestDialog) {
-            RequestDialog(onDismiss = { showRequestDialog = false })
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // App version
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = null,
-                tint = YoTextMuted.copy(alpha = 0.6f),
-                modifier = Modifier.size(13.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "YOCINEMA v1.0.0",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = YoTextMuted.copy(alpha = 0.6f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Tabs
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = YoSurface,
-            contentColor = YoPrimaryViolet,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = YoPrimaryViolet
-                )
-            }
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Watchlist (${watchlist.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text("History (${history.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-            )
-        }
-
-        if (selectedTab == 0) {
-            if (watchlist.isEmpty()) {
-                EmptyAccountState("Your watchlist is empty")
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(watchlist, key = { it.movieId }) { item ->
-                        WatchlistRow(
-                            item = item,
-                            onClick = { onMovieClick(item.movieId) },
-                            onDelete = {
-                                scope.launch { repository.watchlistDao.deleteWatchlist(item.movieId) }
-                            }
-                        )
-                    }
-                }
-            }
-        } else {
-            if (history.isEmpty()) {
-                EmptyAccountState("No watch history yet")
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(history, key = { it.id }) { item ->
-                        HistoryRow(
-                            item = item,
-                            onClick = {
-                                onPlayHistoryClick(item.movieId, item.seasonNumber, item.episodeNumber, item.positionMs)
+                    items(bundle.keys, key = { it.id ?: it.key ?: it.hashCode().toString() }) { keyInfo ->
+                        KeyCard(
+                            keyInfo = keyInfo,
+                            isActive = !activeKey.isNullOrBlank() && keyInfo.key == activeKey,
+                            isSwitching = switchingKeyId == (keyInfo.id ?: keyInfo.key),
+                            onCopy = {
+                                val k = keyInfo.key ?: return@KeyCard
+                                if (activity != null) {
+                                    BiometricCopyHelper.copyWithAuthentication(
+                                        activity = activity,
+                                        label = "YOCINEMA API Key",
+                                        textToCopy = k
+                                    )
+                                }
                             },
-                            onDelete = {
-                                scope.launch { repository.historyDao.deleteHistory(item.id) }
+                            onUseThisKey = {
+                                val k = keyInfo.key ?: return@KeyCard
+                                switchingKeyId = keyInfo.id ?: keyInfo.key
+                                scope.launch {
+                                    repository.switchActiveKey(k)
+                                    load(force = true)
+                                    switchingKeyId = null
+                                }
                             }
                         )
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(6.dp)) }
+            }
+
+            item {
+                Button(
+                    onClick = { showRequestDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YoPrimaryViolet,
+                        contentColor = YoBaseBackground
+                    )
+                ) {
+                    Icon(imageVector = Icons.Default.MovieFilter, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Request a Movie or Series", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = YoTextMuted.copy(alpha = 0.6f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "YOCINEMA v1.0.0",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = YoTextMuted.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showRequestDialog) {
+        RequestDialog(onDismiss = { showRequestDialog = false })
+    }
+}
+
+@Composable
+private fun ProfileCard(
+    isLoggedIn: Boolean,
+    name: String?,
+    email: String?,
+    onLoginClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(YoPrimaryViolet),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = YoBaseBackground,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isLoggedIn) (name ?: "YOCINEMA Subscriber") else "Guest Mode",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = YoTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (isLoggedIn) (email ?: "API Key Active") else "Enter your key for unlimited access",
+                        fontSize = 12.sp,
+                        color = YoTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (isLoggedIn) {
+                OutlinedButton(
+                    onClick = onLogoutClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, YoDestructive.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = YoDestructive)
+                ) {
+                    Icon(imageVector = Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Log Out", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Button(
+                    onClick = onLoginClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YoPrimaryViolet,
+                        contentColor = YoBaseBackground
+                    )
+                ) {
+                    Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Enter API Key", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(14.dp))
+}
+
+@Composable
+private fun BalanceCard(
+    balance: Double?,
+    onTopUpClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
+            .background(YoPrimaryViolet)
+            .padding(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Wallet Balance",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = YoBaseBackground.copy(alpha = 0.75f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = formatUgx(balance),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = YoBaseBackground
+                )
+            }
+            Button(
+                onClick = onTopUpClick,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = YoBaseBackground,
+                    contentColor = YoPrimaryViolet
+                )
+            ) {
+                Text("Top Up", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(14.dp))
+}
+
+@Composable
+private fun WatchOnWebCard(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(YoAccentCyan.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Language, contentDescription = null, tint = YoAccentCyan, modifier = Modifier.size(18.dp))
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Watch on the Web", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YoTextPrimary)
+            Text("watch.yocinema.dpdns.org", fontSize = 11.sp, color = YoTextMuted)
+        }
+        Icon(Icons.Default.OpenInNew, contentDescription = null, tint = YoTextMuted, modifier = Modifier.size(16.dp))
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+}
+
+@Composable
+private fun KeyCard(
+    keyInfo: KeyInfo,
+    isActive: Boolean,
+    isSwitching: Boolean,
+    onCopy: () -> Unit,
+    onUseThisKey: () -> Unit
+) {
+    val statusColor = when {
+        keyInfo.isExpired -> YoDestructive
+        keyInfo.isUsedUp -> YoWarningAmber
+        keyInfo.isUsable -> YoSuccess
+        else -> YoTextMuted
+    }
+    val statusLabel = when {
+        keyInfo.isExpired -> "Expired"
+        keyInfo.isUsedUp -> "Daily limit used up"
+        keyInfo.isUsable -> "Active"
+        else -> (keyInfo.status ?: "Unknown").replaceFirstChar { it.uppercase() }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .shadow(4.dp, RoundedCornerShape(16.dp), clip = false)
+            .clip(RoundedCornerShape(16.dp))
+            .background(YoSurface)
+            .border(
+                width = if (isActive) 1.5.dp else 1.dp,
+                color = if (isActive) YoPrimaryViolet else YoBorder,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(14.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = keyInfo.name?.takeIf { it.isNotBlank() } ?: "API Key",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = YoTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isActive) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.CheckCircle, contentDescription = "In use", tint = YoPrimaryViolet, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = keyInfo.maskedKey,
+                        fontSize = 12.sp,
+                        color = YoTextMuted
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(statusColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(statusLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = statusColor)
+                }
+
+                IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy (requires biometrics)",
+                        tint = YoTextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            val limit = keyInfo.dailyLimit ?: 0
+            if (limit > 0) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Usage today",
+                        fontSize = 11.sp,
+                        color = YoTextMuted
+                    )
+                    Text(
+                        text = "${keyInfo.usageToday ?: 0} / $limit",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = YoTextMuted
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { keyInfo.usageFraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = statusColor,
+                    trackColor = YoSurfaceVariant
+                )
+            }
+
+            if (!keyInfo.expiresAt.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Expires ${keyInfo.expiresAt.take(10)}",
+                    fontSize = 11.sp,
+                    color = YoTextMuted
+                )
+            }
+
+            if (!isActive && keyInfo.isUsable) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onUseThisKey,
+                    enabled = !isSwitching,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, YoPrimaryViolet.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = YoPrimaryViolet)
+                ) {
+                    if (isSwitching) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = YoPrimaryViolet)
+                    } else {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Use this key", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
     }
 }
-
-@Composable
-fun WatchlistRow(
-    item: WatchlistEntity,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(12.dp), clip = false)
-            .clip(RoundedCornerShape(12.dp))
-            .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .width(55.dp)
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(6.dp))
-                .background(YoSurfaceVariant)
-        ) {
-            AsyncImage(
-                model = item.poster,
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!item.vjName.isNull_orBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                VJBadgeChip(vjName = item.vjName!!)
-            }
-        }
-
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Remove",
-                tint = YoTextMuted
-            )
-        }
-    }
-}
-
-@Composable
-fun HistoryRow(
-    item: HistoryEntity,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val progress = if (item.durationMs > 0) {
-        (item.positionMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
-    } else 0f
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(12.dp), clip = false)
-            .clip(RoundedCornerShape(12.dp))
-            .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .width(55.dp)
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(6.dp))
-                .background(YoSurfaceVariant)
-        ) {
-            AsyncImage(
-                model = item.poster,
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(YoPrimaryViolet),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = YoBaseBackground,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (item.seasonNumber != null && item.episodeNumber != null) {
-                Text(
-                    text = "S${item.seasonNumber} E${item.episodeNumber}${if (!item.episodeTitle.isNull_orBlank()) " · ${item.episodeTitle}" else ""}",
-                    fontSize = 12.sp,
-                    color = YoPrimaryViolet
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            val posSec = (item.positionMs / 1000).toInt()
-            val durSec = (item.durationMs / 1000).toInt()
-            Text(
-                text = "Resume at ${formatDuration(posSec)} of ${formatDuration(durSec)}",
-                fontSize = 11.sp,
-                color = YoTextMuted
-            )
-        }
-
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Remove",
-                tint = YoTextMuted
-            )
-        }
-    }
-}
-
-@Composable
-fun EmptyAccountState(message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = message,
-            fontSize = 14.sp,
-            color = YoTextMuted
-        )
-    }
-}
-
-private fun String?.isNull_orBlank(): Boolean = this == null || this.trim().isEmpty()
