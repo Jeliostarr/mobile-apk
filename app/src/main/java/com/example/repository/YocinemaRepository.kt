@@ -1,6 +1,9 @@
 package com.example.repository
 
 import android.content.Context
+import com.example.data.api.ApiIssueClassifier
+import com.example.data.api.ApiIssueReporter
+import com.example.data.api.ApiKeyIssue
 import com.example.data.api.AuthInterceptor
 import com.example.data.api.ResponseEnvelopeExtractor
 import com.example.data.api.YocinemaApi
@@ -56,8 +59,16 @@ class YocinemaRepository(context: Context) {
     val downloadDao = db.downloadDao()
     val movieCacheDao = db.movieCacheDao()
 
+    // Sticky, app-wide "your key has a problem" signal — see ApiKeyIssue.kt.
+    // AuthInterceptor reports into this on every failed authenticated
+    // request; MainAppNav renders ApiKeyIssueDialog whenever it's non-null,
+    // regardless of which screen the failing request came from.
+    private val apiIssueReporter = ApiIssueReporter()
+    val apiKeyIssueFlow: StateFlow<ApiKeyIssue?> = apiIssueReporter.issueFlow
+    fun clearApiKeyIssue() = apiIssueReporter.clear()
+
     private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(AuthInterceptor(tokenManager))
+        .addInterceptor(AuthInterceptor(tokenManager, apiIssueReporter))
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
@@ -121,7 +132,15 @@ class YocinemaRepository(context: Context) {
     suspend fun loginWithKey(key: String): Result<AccountUser> {
         return try {
             tokenManager.saveApiKey(key)
-            val response = api.getAccountMe()
+            // This call's own failure is shown inline on LoginScreen already
+            // — suppress so the global ApiKeyIssueDialog doesn't also pop up
+            // over the login form for the exact same thing.
+            apiIssueReporter.suppressed = true
+            val response = try {
+                api.getAccountMe()
+            } finally {
+                apiIssueReporter.suppressed = false
+            }
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()?.actualUser
                 if (user != null) {
@@ -134,14 +153,19 @@ class YocinemaRepository(context: Context) {
                 val errorBody = response.errorBody()?.string() ?: ""
                 tokenManager.clearApiKey()
 
-                val errorMessage = when {
-                    code == 401 -> "Invalid API key"
-                    code == 403 && (errorBody.contains("exhaust", ignoreCase = true) || errorBody.contains("QUOTA_EXCEEDED", ignoreCase = true)) ->
-                        "Daily quota exhausted — resets at midnight UTC"
-                    code == 403 -> "Key expired, revoked, or account inactive"
-                    code == 429 -> "Rate limit hit"
-                    code >= 500 -> "Server temporarily unavailable"
-                    else -> "Authentication failed (Code $code)"
+                val classified = ApiIssueClassifier.classify(code, errorBody)
+                val errorMessage = when (classified) {
+                    is ApiKeyIssue.Missing -> "No API key was provided"
+                    is ApiKeyIssue.Invalid -> "Invalid API key"
+                    is ApiKeyIssue.Revoked -> "This key has been revoked"
+                    is ApiKeyIssue.Deleted -> "This key no longer exists"
+                    is ApiKeyIssue.Paused -> "This key is paused"
+                    is ApiKeyIssue.Suspended -> "This key is suspended"
+                    is ApiKeyIssue.Expired -> "This key has expired"
+                    is ApiKeyIssue.AccountInactive -> "Your account is inactive"
+                    is ApiKeyIssue.RateLimited -> "Daily quota exhausted — resets at midnight UTC"
+                    is ApiKeyIssue.Other -> classified.detail
+                    null -> if (code >= 500) "Server temporarily unavailable" else "Authentication failed (Code $code)"
                 }
                 Result.failure(Exception(errorMessage))
             }
@@ -209,7 +233,7 @@ class YocinemaRepository(context: Context) {
     suspend fun getKeys(): List<KeyInfo> {
         return try {
             val response = api.getKeys()
-            if (response.isSuccessful) response.body()?.keys ?: emptyList() else emptyList()
+            if (response.isSuccessful) response.body()?.actualKeys ?: emptyList() else emptyList()
         } catch (e: Exception) {
             emptyList()
         }
@@ -233,12 +257,14 @@ class YocinemaRepository(context: Context) {
         tokenManager.saveApiKey(newKey)
         invalidateAccountCache()
         _accountBundle.value = AccountBundle()
+        apiIssueReporter.clear()
     }
 
     fun logout() {
         tokenManager.clearApiKey()
         invalidateAccountCache()
         _accountBundle.value = AccountBundle()
+        apiIssueReporter.clear()
     }
 
     private val memoryMovieCache = java.util.concurrent.ConcurrentHashMap<String, List<Movie>>()
