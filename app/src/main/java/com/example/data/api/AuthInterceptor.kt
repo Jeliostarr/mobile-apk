@@ -5,8 +5,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 
 class AuthInterceptor(
-    private val tokenManager: TokenManager,
-    private val issueReporter: ApiIssueReporter
+    private val tokenManager: TokenManager
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
@@ -22,7 +21,11 @@ class AuthInterceptor(
         // Only classify failures for requests that actually carried a key —
         // a call made while genuinely logged out isn't "your key has a
         // problem", it's just not authenticated, and shouldn't pop the
-        // switch-or-purchase modal.
+        // switch-or-purchase modal. ApiIssueReporter is a singleton (see
+        // ApiKeyIssue.kt) specifically so this works the same way whether
+        // this interceptor instance belongs to YocinemaRepository's client
+        // or the separate one YoApplication builds for Coil's image loader —
+        // both report into the exact same signal.
         if (!apiKey.isNullOrEmpty() && response.code in AUTH_FAILURE_CODES) {
             try {
                 // peekBody (not body()!) reads a copy without consuming the
@@ -30,7 +33,7 @@ class AuthInterceptor(
                 // actual body afterwards (e.g. loginWithKey reads errorBody()
                 // itself), and a response body can only be consumed once.
                 val peeked = response.peekBody(4096).string()
-                issueReporter.report(response.code, peeked)
+                ApiIssueReporter.report(response.code, peeked)
             } catch (e: Exception) {
                 // Non-fatal — worst case the global modal just doesn't fire
                 // for this particular failure.

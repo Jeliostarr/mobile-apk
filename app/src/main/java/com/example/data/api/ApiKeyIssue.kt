@@ -85,12 +85,19 @@ object ApiIssueClassifier {
  * ApiKeyIssueDialog) can observe — instead of each screen independently
  * showing (or more often, silently swallowing) its own fetch failure.
  *
+ * This is a genuine singleton (not a class you instantiate) because more
+ * than one OkHttpClient in this app can carry an AuthInterceptor — the
+ * repository's own client, and separately the one YoApplication builds for
+ * Coil's image loading (posters/covers also go out with X-API-Key, so a
+ * revoked/expired key breaks those too). Both need to feed the exact same
+ * signal, not two independent copies of it.
+ *
  * [suppressed] is a narrow escape hatch for the one call site that should
  * NOT trigger this — LoginScreen's own key-validation request, which
  * already has its own inline error UI and would be confusing to also pop
  * a global "switch or purchase" modal over.
  */
-class ApiIssueReporter {
+object ApiIssueReporter {
     private val _issue = MutableStateFlow<ApiKeyIssue?>(null)
     val issueFlow: StateFlow<ApiKeyIssue?> = _issue
 
