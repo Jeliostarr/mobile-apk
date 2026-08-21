@@ -15,18 +15,38 @@ import com.example.data.model.BASE_URL
 import com.example.data.model.CastDetail
 import com.example.data.model.Episode
 import com.example.data.model.FacetsResponse
+import com.example.data.model.KeyInfo
 import com.example.data.model.Movie
+import com.example.data.model.UsageResponse
 import com.example.data.model.cleanMediaUrl
 import com.example.data.player.StreamTokenManager
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
+
+/**
+ * Everything the Account screen needs in one shot, plus enough of a shell
+ * that the UI can render instantly from a stale copy while a fresh one
+ * loads in the background (see [YocinemaRepository.accountBundle]).
+ */
+data class AccountBundle(
+    val user: AccountUser? = null,
+    val keys: List<KeyInfo> = emptyList(),
+    val usage: UsageResponse? = null,
+    val isStale: Boolean = false,
+    val lastLoadedAt: Long = 0L
+) {
+    val activeKeyUsage: KeyInfo?
+        get() = null // resolved by the screen against the locally-active key string
+}
 
 class YocinemaRepository(context: Context) {
     val tokenManager = TokenManager(context)
@@ -68,6 +88,31 @@ class YocinemaRepository(context: Context) {
     var cachedGenreMovies: Map<String, List<Movie>> = emptyMap()
     var cachedVjsList: List<String> = emptyList()
     var cachedFacets: FacetsResponse? = null
+    // The hero carousel needs enriched detail (heroImage/cover + description)
+    // for a handful of titles — this was NOT being cached before, so it was
+    // silently re-fetched (5 extra network calls) every single time Home
+    // re-entered composition, which is a big part of why it felt slow on
+    // every open even though the rails themselves painted from cache.
+    var cachedHeroMovies: List<Movie> = emptyList()
+
+    // Home content is otherwise fetched with zero freshness check at all —
+    // every re-open of the tab silently redid the full burst (3 list calls +
+    // facets + one call per genre) in the background. This timestamp/TTL
+    // gate is what Home should check before firing that burst again.
+    private val homeCacheTtlMs = 3 * 60_000L // 3 minutes — catalog doesn't change second-to-second
+    private var homeCacheTimestamp = 0L
+
+    fun isHomeCacheFresh(): Boolean =
+        cachedPopularMovies.isNotEmpty() && (System.currentTimeMillis() - homeCacheTimestamp) < homeCacheTtlMs
+
+    /** Call once after a successful Home fetch to start/reset the freshness window. */
+    fun markHomeCacheFresh() {
+        homeCacheTimestamp = System.currentTimeMillis()
+    }
+
+    fun invalidateHomeCache() {
+        homeCacheTimestamp = 0L
+    }
 
     val isLoggedInFlow: Flow<Boolean> = tokenManager.apiKeyFlow.map { !it.isNullOrBlank() }
 
@@ -82,7 +127,7 @@ class YocinemaRepository(context: Context) {
                 if (user != null) {
                     Result.success(user)
                 } else {
-                    Result.success(AccountUser(name = "User", email = "", balance = "0"))
+                    Result.success(AccountUser(name = "User", email = "", balance = 0.0))
                 }
             } else {
                 val code = response.code()
@@ -115,8 +160,85 @@ class YocinemaRepository(context: Context) {
         }
     }
 
+    // ─── Account bundle (profile + keys + usage), cached in memory ───
+    //
+    // The repository is created once per app process (see MainAppNav) and
+    // handed down to every screen, so this cache survives tab switches —
+    // that's what stops the Account screen re-hitting the network (and
+    // re-showing a spinner) every single time it's opened. A short TTL keeps
+    // balances/usage from ever going too stale; [invalidateAccountCache] lets
+    // any action that changes the numbers (switching keys, logging out) force
+    // the next read to be fresh.
+
+    private val accountCacheTtlMs = 90_000L // 90s — long enough to survive tab-hopping, short enough to stay honest
+    private var accountCacheTimestamp = 0L
+    private val _accountBundle = MutableStateFlow(AccountBundle())
+    val accountBundleFlow: StateFlow<AccountBundle> = _accountBundle
+
+    /**
+     * Returns the account bundle. If a cached copy younger than
+     * [accountCacheTtlMs] exists, returns it immediately without a network
+     * call. Pass [forceRefresh] = true to always hit the network (pull to
+     * refresh, after switching keys, etc).
+     */
+    suspend fun getAccountBundle(forceRefresh: Boolean = false): AccountBundle {
+        val now = System.currentTimeMillis()
+        val cached = _accountBundle.value
+        val isFresh = cached.lastLoadedAt > 0 && (now - accountCacheTimestamp) < accountCacheTtlMs
+        if (!forceRefresh && isFresh) {
+            return cached
+        }
+
+        val user = getAccountMe()
+        val keys = getKeys()
+        val usage = getUsage()
+        val bundle = AccountBundle(user = user, keys = keys, usage = usage, isStale = false, lastLoadedAt = now)
+        accountCacheTimestamp = now
+        _accountBundle.value = bundle
+        return bundle
+    }
+
+    /** Cache-only read for instant paint — never touches the network. */
+    fun getCachedAccountBundle(): AccountBundle? =
+        _accountBundle.value.takeIf { it.lastLoadedAt > 0 }
+
+    fun invalidateAccountCache() {
+        accountCacheTimestamp = 0L
+    }
+
+    suspend fun getKeys(): List<KeyInfo> {
+        return try {
+            val response = api.getKeys()
+            if (response.isSuccessful) response.body()?.keys ?: emptyList() else emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getUsage(days: Int = 7): UsageResponse? {
+        return try {
+            val response = api.getUsage(days)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Makes [newKey] the key used for every subsequent request (it's what
+     * [AuthInterceptor] reads). Invalidates the account cache so the next
+     * screen read reflects the newly-active key's own balance/usage.
+     */
+    fun switchActiveKey(newKey: String) {
+        tokenManager.saveApiKey(newKey)
+        invalidateAccountCache()
+        _accountBundle.value = AccountBundle()
+    }
+
     fun logout() {
         tokenManager.clearApiKey()
+        invalidateAccountCache()
+        _accountBundle.value = AccountBundle()
     }
 
     private val memoryMovieCache = java.util.concurrent.ConcurrentHashMap<String, List<Movie>>()
