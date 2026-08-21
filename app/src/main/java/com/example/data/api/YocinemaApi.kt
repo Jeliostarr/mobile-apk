@@ -5,6 +5,7 @@ import com.example.data.model.FacetsResponse
 import com.example.data.model.KeysResponse
 import com.example.data.model.MeResponse
 import com.example.data.model.StreamTokenResponse
+import com.example.data.model.UsageResponse
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -21,6 +22,15 @@ interface YocinemaApi {
 
     @GET("api/v1/keys")
     suspend fun getKeys(): Response<KeysResponse>
+
+    // NOTE: backend route file is routes/dashboard/usage.js. Confirm the actual
+    // mount path in app.js/index.js — this assumes it's mounted the same way
+    // as the other v1 routes ("api/v1/usage"). If it's mounted elsewhere
+    // (e.g. "api/dashboard/usage"), update this path to match.
+    @GET("api/v1/usage")
+    suspend fun getUsage(
+        @Query("days") days: Int = 7
+    ): Response<UsageResponse>
 
     @GET("api/v1/movies")
     suspend fun getMovies(
