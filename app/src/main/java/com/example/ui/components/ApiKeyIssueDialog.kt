@@ -1,7 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +18,7 @@ import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PersonOff
-import androidx.compose.material.icons.filled.SpeedOutlined
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VpnKeyOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -45,8 +43,16 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
-private val WarningAmber = Color(0xFFFFA726)
+private val WarningAmber = androidx.compose.ui.graphics.Color(0xFFFFA726)
 
+/**
+ * The one global "your key can't be used right now" modal — surfaces
+ * whatever [issue] the AuthInterceptor most recently classified from a
+ * failed authenticated request, with actions scoped to what could actually
+ * fix it (see [ApiKeyIssue.canSwitchKey]/[canPurchase]). Shown from
+ * MainAppNav so it appears above whichever screen the failing request
+ * happened on, instead of that screen just going blank.
+ */
 @Composable
 fun ApiKeyIssueDialog(
     issue: ApiKeyIssue,
@@ -153,10 +159,10 @@ private fun titleFor(issue: ApiKeyIssue): String = when (issue) {
     is ApiKeyIssue.Other -> "Something's wrong with this key"
 }
 
-private fun iconFor(issue: ApiKeyIssue): Pair<ImageVector, Color> =
+private fun iconFor(issue: ApiKeyIssue): Pair<androidx.compose.ui.graphics.vector.ImageVector, androidx.compose.ui.graphics.Color> =
     when (issue) {
         is ApiKeyIssue.Expired -> Icons.Default.HourglassBottom to WarningAmber
-        is ApiKeyIssue.RateLimited -> Icons.Default.SpeedOutlined to WarningAmber
+        is ApiKeyIssue.RateLimited -> Icons.Default.Speed to WarningAmber
         is ApiKeyIssue.Paused -> Icons.Default.PauseCircle to WarningAmber
         is ApiKeyIssue.Revoked, is ApiKeyIssue.Deleted, is ApiKeyIssue.Suspended -> Icons.Default.Block to YoDestructive
         is ApiKeyIssue.AccountInactive -> Icons.Default.PersonOff to YoDestructive
