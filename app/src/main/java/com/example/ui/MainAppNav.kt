@@ -171,7 +171,6 @@ fun MainAppNav() {
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
                             onSearchClick = { navigateTo(Screen.Search()) },
                             onWatchlistClick = {
-                                currentTab = BottomTab.Library
                                 navigateTo(Screen.Library)
                             },
                             onDownloadsClick = {
@@ -213,7 +212,8 @@ fun MainAppNav() {
                     is Screen.Account -> {
                         AccountScreen(
                             repository = repository,
-                            onLoginClick = { navigateTo(Screen.Login) }
+                            onLoginClick = { navigateTo(Screen.Login) },
+                            onLibraryClick = { navigateTo(Screen.Library) }
                         )
                     }
 
