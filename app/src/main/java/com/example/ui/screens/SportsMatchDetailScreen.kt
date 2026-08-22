@@ -295,7 +295,7 @@ fun SportsMatchDetailScreen(
                                     text = if (match?.live == true)
                                         "No stream found for this match right now."
                                     else
-                                        "Stream isn't available yet — check back closer to kickoff.",
+                                        "Stream isn't available yet check back closer to kickoff.",
                                     color = YoTextMuted,
                                     fontSize = 13.sp,
                                     textAlign = TextAlign.Center

@@ -14,18 +14,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Key
@@ -49,16 +45,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.DASHBOARD_URL
 import com.example.repository.YocinemaRepository
@@ -78,13 +71,6 @@ private val TUTORIAL_YOUTUBE_URL =
         "https://www.youtube.com/watch?v=$TUTORIAL_YOUTUBE_VIDEO_ID"
     else
         "https://www.youtube.com/results?search_query=yocinema+api+key+tutorial"
-
-// hqdefault always exists for any public video (unlike maxresdefault, which
-// 404s for lower-resolution source uploads) — safest default thumbnail size.
-private val TUTORIAL_THUMBNAIL_URL =
-    if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
-        "https://img.youtube.com/vi/$TUTORIAL_YOUTUBE_VIDEO_ID/hqdefault.jpg"
-    else null
 
 @Composable
 fun LoginScreen(
@@ -108,112 +94,56 @@ fun LoginScreen(
                 )
             )
     ) {
-        // Soft ambient glows — a violet one behind the logo, a faint cyan
-        // one low in the frame — purely decorative depth so the screen
-        // doesn't read as a flat form on a black background.
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-80).dp)
-                .size(340.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(YoPrimaryViolet.copy(alpha = 0.28f), Color.Transparent)
-                    ),
-                    shape = CircleShape
-                )
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = 120.dp)
-                .size(300.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(Color(0xFF2DD4BF).copy(alpha = 0.12f), Color.Transparent)
-                    ),
-                    shape = CircleShape
-                )
-        )
-
+        // Compact column – no scroll needed
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(modifier = Modifier.height(20.dp))
+            // Logo (reduced size)
+            Image(
+                painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
+                contentDescription = "YOCINEMA Logo",
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+            )
 
-            Box(contentAlignment = Alignment.Center) {
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(YoPrimaryViolet.copy(alpha = 0.35f), Color.Transparent)
-                            ),
-                            shape = CircleShape
-                        )
-                )
-                Image(
-                    painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
-                    contentDescription = "YOCINEMA Logo",
-                    modifier = Modifier
-                        .size(68.dp)
-                        .shadow(16.dp, CircleShape, clip = false)
-                        .clip(CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = "YOCINEMA",
-                fontSize = 26.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 3.sp,
+                letterSpacing = 2.sp,
                 color = YoTextPrimary
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "Enter your API key to continue",
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 color = YoTextMuted,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // Input card (simplified, no extra decoration)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(20.dp, RoundedCornerShape(28.dp), clip = false)
-                    .clip(RoundedCornerShape(28.dp))
+                    .shadow(12.dp, RoundedCornerShape(20.dp), clip = false)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(28.dp))
+                    .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
             ) {
-                // Thin gradient accent stripe across the top of the card —
-                // a small detail that keeps the card from reading as a flat
-                // grey box and ties it back to the brand color.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(Color.Transparent, YoPrimaryViolet, Color.Transparent)
-                            )
-                        )
-                )
-
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     OutlinedTextField(
@@ -222,7 +152,7 @@ fun LoginScreen(
                             apiKeyInput = it
                             errorMessage = null
                         },
-                        placeholder = { Text("Paste your API key", color = YoTextMuted, fontSize = 14.sp) },
+                        placeholder = { Text("Paste your API key", color = YoTextMuted, fontSize = 13.sp) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Key,
@@ -252,7 +182,7 @@ fun LoginScreen(
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = YoPrimaryViolet,
                             unfocusedBorderColor = YoBorder,
@@ -264,17 +194,17 @@ fun LoginScreen(
                     )
 
                     if (!errorMessage.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = errorMessage!!,
                             color = YoDestructive,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
                         onClick = {
@@ -297,170 +227,86 @@ fun LoginScreen(
                         enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp)
-                            .shadow(10.dp, RoundedCornerShape(18.dp), clip = false),
-                        shape = RoundedCornerShape(18.dp),
+                            .height(48.dp)
+                            .shadow(8.dp, RoundedCornerShape(16.dp), clip = false),
+                        shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryViolet,
                             contentColor = YoBaseBackground
                         )
                     ) {
                         if (isLoading) {
-                            ModernLoader(size = 26.dp, strokeWidth = 3.dp)
+                            ModernLoader(size = 22.dp, strokeWidth = 3.dp)
                         } else {
                             Text(
                                 text = "Sign In & Continue",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    OutlinedButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DASHBOARD_URL))
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        border = BorderStroke(1.dp, YoBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextPrimary)
+                    // Row of two action links (Dashboard & Tutorial)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Text("Get a key at the Dashboard", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Icon(
-                            imageVector = Icons.Default.OpenInNew,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = YoTextMuted
+                        ActionLink(
+                            text = "Get a key",
+                            icon = Icons.Default.OpenInNew,
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DASHBOARD_URL))
+                                context.startActivity(intent)
+                            }
+                        )
+                        ActionLink(
+                            text = "Watch tutorial",
+                            icon = Icons.Default.PlayArrow,
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_YOUTUBE_URL))
+                                context.startActivity(intent)
+                            }
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
-            TutorialCard(
-                onOpenInYouTube = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_YOUTUBE_URL))
-                    context.startActivity(intent)
-                }
+            // Version info at bottom
+            Text(
+                text = "v1.0.0",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = YoTextMuted.copy(alpha = 0.5f),
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-
-            Spacer(modifier = Modifier.height(40.dp))
         }
-
-        Text(
-            text = "v1.0.0",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = YoTextMuted.copy(alpha = 0.5f),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 20.dp)
-        )
     }
 }
 
-/**
- * Embedding a YouTube video in-app (via YouTubePlayerView) turned out to
- * fail for real videos with "This video is unavailable — Error code: 152"
- * — that error means the video's owner has disabled playback on embedded
- * players, which no amount of app-side code can work around. A thumbnail
- * that hands off to the real YouTube app/browser sidesteps the problem
- * entirely and works for any video regardless of its embed settings.
- */
 @Composable
-private fun TutorialCard(onOpenInYouTube: () -> Unit) {
-    Column(
+private fun ActionLink(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .shadow(10.dp, RoundedCornerShape(20.dp), clip = false)
-            .clip(RoundedCornerShape(20.dp))
-            .background(YoSurface)
-            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
-            .padding(14.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "New here? Watch the tutorial",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = YoTextPrimary
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = YoTextMuted
         )
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
-            text = "How to create an account and get your API key",
-            fontSize = 11.sp,
-            color = YoTextMuted
+            text = text,
+            fontSize = 12.sp,
+            color = YoTextMuted,
+            fontWeight = FontWeight.Medium
         )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF15151A))
-                .clickable(onClick = onOpenInYouTube)
-        ) {
-            if (TUTORIAL_THUMBNAIL_URL != null) {
-                AsyncImage(
-                    model = TUTORIAL_THUMBNAIL_URL,
-                    contentDescription = "Tutorial preview",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                // Scrim so the play button stays legible over any thumbnail.
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f))
-                            )
-                        )
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(56.dp)
-                    .shadow(8.dp, CircleShape, clip = false)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Watch on YouTube",
-                    tint = YoPrimaryViolet,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpenInYouTube),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Open in YouTube", fontSize = 11.sp, color = YoTextMuted)
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Default.OpenInNew,
-                contentDescription = null,
-                tint = YoTextMuted,
-                modifier = Modifier.size(13.dp)
-            )
-        }
     }
 }
