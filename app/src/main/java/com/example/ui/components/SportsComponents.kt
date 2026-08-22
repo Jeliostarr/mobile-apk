@@ -6,12 +6,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +33,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -85,8 +89,10 @@ fun LeagueChip(
 ) {
     Row(
         modifier = Modifier
+            .let { if (isSelected) it.shadow(6.dp, RoundedCornerShape(20.dp), clip = false) else it }
             .clip(RoundedCornerShape(20.dp))
             .background(if (isSelected) YoPrimaryViolet else YoSurface)
+            .border(1.dp, if (isSelected) Color.Transparent else YoBorder, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -118,14 +124,28 @@ fun MatchCard(
     match: SportsMatch,
     onClick: () -> Unit
 ) {
-    Column(
+    val accentColor = if (match.live) Color(0xFFE53935) else YoPrimaryViolet
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
             .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(14.dp)
     ) {
+        // Left accent stripe — the one cue that makes a live match register
+        // at a glance while scanning a long list, instead of every card
+        // looking identical until you read the badge text.
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(4.dp)
+                .background(accentColor)
+        )
+
+        Column(modifier = Modifier.padding(14.dp)) {
         // League row
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (match.league?.img != null) {
@@ -197,7 +217,13 @@ fun MatchCard(
                     fontSize = 11.sp
                 )
                 if (match.hasStream) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(YoPrimaryViolet.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.PlayCircle,
                             contentDescription = "Stream available",
@@ -209,6 +235,7 @@ fun MatchCard(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -287,8 +314,10 @@ fun MatchCardSkeleton() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
             .clip(RoundedCornerShape(14.dp))
             .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .padding(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

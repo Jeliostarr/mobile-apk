@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.YoAccentCyan
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
@@ -81,7 +80,7 @@ fun BottomNavBar(
         BottomTab.Home,
         BottomTab.Explore,
         BottomTab.Downloads,
-        BottomTab.Library,
+        BottomTab.Sports,
         BottomTab.Account
     )
 
@@ -154,16 +153,6 @@ private fun NavTabItem(
                 tint = iconColor,
                 modifier = Modifier.size(23.dp)
             )
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 1.dp)
-                        .size(3.dp)
-                        .clip(CircleShape)
-                        .background(YoAccentCyan)
-                )
-            }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
