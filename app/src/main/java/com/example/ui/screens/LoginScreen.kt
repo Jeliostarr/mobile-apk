@@ -76,7 +76,8 @@ import kotlinx.coroutines.launch
 private const val TUTORIAL_YOUTUBE_VIDEO_ID = ""
 private val TUTORIAL_YOUTUBE_URL =
     if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
-        "https://www.youtube.com/watch?v=$TUTORIAL_YOUTUBE_VIDEO_ID"
+        "https://www.youtube.com/watch?v=$LCX5Ropft-8"
+        
     else
         "https://www.youtube.com/results?search_query=yocinema+api+key+tutorial"
 
