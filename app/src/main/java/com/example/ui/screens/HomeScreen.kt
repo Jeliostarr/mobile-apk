@@ -34,16 +34,20 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,16 +60,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.FacetsResponse
 import com.example.data.model.Movie
+import com.example.data.model.SportsMatch
 import com.example.data.model.formatDuration
 import com.example.data.model.isNull_orEmpty
+import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.HomeSkeleton
+import com.example.ui.components.LiveBadge
 import com.example.ui.components.PosterCard
 import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.VJChip
@@ -77,6 +86,7 @@ import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import com.example.ui.util.SportsTimeUtils
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -287,9 +297,11 @@ fun HeroSliderPager(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     repository: YocinemaRepository,
+    sportsRepository: SportsRepository,
     onMovieClick: (String) -> Unit,
     onSearchClick: () -> Unit,
     onWatchlistClick: () -> Unit,
@@ -297,7 +309,9 @@ fun HomeScreen(
     onAccountClick: () -> Unit,
     onViewAllVJsClick: () -> Unit,
     onVJClick: (String) -> Unit,
-    onViewAllCategoryClick: (title: String, sort: String?, type: String?, genre: String?) -> Unit
+    onViewAllCategoryClick: (title: String, sort: String?, type: String?, genre: String?) -> Unit,
+    onMatchClick: (String) -> Unit,
+    onViewAllSportsClick: () -> Unit
 ) {
     var popularMovies by remember { mutableStateOf(repository.cachedPopularMovies) }
     var latestMovies by remember { mutableStateOf(repository.cachedLatestMovies) }
@@ -305,6 +319,12 @@ fun HomeScreen(
     var genreMovies by remember { mutableStateOf(repository.cachedGenreMovies) }
     var vjsList by remember { mutableStateOf(repository.cachedVjsList) }
     var isLoading by remember { mutableStateOf(popularMovies.isEmpty() && latestMovies.isEmpty()) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    // Sports rail: prefer live matches; if there aren't any right now, fall
+    // back to upcoming ones with a countdown instead of just hiding the rail.
+    var sportsMatches by remember { mutableStateOf<List<SportsMatch>>(emptyList()) }
+    var sportsShowingLive by remember { mutableStateOf(true) }
 
     // Hero carousel needs the same rich payload Detail screen uses
     // (heroImage/cover + full description) — the list endpoint that
@@ -316,6 +336,121 @@ fun HomeScreen(
 
     val scope = rememberCoroutineScope()
 
+    suspend fun fetchHomeMovies(forceRefresh: Boolean) {
+        if (!forceRefresh && repository.isHomeCacheFresh()) {
+            return
+        }
+
+        if (popularMovies.isEmpty()) {
+            isLoading = true
+        }
+        try {
+            // These four don't depend on each other — they were being
+            // fetched one after another (four full round trips before
+            // the genre batch even started), which was the main reason
+            // cold loads felt slow. Launching all four up front and
+            // awaiting them after means the wait is bounded by the
+            // slowest single call instead of the sum of all four.
+            lateinit var pop: List<Movie>
+            lateinit var lat: List<Movie>
+            lateinit var ser: List<Movie>
+            lateinit var facets: FacetsResponse
+
+            coroutineScope {
+                val popDeferred = async { repository.getMovies(sort = "popular", limit = 15) }
+                val latDeferred = async { repository.getMovies(sort = "latest", limit = 15) }
+                val serDeferred = async { repository.getMovies(type = "series", limit = 15) }
+                val facetsDeferred = async { repository.getFacets() }
+
+                pop = popDeferred.await()
+                lat = latDeferred.await()
+                ser = serDeferred.await()
+                facets = facetsDeferred.await()
+            }
+
+            val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
+            val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
+
+            // Genre rails used to each cost their own network round trip
+            // (one request per genre, fired in parallel) even though
+            // pop+lat+series had usually already pulled in most of the
+            // catalog's popular titles. Building each rail from that
+            // in-memory pool first — and only falling back to a network
+            // call on the rare genre with nothing in the pool — cuts
+            // this from "N extra requests every load" to "close to zero"
+            // on a typical catalog, which is most of what was making
+            // cold loads slow.
+            val genreResults = coroutineScope {
+                allGenres.map { genre ->
+                    async {
+                        val fromPool = allMoviesPool.filter {
+                            it.genre?.contains(genre, ignoreCase = true) == true
+                        }
+                        val movies = if (fromPool.size >= 5) {
+                            fromPool.take(15)
+                        } else {
+                            repository.getMovies(genre = genre, limit = 15).ifEmpty { fromPool }
+                        }
+                        genre to movies
+                    }
+                }.awaitAll()
+            }.filter { (_, movies) -> movies.isNotEmpty() }
+                .associate { it }
+
+            // VJs sorted by how many movies they've translated (using the
+            // same in-memory pool, same trade-off as genre rails above: an
+            // approximation from ~45 fetched titles rather than a full
+            // catalog-wide count, but no extra network calls needed for it).
+            // Facets is still the source of truth for WHICH vjs exist —
+            // this only decides the order they're shown in.
+            val vjCounts = allMoviesPool
+                .mapNotNull { it.vjName?.takeIf { name -> name.isNotBlank() } }
+                .groupingBy { it }
+                .eachCount()
+            val sortedVjs = (facets.vjs ?: emptyList())
+                .distinct()
+                .ifEmpty { vjCounts.keys.toList() }
+                .sortedByDescending { vjCounts[it] ?: 0 }
+
+            popularMovies = pop
+            latestMovies = lat
+            seriesList = ser
+            genreMovies = genreResults
+            vjsList = sortedVjs
+
+            repository.cachedPopularMovies = pop
+            repository.cachedLatestMovies = lat
+            repository.cachedSeriesList = ser
+            repository.cachedGenreMovies = genreResults
+            repository.cachedVjsList = sortedVjs
+            repository.cachedFacets = facets
+            repository.markHomeCacheFresh()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            isLoading = false
+        }
+    }
+
+    suspend fun fetchHomeSports() {
+        try {
+            val live = sportsRepository.getMatches(status = "live", limit = 15)
+            if (live.matches.isNotEmpty()) {
+                sportsMatches = live.matches
+                sportsShowingLive = true
+                return
+            }
+            val upcoming = sportsRepository.getMatches(status = "upcoming", limit = 15)
+            sportsMatches = upcoming.matches.sortedBy { it.kickoff ?: "" }
+            sportsShowingLive = false
+        } catch (e: Exception) {
+            // Sports is a secondary rail on Home — a failure here shouldn't
+            // block or blank out the rest of the screen, it should just
+            // leave the rail hidden (see the isNotEmpty() check where it's
+            // rendered below).
+        }
+    }
+
     LaunchedEffect(Unit) {
         // This used to run the full fetch burst unconditionally on every
         // single composition of HomeScreen — i.e. every time the Home tab
@@ -323,86 +458,8 @@ fun HomeScreen(
         // main reason it felt slow "every open". Now it's skipped entirely
         // once a fresh cache exists; the screen just paints from cache
         // instantly with zero network calls.
-        if (repository.isHomeCacheFresh()) {
-            return@LaunchedEffect
-        }
-
-        scope.launch {
-            if (popularMovies.isEmpty()) {
-                isLoading = true
-            }
-            try {
-                // These four don't depend on each other — they were being
-                // fetched one after another (four full round trips before
-                // the genre batch even started), which was the main reason
-                // cold loads felt slow. Launching all four up front and
-                // awaiting them after means the wait is bounded by the
-                // slowest single call instead of the sum of all four.
-                lateinit var pop: List<Movie>
-                lateinit var lat: List<Movie>
-                lateinit var ser: List<Movie>
-                lateinit var facets: FacetsResponse
-
-                coroutineScope {
-                    val popDeferred = async { repository.getMovies(sort = "popular", limit = 15) }
-                    val latDeferred = async { repository.getMovies(sort = "latest", limit = 15) }
-                    val serDeferred = async { repository.getMovies(type = "series", limit = 15) }
-                    val facetsDeferred = async { repository.getFacets() }
-
-                    pop = popDeferred.await()
-                    lat = latDeferred.await()
-                    ser = serDeferred.await()
-                    facets = facetsDeferred.await()
-                }
-
-                val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
-                val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
-
-                // Genre rails used to each cost their own network round trip
-                // (one request per genre, fired in parallel) even though
-                // pop+lat+series had usually already pulled in most of the
-                // catalog's popular titles. Building each rail from that
-                // in-memory pool first — and only falling back to a network
-                // call on the rare genre with nothing in the pool — cuts
-                // this from "N extra requests every load" to "close to zero"
-                // on a typical catalog, which is most of what was making
-                // cold loads slow.
-                val genreResults = coroutineScope {
-                    allGenres.map { genre ->
-                        async {
-                            val fromPool = allMoviesPool.filter {
-                                it.genre?.contains(genre, ignoreCase = true) == true
-                            }
-                            val movies = if (fromPool.size >= 5) {
-                                fromPool.take(15)
-                            } else {
-                                repository.getMovies(genre = genre, limit = 15).ifEmpty { fromPool }
-                            }
-                            genre to movies
-                        }
-                    }.awaitAll()
-                }.filter { (_, movies) -> movies.isNotEmpty() }
-                    .associate { it }
-
-                popularMovies = pop
-                latestMovies = lat
-                seriesList = ser
-                genreMovies = genreResults
-                vjsList = facets.vjs ?: listOf("Soul", "Chambers", "Lenon", "Junior", "Emmy", "Kin", "Ulio")
-
-                repository.cachedPopularMovies = pop
-                repository.cachedLatestMovies = lat
-                repository.cachedSeriesList = ser
-                repository.cachedGenreMovies = genreResults
-                repository.cachedVjsList = vjsList
-                repository.cachedFacets = facets
-                repository.markHomeCacheFresh()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                isLoading = false
-            }
-        }
+        scope.launch { fetchHomeMovies(forceRefresh = false) }
+        scope.launch { fetchHomeSports() }
     }
 
     // Fetch full detail (heroImage/cover + description) for just the
@@ -453,6 +510,18 @@ fun HomeScreen(
         if (isLoading) {
             HomeSkeleton()
         } else {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    scope.launch {
+                        isRefreshing = true
+                        fetchHomeMovies(forceRefresh = true)
+                        fetchHomeSports()
+                        isRefreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -489,13 +558,13 @@ fun HomeScreen(
                     }
                 }
 
-                if (popularMovies.isNotEmpty()) {
+                if (sportsMatches.isNotEmpty()) {
                     item {
-                        MovieRailSection(
-                            title = "Popular",
-                            movies = popularMovies,
-                            onMovieClick = onMovieClick,
-                            onViewAllClick = { onViewAllCategoryClick("Popular", "popular", null, null) }
+                        HomeSportsRail(
+                            matches = sportsMatches,
+                            isLive = sportsShowingLive,
+                            onMatchClick = onMatchClick,
+                            onViewAllClick = onViewAllSportsClick
                         )
                     }
                 }
@@ -532,6 +601,7 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -681,5 +751,166 @@ fun MovieRailSection(
                 )
             }
         }
+    }
+}
+/**
+ * Football rail for Home — shows live matches when there are any, falling
+ * back to upcoming ones with a live countdown otherwise. Uses its own
+ * compact card (not SportsComponents' MatchCard, which is built for a
+ * full-width vertical list, not a fixed-width horizontal rail item).
+ */
+@Composable
+fun HomeSportsRail(
+    matches: List<SportsMatch>,
+    isLive: Boolean,
+    onMatchClick: (String) -> Unit,
+    onViewAllClick: () -> Unit
+) {
+    if (matches.isEmpty()) return
+
+    // Ticks periodically so an upcoming match's countdown actually counts
+    // down instead of being frozen at whatever it read when the rail first
+    // composed — shared by every card in the rail via a single timer.
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            tick++
+        }
+    }
+
+    Column {
+        RailHeader(
+            title = if (isLive) "Live Now" else "Upcoming Matches",
+            onViewAllClick = onViewAllClick
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            items(matches, key = { it.id }) { match ->
+                key(tick) {
+                    HomeMatchCard(match = match, onClick = { onMatchClick(match.id.toString()) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
+    val accentColor = if (match.live) Color(0xFFE53935) else YoPrimaryAmber
+
+    Column(
+        modifier = Modifier
+            .width(212.dp)
+            .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(YoSurfaceVariant, YoSurface)
+                )
+            )
+            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (match.league?.img != null) {
+                AsyncImage(
+                    model = match.league.img,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+            }
+            Text(
+                text = match.league?.name ?: "Football",
+                fontSize = 10.sp,
+                color = YoTextMuted,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (match.live) {
+                LiveBadge(compact = true)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HomeTeamBadge(name = match.home?.name, imageUrl = match.home?.img)
+            Text("vs", fontSize = 11.sp, color = YoTextMuted, fontWeight = FontWeight.Bold)
+            HomeTeamBadge(name = match.away?.name, imageUrl = match.away?.img)
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(accentColor.copy(alpha = 0.14f))
+                .padding(vertical = 7.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (match.live) {
+                    "Watch Live"
+                } else {
+                    SportsTimeUtils.formatCountdown(match.kickoff).ifBlank {
+                        SportsTimeUtils.formatTime(match.kickoff)
+                    }
+                },
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeTeamBadge(name: String?, imageUrl: String?) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(68.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(YoBorder.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = name,
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = name ?: "TBD",
+            fontSize = 10.sp,
+            color = YoTextPrimary,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
     }
 }

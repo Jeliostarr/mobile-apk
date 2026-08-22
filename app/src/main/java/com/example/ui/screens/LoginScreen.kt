@@ -6,10 +6,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,16 +18,19 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width   // ✅ ADDED this import
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -49,14 +51,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.DASHBOARD_URL
 import com.example.repository.YocinemaRepository
@@ -68,18 +70,21 @@ import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import kotlinx.coroutines.launch
 
-private const val TUTORIAL_YOUTUBE_VIDEO_ID = ""
+private const val TUTORIAL_YOUTUBE_VIDEO_ID = "LCX5Ropft-8"
 private val TUTORIAL_YOUTUBE_URL =
     if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
-        "https://www.youtube.com/watch?v=$LCX5Ropft-8"
-        
+        "https://www.youtube.com/watch?v=$TUTORIAL_YOUTUBE_VIDEO_ID"
     else
         "https://www.youtube.com/results?search_query=yocinema+api+key+tutorial"
+
+// hqdefault always exists for any public video (unlike maxresdefault, which
+// 404s for lower-resolution source uploads) — safest default thumbnail size.
+private val TUTORIAL_THUMBNAIL_URL =
+    if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
+        "https://img.youtube.com/vi/$TUTORIAL_YOUTUBE_VIDEO_ID/hqdefault.jpg"
+    else null
 
 @Composable
 fun LoginScreen(
@@ -99,13 +104,38 @@ fun LoginScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0A0A0C),
-                        Color(0xFF1A1A20)
-                    )
+                    colors = listOf(Color(0xFF0A0A0C), Color(0xFF16141C), Color(0xFF0A0A0C))
                 )
             )
     ) {
+        // Soft ambient glows — a violet one behind the logo, a faint cyan
+        // one low in the frame — purely decorative depth so the screen
+        // doesn't read as a flat form on a black background.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-80).dp)
+                .size(340.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(YoPrimaryViolet.copy(alpha = 0.28f), Color.Transparent)
+                    ),
+                    shape = CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .offset(y = 120.dp)
+                .size(300.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFF2DD4BF).copy(alpha = 0.12f), Color.Transparent)
+                    ),
+                    shape = CircleShape
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -114,25 +144,39 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(YoPrimaryViolet.copy(alpha = 0.35f), Color.Transparent)
+                            ),
+                            shape = CircleShape
+                        )
+                )
                 Image(
                     painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
                     contentDescription = "YOCINEMA Logo",
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(68.dp)
+                        .shadow(16.dp, CircleShape, clip = false)
                         .clip(CircleShape)
-                        .shadow(10.dp, CircleShape, clip = false)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "YOCINEMA",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = YoTextPrimary
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "YOCINEMA",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 3.sp,
+                color = YoTextPrimary
+            )
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -144,18 +188,32 @@ fun LoginScreen(
                 lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(12.dp, RoundedCornerShape(26.dp), clip = false)
-                    .clip(RoundedCornerShape(26.dp))
+                    .shadow(20.dp, RoundedCornerShape(28.dp), clip = false)
+                    .clip(RoundedCornerShape(28.dp))
                     .background(YoSurface)
-                    .border(1.dp, YoBorder, RoundedCornerShape(26.dp))
-                    .padding(20.dp)
+                    .border(1.dp, YoBorder, RoundedCornerShape(28.dp))
             ) {
+                // Thin gradient accent stripe across the top of the card —
+                // a small detail that keeps the card from reading as a flat
+                // grey box and ties it back to the brand color.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color.Transparent, YoPrimaryViolet, Color.Transparent)
+                            )
+                        )
+                )
+
                 Column(
+                    modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     OutlinedTextField(
@@ -239,7 +297,8 @@ fun LoginScreen(
                         enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp),
+                            .height(54.dp)
+                            .shadow(10.dp, RoundedCornerShape(18.dp), clip = false),
                         shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryViolet,
@@ -257,7 +316,7 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedButton(
                         onClick = {
@@ -268,7 +327,7 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .height(50.dp),
                         shape = RoundedCornerShape(18.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, YoBorder),
+                        border = BorderStroke(1.dp, YoBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextPrimary)
                     ) {
                         Text("Get a key at the Dashboard", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -286,7 +345,6 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             TutorialCard(
-                videoId = TUTORIAL_YOUTUBE_VIDEO_ID,
                 onOpenInYouTube = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_YOUTUBE_URL))
                     context.startActivity(intent)
@@ -308,13 +366,16 @@ fun LoginScreen(
     }
 }
 
-// ✅ kept this extension – now used correctly
-private fun String?.isNullOrBlank(): Boolean = this == null || this.trim().isEmpty()
-
+/**
+ * Embedding a YouTube video in-app (via YouTubePlayerView) turned out to
+ * fail for real videos with "This video is unavailable — Error code: 152"
+ * — that error means the video's owner has disabled playback on embedded
+ * players, which no amount of app-side code can work around. A thumbnail
+ * that hands off to the real YouTube app/browser sidesteps the problem
+ * entirely and works for any video regardless of its embed settings.
+ */
 @Composable
-private fun TutorialCard(videoId: String, onOpenInYouTube: () -> Unit) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-
+private fun TutorialCard(onOpenInYouTube: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -338,63 +399,68 @@ private fun TutorialCard(videoId: String, onOpenInYouTube: () -> Unit) {
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        if (videoId.isBlank()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF15151A))
+                .clickable(onClick = onOpenInYouTube)
+        ) {
+            if (TUTORIAL_THUMBNAIL_URL != null) {
+                AsyncImage(
+                    model = TUTORIAL_THUMBNAIL_URL,
+                    contentDescription = "Tutorial preview",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // Scrim so the play button stays legible over any thumbnail.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f))
+                            )
+                        )
+                )
+            }
+
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF15151A))
-                    .clickable(onClick = onOpenInYouTube),
+                    .align(Alignment.Center)
+                    .size(56.dp)
+                    .shadow(8.dp, CircleShape, clip = false)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.PlayCircle,
-                    contentDescription = "Open YouTube",
-                    tint = Color.White,
-                    modifier = Modifier.size(56.dp)
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Watch on YouTube",
+                    tint = YoPrimaryViolet,
+                    modifier = Modifier.size(28.dp)
                 )
             }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp))
-            ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        YouTubePlayerView(ctx).apply {
-                            lifecycleOwner.lifecycle.addObserver(this)
-                            addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
-                                override fun onReady(youTubePlayer: YouTubePlayer) {
-                                    youTubePlayer.cueVideo(videoId, 0f)
-                                }
-                            })
-                        }
-                    }
-                )
-            }
+        }
 
-            Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenInYouTube),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Open in YouTube", fontSize = 11.sp, color = YoTextMuted)
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Default.OpenInNew,
-                    contentDescription = null,
-                    tint = YoTextMuted,
-                    modifier = Modifier.size(13.dp)
-                )
-            }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenInYouTube),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Open in YouTube", fontSize = 11.sp, color = YoTextMuted)
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.OpenInNew,
+                contentDescription = null,
+                tint = YoTextMuted,
+                modifier = Modifier.size(13.dp)
+            )
         }
     }
 }
