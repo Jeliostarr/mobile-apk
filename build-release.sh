@@ -3,17 +3,16 @@ set -e
 
 cd /workspaces/mobile-apk || exit
 
-# ------------------- 1. JAVA 17 via APT (fallback) -------------------
+# ------------------- 1. JAVA 17 via APT -------------------
 echo "📦 Installing Java 17 (OpenJDK) via apt..."
 sudo apt update -qq
 sudo apt install -y openjdk-17-jdk
 
-# Set JAVA_HOME explicitly
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export PATH=$JAVA_HOME/bin:$PATH
 echo "✅ Java version: $(java -version 2>&1 | head -n1)"
 
-# ------------------- 2. ANDROID SDK -------------------
+# ------------------- 2. ANDROID SDK (unchanged) -------------------
 export ANDROID_HOME=$HOME/android-sdk
 export ANDROID_SDK_ROOT=$ANDROID_HOME
 export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
@@ -48,7 +47,6 @@ else
   exit 1
 fi
 
-# Validate
 if [ -z "$RELEASE_KEYSTORE_BASE64" ] || [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
   echo "❌ One or more secrets are missing in .env.release."
   exit 1
@@ -66,12 +64,17 @@ if [ ! -f "./gradlew" ]; then
   gradle wrapper --gradle-version 9.3.1
 fi
 
-# ------------------- 6. BUILD RELEASE APK -------------------
-rm -rf build/ .gradle/ app/build
-echo "🔨 Building release APK..."
-./gradlew clean :app:assembleRelease --stacktrace --no-daemon
+# ------------------- 6. SET MEMORY OPTIONS -------------------
+export GRADLE_OPTS="-Xmx2g -XX:MaxMetaspaceSize=512m"
+# Also write to gradle.properties for extra safety
+echo "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m" >> gradle.properties
 
-# ------------------- 7. VERIFY OUTPUT -------------------
+# ------------------- 7. BUILD RELEASE APK (with memory-friendly flags) -------------------
+rm -rf build/ .gradle/ app/build
+echo "🔨 Building release APK with memory limits..."
+./gradlew clean :app:assembleRelease --stacktrace --no-daemon --max-workers=1
+
+# ------------------- 8. VERIFY OUTPUT -------------------
 if [ -f app/build/outputs/apk/release/app-release.apk ]; then
   echo "✅ Build successful! APK at: app/build/outputs/apk/release/app-release.apk"
   ls -l app/build/outputs/apk/release/app-release.apk
@@ -80,6 +83,5 @@ else
   exit 1
 fi
 
-# ------------------- 8. CLEANUP -------------------
 rm -f release-upload-key.jks
 echo "✅ Keystore removed from disk."
