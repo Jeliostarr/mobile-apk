@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -104,20 +103,7 @@ fun LoginScreen(
                 )
             )
     ) {
-        // One subtle glow behind the header — enough to keep the screen from
-        // feeling flat without adding visual clutter or taking up layout space.
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-40).dp)
-                .size(220.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(YoPrimaryViolet.copy(alpha = 0.22f), Color.Transparent)
-                    ),
-                    shape = CircleShape
-                )
-        )
+        // No glow at the top – removed as requested.
 
         // No scroll — everything sized to fit one screen, centered as a unit.
         Column(
@@ -166,6 +152,8 @@ fun LoginScreen(
                     .background(YoSurface)
                     .border(1.dp, YoBorder, RoundedCornerShape(22.dp))
             ) {
+                // Top gradient bar – kept for subtle accent, but can be removed if desired.
+                // The user only requested removal of the top violet glow.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -298,8 +286,9 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
+            // Enhanced tutorial banner – larger thumbnail area
             TutorialBanner(
                 onOpenInYouTube = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_YOUTUBE_URL))
@@ -321,26 +310,26 @@ fun LoginScreen(
 }
 
 /**
- * A single slim row instead of a full 16:9 video block — same "watch the
- * tutorial" affordance (thumbnail + play icon, taps out to YouTube) without
- * costing nearly as much vertical space.
+ * A more prominent tutorial banner: larger thumbnail area (120dp high) with
+ * a play icon overlay, and a descriptive text row below.
  */
 @Composable
 private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
             .clickable(onClick = onOpenInYouTube)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(12.dp)
     ) {
+        // Thumbnail with play overlay
         Box(
             modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .fillMaxWidth()
+                .height(120.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFF15151A))
         ) {
             if (TUTORIAL_THUMBNAIL_URL != null) {
@@ -351,10 +340,11 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
                     contentScale = ContentScale.Crop
                 )
             }
+            // Play button overlay
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(24.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center
@@ -363,36 +353,41 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Watch on YouTube",
                     tint = YoPrimaryViolet,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "New here? Watch the tutorial",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "How to get your API key",
-                fontSize = 11.sp,
-                color = YoTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+        // Text row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "New here? Watch the tutorial",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YoTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "How to get your API key",
+                    fontSize = 12.sp,
+                    color = YoTextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.OpenInNew,
+                contentDescription = null,
+                tint = YoTextMuted,
+                modifier = Modifier.size(16.dp)
             )
         }
-
-        Icon(
-            imageVector = Icons.Default.OpenInNew,
-            contentDescription = null,
-            tint = YoTextMuted,
-            modifier = Modifier.size(14.dp)
-        )
     }
 }
