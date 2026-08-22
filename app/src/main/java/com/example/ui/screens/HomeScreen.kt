@@ -28,7 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
@@ -577,8 +577,8 @@ fun HomeSearchBar(
 
             IconButton(onClick = onWatchlistClick, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    imageVector = Icons.Default.Bookmark,
-                    contentDescription = "Watchlist",
+                    imageVector = Icons.Default.VideoLibrary,
+                    contentDescription = "Library",
                     tint = YoPrimaryAmber,
                     modifier = Modifier.size(20.dp)
                 )

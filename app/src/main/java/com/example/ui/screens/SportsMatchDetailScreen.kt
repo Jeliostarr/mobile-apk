@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -136,50 +140,66 @@ fun SportsMatchDetailScreen(
                         .fillMaxSize()
                         .padding(horizontal = 20.dp)
                 ) {
-                    // League + status
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (match?.league?.img != null) {
-                            AsyncImage(
-                                model = match.league.img,
-                                contentDescription = match.league.name,
-                                modifier = Modifier.size(18.dp),
-                                contentScale = ContentScale.Fit
+                    // Hero card — gradient wash behind the matchup so this
+                    // reads as the focal point of the screen instead of
+                    // floating on the same flat background as everything else.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(10.dp, RoundedCornerShape(24.dp), clip = false)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(YoPrimaryViolet.copy(alpha = 0.20f), YoSurface)
+                                )
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
-                        Text(
-                            text = match?.league?.name ?: "Football",
-                            color = YoTextMuted,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (match?.live == true) {
-                            LiveBadge()
-                        } else {
+                            .padding(20.dp)
+                    ) {
+                        // League + status
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (match?.league?.img != null) {
+                                AsyncImage(
+                                    model = match.league.img,
+                                    contentDescription = match.league.name,
+                                    modifier = Modifier.size(18.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
                             Text(
-                                text = "${SportsTimeUtils.formatDay(match?.kickoff)} · ${SportsTimeUtils.formatTime(match?.kickoff)}",
-                                color = YoTextPrimary,
+                                text = match?.league?.name ?: "Football",
+                                color = YoTextMuted,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
                             )
+                            if (match?.live == true) {
+                                LiveBadge()
+                            } else {
+                                Text(
+                                    text = "${SportsTimeUtils.formatDay(match?.kickoff)} · ${SportsTimeUtils.formatTime(match?.kickoff)}",
+                                    color = YoTextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(28.dp))
+
+                        // Matchup
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            BigTeam(name = match?.home?.name, imageUrl = match?.home?.img)
+                            Text("VS", color = YoTextMuted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            BigTeam(name = match?.away?.name, imageUrl = match?.away?.img)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(28.dp))
-
-                    // Matchup
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BigTeam(name = match?.home?.name, imageUrl = match?.home?.img)
-                        Text("VS", color = YoTextMuted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        BigTeam(name = match?.away?.name, imageUrl = match?.away?.img)
-                    }
-
-                    Spacer(modifier = Modifier.height(36.dp))
 
                     val canWatch = match?.live == true && streams.isNotEmpty()
 
@@ -196,23 +216,40 @@ fun SportsMatchDetailScreen(
                                 val isSelected = stream.id == selectedStream?.id
                                 Column(
                                     modifier = Modifier
+                                        .let { if (isSelected) it.shadow(6.dp, RoundedCornerShape(12.dp), clip = false) else it }
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(if (isSelected) YoPrimaryViolet else YoSurface)
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) Color.Transparent else YoBorder,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
                                         .clickable { selectedStream = stream }
                                         .padding(horizontal = 16.dp, vertical = 10.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(
-                                        text = stream.label,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) Color.Black else YoTextPrimary
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = stream.label,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) YoBaseBackground else YoTextPrimary
+                                        )
+                                        if (isSelected) {
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Icon(
+                                                imageVector = Icons.Filled.CheckCircle,
+                                                contentDescription = "Selected",
+                                                tint = YoBaseBackground,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
                                     if (stream.quality != null) {
                                         Text(
                                             text = stream.quality,
                                             fontSize = 11.sp,
-                                            color = if (isSelected) Color.Black.copy(alpha = 0.7f) else YoTextMuted
+                                            color = if (isSelected) YoBaseBackground.copy(alpha = 0.7f) else YoTextMuted
                                         )
                                     }
                                 }
@@ -228,9 +265,13 @@ fun SportsMatchDetailScreen(
                             enabled = selectedStream != null,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = YoPrimaryViolet,
-                                contentColor = Color.Black
+                                contentColor = YoBaseBackground
                             ),
-                            modifier = Modifier.fillMaxWidth().height(52.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .shadow(8.dp, RoundedCornerShape(14.dp), clip = false)
+                                .height(54.dp)
                         ) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -246,6 +287,7 @@ fun SportsMatchDetailScreen(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(YoSurface)
+                                .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
                                 .padding(20.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -282,7 +324,8 @@ private fun BigTeam(name: String?, imageUrl: String?) {
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(YoBorder.copy(alpha = 0.3f)),
+                .background(YoBorder.copy(alpha = 0.3f))
+                .border(1.dp, YoBorder, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {

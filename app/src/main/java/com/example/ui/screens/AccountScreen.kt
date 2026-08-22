@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
@@ -29,9 +31,9 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,11 +56,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.DASHBOARD_URL
 import com.example.data.model.KeyInfo
 import com.example.data.model.WATCH_WEB_URL
@@ -86,7 +91,8 @@ private val YoWarningAmber = Color(0xFFFFA726)
 @Composable
 fun AccountScreen(
     repository: YocinemaRepository,
-    onLoginClick: () -> Unit
+    onLoginClick: () -> Unit,
+    onLibraryClick: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? androidx.fragment.app.FragmentActivity
@@ -102,7 +108,18 @@ fun AccountScreen(
     var showRequestDialog by remember { mutableStateOf(false) }
     var switchingKeyId by remember { mutableStateOf<String?>(null) }
 
-    val activeKey = repository.tokenManager.getApiKey()
+    // Plain `repository.tokenManager.getApiKey()` used to be read once per
+    // recomposition with no reactive tie to anything — in practice that
+    // meant "switched key" only visibly took effect after leaving and
+    // re-entering this screen forced a fresh read. Two fixes together:
+    // collecting apiKeyFlow makes this properly reactive to the persisted
+    // value, and optimisticActiveKey makes the switch feel instant instead
+    // of waiting on that flow (or the follow-up network refresh) to catch up.
+    val persistedActiveKey by repository.tokenManager.apiKeyFlow.collectAsState(
+        initial = repository.tokenManager.getApiKey()
+    )
+    var optimisticActiveKey by remember { mutableStateOf<String?>(null) }
+    val activeKey = optimisticActiveKey ?: persistedActiveKey
 
     suspend fun load(force: Boolean) {
         if (!repository.isLoggedIn()) return
@@ -186,6 +203,10 @@ fun AccountScreen(
                 }
 
                 item {
+                    LibraryQuickLinkCard(onClick = onLibraryClick)
+                }
+
+                item {
                     Text(
                         text = "Your API Keys",
                         fontSize = 15.sp,
@@ -223,6 +244,7 @@ fun AccountScreen(
                             onUseThisKey = {
                                 val k = keyInfo.key ?: return@KeyCard
                                 switchingKeyId = keyInfo.id ?: keyInfo.key
+                                optimisticActiveKey = k
                                 scope.launch {
                                     repository.switchActiveKey(k)
                                     load(force = true)
@@ -313,11 +335,16 @@ private fun ProfileCard(
                         .background(YoPrimaryViolet),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
+                    // Was a generic Person icon — swapped for the app's own
+                    // logo (same drawable LoginScreen uses) since there's no
+                    // per-user avatar photo from the backend to show instead.
+                    Image(
+                        painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
                         contentDescription = null,
-                        tint = YoBaseBackground,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
                     )
                 }
 
@@ -457,6 +484,45 @@ private fun WatchOnWebCard(onClick: () -> Unit) {
             Text("watch.yocinema.dpdns.org", fontSize = 11.sp, color = YoTextMuted)
         }
         Icon(Icons.Default.OpenInNew, contentDescription = null, tint = YoTextMuted, modifier = Modifier.size(16.dp))
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+}
+
+/**
+ * Library moved off the bottom nav (see BottomNavBar.kt — that slot now
+ * goes to Sports) and onto a shortcut from Home's search bar, but Account
+ * is the other place someone naturally looks for "my stuff", so it gets a
+ * quick link here too rather than losing a second point of entry.
+ */
+@Composable
+private fun LibraryQuickLinkCard(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(YoPrimaryViolet.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = YoPrimaryViolet, modifier = Modifier.size(18.dp))
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("My Library", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YoTextPrimary)
+            Text("Watchlist and watch history", fontSize = 11.sp, color = YoTextMuted)
+        }
+        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = YoTextMuted, modifier = Modifier.size(13.dp))
     }
 
     Spacer(modifier = Modifier.height(6.dp))

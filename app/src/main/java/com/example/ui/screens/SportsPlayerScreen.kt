@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +74,7 @@ import com.example.repository.SportsRepository
 import com.example.ui.components.LiveBadge
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 
@@ -114,6 +116,10 @@ fun SportsPlayerScreen(
     var playerError by remember { mutableStateOf<String?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
+    // Was a no-op stub — now actually toggles between fitting the whole
+    // frame (letterboxed) and filling the screen (cropped), same as most
+    // video apps' resize button.
+    var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
     fun playUrl(url: String) {
         playerError = null
@@ -205,6 +211,7 @@ fun SportsPlayerScreen(
                         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     }
                 },
+                update = { view -> view.resizeMode = resizeMode },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -221,9 +228,10 @@ fun SportsPlayerScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
                         onClick = onBackClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = YoPrimaryViolet, contentColor = Color.Black)
+                        colors = ButtonDefaults.buttonColors(containerColor = YoPrimaryViolet, contentColor = YoBaseBackground),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Go Back")
+                        Text("Go Back", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -245,10 +253,14 @@ fun SportsPlayerScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(playerError ?: "", color = YoTextMuted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { selectedStream?.let { playUrl(it.playUrl) } }) {
+                    Button(
+                        onClick = { selectedStream?.let { playUrl(it.playUrl) } },
+                        colors = ButtonDefaults.buttonColors(containerColor = YoPrimaryViolet, contentColor = YoBaseBackground),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Retry")
+                        Text("Retry", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -292,16 +304,28 @@ fun SportsPlayerScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(20.dp))
                                         .background(Color.Black.copy(alpha = 0.5f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
                                         .clickable { showQualityMenu = true }
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(selectedStream?.label ?: "Quality", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                 }
-                                DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
+                                DropdownMenu(
+                                    expanded = showQualityMenu,
+                                    onDismissRequest = { showQualityMenu = false },
+                                    modifier = Modifier.background(YoSurface)
+                                ) {
                                     streams.forEach { stream ->
+                                        val isSelected = stream.id == selectedStream?.id
                                         DropdownMenuItem(
-                                            text = { Text(stream.quality?.let { "${stream.label} · $it" } ?: stream.label) },
+                                            text = {
+                                                Text(
+                                                    text = stream.quality?.let { "${stream.label} · $it" } ?: stream.label,
+                                                    color = if (isSelected) YoPrimaryViolet else Color.White,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            },
                                             onClick = {
                                                 selectedStream = stream
                                                 playUrl(stream.playUrl)
@@ -355,7 +379,18 @@ fun SportsPlayerScreen(
                             fontSize = 13.sp
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ControlIcon(icon = Icons.Default.AspectRatio, contentDescription = "Resize", size = 40.dp, onClick = { /* toggled via PlayerView resizeMode if desired */ })
+                            ControlIcon(
+                                icon = Icons.Default.AspectRatio,
+                                contentDescription = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) "Fill screen" else "Fit to screen",
+                                size = 40.dp,
+                                onClick = {
+                                    resizeMode = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
+                                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                    } else {
+                                        AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                    }
+                                }
+                            )
                             ControlIcon(
                                 icon = Icons.Default.PictureInPicture,
                                 contentDescription = "Picture in picture",

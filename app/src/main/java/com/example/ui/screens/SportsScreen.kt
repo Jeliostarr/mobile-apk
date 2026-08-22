@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -48,6 +51,7 @@ import com.example.ui.components.MatchCard
 import com.example.ui.components.SportsListSkeleton
 import com.example.ui.components.SportsSectionHeader
 import com.example.ui.theme.YoBaseBackground
+import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
@@ -136,13 +140,21 @@ fun SportsScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Filled.SportsSoccer,
-                contentDescription = null,
-                tint = YoPrimaryViolet,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(YoPrimaryViolet.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SportsSoccer,
+                    contentDescription = null,
+                    tint = YoPrimaryViolet,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Sports",
@@ -171,27 +183,37 @@ fun SportsScreen(
             }
         }
 
-        // Status filter pills
+        // Status filter — segmented control (same language as LibraryScreen's
+        // Watchlist/History switcher) instead of loose floating pills, so the
+        // set of options reads as one control rather than four disconnected buttons.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 20.dp)
+                .height(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(YoSurface)
+                .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             SportsFilter.values().forEach { filter ->
                 val isSelected = filter == selectedFilter
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (isSelected) YoPrimaryViolet else YoSurface)
-                        .clickable { selectedFilter = filter }
-                        .padding(horizontal = 18.dp, vertical = 9.dp)
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .let { if (isSelected) it.shadow(3.dp, RoundedCornerShape(12.dp), clip = false) else it }
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) YoPrimaryViolet else Color.Transparent)
+                        .clickable { selectedFilter = filter },
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = filter.label,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isSelected) Color.Black else YoTextMuted
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) YoBaseBackground else YoTextMuted
                     )
                 }
             }
