@@ -3,10 +3,14 @@ set -e
 
 cd /workspaces/mobile-apk || exit
 
-# ------------------- 1. JAVA 17 via SDKMAN -------------------
-source "$HOME/.sdkman/bin/sdkman-init.sh"
-sdk install java 17.0.13-tem
-sdk use java 17.0.13-tem
+# ------------------- 1. JAVA 17 via APT (fallback) -------------------
+echo "📦 Installing Java 17 (OpenJDK) via apt..."
+sudo apt update -qq
+sudo apt install -y openjdk-17-jdk
+
+# Set JAVA_HOME explicitly
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH=$JAVA_HOME/bin:$PATH
 echo "✅ Java version: $(java -version 2>&1 | head -n1)"
 
 # ------------------- 2. ANDROID SDK -------------------
@@ -76,6 +80,6 @@ else
   exit 1
 fi
 
-# ------------------- 8. CLEANUP (optional) -------------------
+# ------------------- 8. CLEANUP -------------------
 rm -f release-upload-key.jks
 echo "✅ Keystore removed from disk."
