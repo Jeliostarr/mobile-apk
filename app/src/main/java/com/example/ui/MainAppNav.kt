@@ -168,6 +168,7 @@ fun MainAppNav() {
                     is Screen.Home -> {
                         HomeScreen(
                             repository = repository,
+                            sportsRepository = sportsRepository,
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
                             onSearchClick = { navigateTo(Screen.Search()) },
                             onWatchlistClick = {
@@ -185,6 +186,11 @@ fun MainAppNav() {
                             onVJClick = { vjName -> navigateTo(Screen.VJCatalogue(vjName)) },
                             onViewAllCategoryClick = { title, sort, type, genre ->
                                 navigateTo(Screen.Explore(title = title, sort = sort, type = type, genre = genre))
+                            },
+                            onMatchClick = { matchId -> navigateTo(Screen.SportsDetail(matchId)) },
+                            onViewAllSportsClick = {
+                                currentTab = BottomTab.Sports
+                                navigateTo(Screen.SportsHome)
                             }
                         )
                     }
