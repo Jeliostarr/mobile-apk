@@ -434,15 +434,27 @@ fun HomeScreen(
 
     suspend fun fetchHomeSports() {
         try {
-            val live = sportsRepository.getMatches(status = "live", limit = 15)
-            if (live.matches.isNotEmpty()) {
-                sportsMatches = live.matches
-                sportsShowingLive = true
-                return
+            // Always show both: live matches first, then upcoming ones with a
+            // countdown right after them in the same rail.
+            val live = try {
+                sportsRepository.getMatches(status = "live", limit = 15).matches
+            } catch (e: Exception) {
+                emptyList()
             }
-            val upcoming = sportsRepository.getMatches(status = "upcoming", limit = 15)
-            sportsMatches = upcoming.matches.sortedBy { it.kickoff ?: "" }
-            sportsShowingLive = false
+            val upcoming = try {
+                sportsRepository.getMatches(status = "upcoming", limit = 15).matches
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            val liveSorted = live.sortedBy { it.kickoff ?: "" }
+            val liveIds = liveSorted.map { it.id }.toSet()
+            val upcomingSorted = upcoming
+                .filter { it.id !in liveIds }
+                .sortedBy { it.kickoff ?: "" }
+
+            sportsMatches = (liveSorted + upcomingSorted).take(20)
+            sportsShowingLive = liveSorted.isNotEmpty()
         } catch (e: Exception) {
             // Sports is a secondary rail on Home — a failure here shouldn't
             // block or blank out the rest of the screen, it should just
@@ -781,13 +793,13 @@ fun HomeSportsRail(
 
     Column {
         RailHeader(
-            title = if (isLive) "Live Now" else "Upcoming Matches",
+            title = if (isLive) "Live & Upcoming Football" else "Upcoming Matches",
             onViewAllClick = onViewAllClick
         )
         Spacer(modifier = Modifier.height(10.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(matches, key = { it.id }) { match ->
                 key(tick) {
@@ -804,31 +816,31 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
 
     Column(
         modifier = Modifier
-            .width(212.dp)
-            .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
-            .clip(RoundedCornerShape(18.dp))
+            .width(172.dp)
+            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
+            .clip(RoundedCornerShape(14.dp))
             .background(
                 Brush.verticalGradient(
                     colors = listOf(YoSurfaceVariant, YoSurface)
                 )
             )
-            .border(1.dp, YoBorder, RoundedCornerShape(18.dp))
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(14.dp)
+            .padding(11.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (match.league?.img != null) {
                 AsyncImage(
                     model = match.league.img,
                     contentDescription = null,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(12.dp),
                     contentScale = ContentScale.Fit
                 )
-                Spacer(modifier = Modifier.width(5.dp))
+                Spacer(modifier = Modifier.width(4.dp))
             }
             Text(
                 text = match.league?.name ?: "Football",
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 color = YoTextMuted,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -840,7 +852,7 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -848,18 +860,18 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             HomeTeamBadge(name = match.home?.name, imageUrl = match.home?.img)
-            Text("vs", fontSize = 11.sp, color = YoTextMuted, fontWeight = FontWeight.Bold)
+            Text("vs", fontSize = 10.sp, color = YoTextMuted, fontWeight = FontWeight.Bold)
             HomeTeamBadge(name = match.away?.name, imageUrl = match.away?.img)
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(7.dp))
                 .background(accentColor.copy(alpha = 0.14f))
-                .padding(vertical = 7.dp),
+                .padding(vertical = 5.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -870,7 +882,7 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
                         SportsTimeUtils.formatTime(match.kickoff)
                     }
                 },
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = accentColor,
                 maxLines = 1,
@@ -884,11 +896,11 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
 private fun HomeTeamBadge(name: String?, imageUrl: String?) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(68.dp)
+        modifier = Modifier.width(56.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .background(YoBorder.copy(alpha = 0.3f)),
             contentAlignment = Alignment.Center
@@ -897,7 +909,7 @@ private fun HomeTeamBadge(name: String?, imageUrl: String?) {
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = name,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(23.dp),
                     contentScale = ContentScale.Fit
                 )
             }
@@ -905,7 +917,7 @@ private fun HomeTeamBadge(name: String?, imageUrl: String?) {
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = name ?: "TBD",
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             color = YoTextPrimary,
             fontWeight = FontWeight.Medium,
             maxLines = 1,

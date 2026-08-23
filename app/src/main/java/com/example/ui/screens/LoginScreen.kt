@@ -69,7 +69,7 @@ import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import kotlinx.coroutines.launch
 
-private const val TUTORIAL_YOUTUBE_VIDEO_ID = "LCX5Ropft-8"
+private const val TUTORIAL_YOUTUBE_VIDEO_ID = "uwEJ2AAGmcE"
 private val TUTORIAL_YOUTUBE_URL =
     if (TUTORIAL_YOUTUBE_VIDEO_ID.isNotBlank())
         "https://www.youtube.com/watch?v=$TUTORIAL_YOUTUBE_VIDEO_ID"
