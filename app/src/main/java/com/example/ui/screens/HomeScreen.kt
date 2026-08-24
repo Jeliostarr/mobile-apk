@@ -324,7 +324,7 @@ fun HomeScreen(
     // Sports rail: prefer live matches; if there aren't any right now, fall
     // back to upcoming ones with a countdown instead of just hiding the rail.
     var sportsMatches by remember { mutableStateOf<List<SportsMatch>>(emptyList()) }
-    var sportsShowingLive by remember { mutableStateOf(true) }
+    var sportsHasLive by remember { mutableStateOf(false) }
 
     // Hero carousel needs the same rich payload Detail screen uses
     // (heroImage/cover + full description) — the list endpoint that
@@ -357,9 +357,9 @@ fun HomeScreen(
             lateinit var facets: FacetsResponse
 
             coroutineScope {
-                val popDeferred = async { repository.getMovies(sort = "popular", limit = 15) }
-                val latDeferred = async { repository.getMovies(sort = "latest", limit = 15) }
-                val serDeferred = async { repository.getMovies(type = "series", limit = 15) }
+                val popDeferred = async { repository.getMovies(sort = "popular", limit = 15, forceRefresh = forceRefresh) }
+                val latDeferred = async { repository.getMovies(sort = "latest", limit = 15, forceRefresh = forceRefresh) }
+                val serDeferred = async { repository.getMovies(type = "series", limit = 15, forceRefresh = forceRefresh) }
                 val facetsDeferred = async { repository.getFacets() }
 
                 pop = popDeferred.await()
@@ -389,7 +389,7 @@ fun HomeScreen(
                         val movies = if (fromPool.size >= 5) {
                             fromPool.take(15)
                         } else {
-                            repository.getMovies(genre = genre, limit = 15).ifEmpty { fromPool }
+                            repository.getMovies(genre = genre, limit = 15, forceRefresh = forceRefresh).ifEmpty { fromPool }
                         }
                         genre to movies
                     }
@@ -434,27 +434,16 @@ fun HomeScreen(
 
     suspend fun fetchHomeSports() {
         try {
-            // Always show both: live matches first, then upcoming ones with a
-            // countdown right after them in the same rail.
-            val live = try {
-                sportsRepository.getMatches(status = "live", limit = 15).matches
-            } catch (e: Exception) {
-                emptyList()
-            }
-            val upcoming = try {
-                sportsRepository.getMatches(status = "upcoming", limit = 15).matches
-            } catch (e: Exception) {
-                emptyList()
-            }
-
-            val liveSorted = live.sortedBy { it.kickoff ?: "" }
-            val liveIds = liveSorted.map { it.id }.toSet()
-            val upcomingSorted = upcoming
-                .filter { it.id !in liveIds }
-                .sortedBy { it.kickoff ?: "" }
-
-            sportsMatches = (liveSorted + upcomingSorted).take(20)
-            sportsShowingLive = liveSorted.isNotEmpty()
+            val live = sportsRepository.getMatches(status = "live", limit = 10)
+            val upcoming = sportsRepository.getMatches(status = "upcoming", limit = 10)
+            val upcomingSorted = upcoming.matches.sortedBy { it.kickoff ?: "" }
+            // Live matches lead the rail when there are any; upcoming ones
+            // fill out the rest of it right after — previously upcoming was
+            // only ever shown when there were zero live matches, which made
+            // the rail go nearly empty during quiet live moments even though
+            // there were perfectly good upcoming matches to show.
+            sportsMatches = (live.matches + upcomingSorted).distinctBy { it.id }.take(15)
+            sportsHasLive = live.matches.isNotEmpty()
         } catch (e: Exception) {
             // Sports is a secondary rail on Home — a failure here shouldn't
             // block or blank out the rest of the screen, it should just
@@ -574,7 +563,7 @@ fun HomeScreen(
                     item {
                         HomeSportsRail(
                             matches = sportsMatches,
-                            isLive = sportsShowingLive,
+                            isLive = sportsHasLive,
                             onMatchClick = onMatchClick,
                             onViewAllClick = onViewAllSportsClick
                         )
@@ -793,13 +782,17 @@ fun HomeSportsRail(
 
     Column {
         RailHeader(
-            title = if (isLive) "Live & Upcoming Football" else "Upcoming Matches",
+            // The rail itself is a mix of live + upcoming now (each card
+            // shows its own live badge or countdown), so the header just
+            // flags whether anything's live right now rather than claiming
+            // the whole rail is one or the other.
+            title = if (isLive) "Football \u2022 Live" else "Football",
             onViewAllClick = onViewAllClick
         )
         Spacer(modifier = Modifier.height(10.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(matches, key = { it.id }) { match ->
                 key(tick) {
@@ -816,7 +809,7 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
 
     Column(
         modifier = Modifier
-            .width(172.dp)
+            .width(150.dp)
             .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
             .clip(RoundedCornerShape(14.dp))
             .background(
@@ -826,14 +819,14 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
             )
             .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(11.dp)
+            .padding(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (match.league?.img != null) {
                 AsyncImage(
                     model = match.league.img,
                     contentDescription = null,
-                    modifier = Modifier.size(12.dp),
+                    modifier = Modifier.size(11.dp),
                     contentScale = ContentScale.Fit
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -852,7 +845,7 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -860,11 +853,11 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             HomeTeamBadge(name = match.home?.name, imageUrl = match.home?.img)
-            Text("vs", fontSize = 10.sp, color = YoTextMuted, fontWeight = FontWeight.Bold)
+            Text("vs", fontSize = 9.sp, color = YoTextMuted, fontWeight = FontWeight.Bold)
             HomeTeamBadge(name = match.away?.name, imageUrl = match.away?.img)
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Box(
             modifier = Modifier
@@ -882,7 +875,7 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
                         SportsTimeUtils.formatTime(match.kickoff)
                     }
                 },
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = accentColor,
                 maxLines = 1,
@@ -896,11 +889,11 @@ private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
 private fun HomeTeamBadge(name: String?, imageUrl: String?) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(56.dp)
+        modifier = Modifier.width(50.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
+                .size(30.dp)
                 .clip(CircleShape)
                 .background(YoBorder.copy(alpha = 0.3f)),
             contentAlignment = Alignment.Center
@@ -909,12 +902,12 @@ private fun HomeTeamBadge(name: String?, imageUrl: String?) {
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = name,
-                    modifier = Modifier.size(23.dp),
+                    modifier = Modifier.size(21.dp),
                     contentScale = ContentScale.Fit
                 )
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = name ?: "TBD",
             fontSize = 9.sp,
