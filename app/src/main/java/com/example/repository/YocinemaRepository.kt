@@ -279,12 +279,20 @@ class YocinemaRepository(context: Context) {
         year: String? = null,
         search: String? = null,
         limit: Int = 20,
-        page: Int = 1
+        page: Int = 1,
+        forceRefresh: Boolean = false
     ): List<Movie> {
         val cacheKey = "movies_${type}_${sort}_${genre}_${vj}_${country}_${year}_${search}_${limit}_$page"
-        val cached = memoryMovieCache[cacheKey]
-        if (cached != null && cached.isNotEmpty()) {
-            return cached
+        // This cache never expired and had no bypass — "pull to refresh"
+        // on Home was calling straight into it and getting the exact same
+        // list back from earlier in the session, without ever actually
+        // hitting the network again. forceRefresh (used by pull-to-refresh)
+        // skips this read entirely so a real request goes out.
+        if (!forceRefresh) {
+            val cached = memoryMovieCache[cacheKey]
+            if (cached != null && cached.isNotEmpty()) {
+                return cached
+            }
         }
 
         return try {
