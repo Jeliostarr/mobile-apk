@@ -1,11 +1,16 @@
 package com.example
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.example.data.api.AuthInterceptor
 import com.example.data.local.TokenManager
+import com.example.push.YoFirebaseMessagingService
+import com.google.firebase.messaging.FirebaseMessaging
 import okhttp3.OkHttpClient
 
 class YoApplication : Application(), ImageLoaderFactory {
@@ -13,6 +18,27 @@ class YoApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         val imageLoader = newImageLoader()
         Coil.setImageLoader(imageLoader)
+
+        createNotificationChannel()
+
+        // Subscribing is idempotent — safe to call on every single launch,
+        // Firebase no-ops if already subscribed. This is the entire
+        // "registration" step; there's no per-device token to send
+        // anywhere since the backend pushes to this topic directly.
+        FirebaseMessaging.getInstance().subscribeToTopic("new_movies")
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val channel = NotificationChannel(
+            YoFirebaseMessagingService.CHANNEL_ID,
+            "New Movies",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Notifies you when a new movie or series is added"
+        }
+        manager.createNotificationChannel(channel)
     }
 
     override fun newImageLoader(): ImageLoader {
