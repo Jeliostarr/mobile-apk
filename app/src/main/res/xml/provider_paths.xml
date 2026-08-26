@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Matches where ApkInstaller.kt saves the downloaded update APK
+         (context.getExternalFilesDir(null), app-specific external storage —
+         no storage permission needed to write there). -->
+    <external-files-path name="update_apk" path="." />
+    <cache-path name="cache" path="." />
+</paths>
