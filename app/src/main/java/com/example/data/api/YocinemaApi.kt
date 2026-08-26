@@ -1,5 +1,6 @@
 package com.example.data.api
 
+import com.example.data.model.AppVersionResponse
 import com.example.data.model.CastDetail
 import com.example.data.model.FacetsResponse
 import com.example.data.model.KeysResponse
@@ -19,6 +20,11 @@ interface YocinemaApi {
 
     @GET("api/v1/account/me")
     suspend fun getAccountMe(): Response<MeResponse>
+
+    // Public — no auth required. Checked on every app launch to decide
+    // whether to show the update dialog (see YocinemaRepository.checkAppVersion).
+    @GET("api/v1/app-version")
+    suspend fun getAppVersion(): Response<AppVersionResponse>
 
     @GET("api/v1/keys")
     suspend fun getKeys(): Response<KeysResponse>
