@@ -21,7 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
+import com.example.PendingDeepLink
 import com.example.data.api.ApiKeyIssue
+import com.example.data.model.AppUpdateState
 import com.example.data.model.DASHBOARD_URL
 import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
@@ -29,6 +31,7 @@ import com.example.ui.components.ApiKeyIssueDialog
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BottomTab
 import com.example.ui.components.LoadingScreen
+import com.example.ui.components.UpdateDialog
 import com.example.ui.screens.AccountScreen
 import com.example.ui.screens.CastDetailScreen
 import com.example.ui.screens.DetailScreen
@@ -95,6 +98,20 @@ fun MainAppNav() {
         showSplash = false
     }
 
+    // App-update check — runs once per process on launch. A failed/offline
+    // check just leaves appUpdateState null, which renders nothing; this
+    // should never block someone from using the app when they can't reach
+    // the version-check endpoint at all.
+    var appUpdateState by remember { mutableStateOf<AppUpdateState?>(null) }
+    var updateDialogDismissed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val versionResponse = repository.checkAppVersion() ?: return@LaunchedEffect
+        appUpdateState = repository.classifyAppUpdate(
+            currentVersionCode = com.example.BuildConfig.VERSION_CODE,
+            response = versionResponse
+        )
+    }
+
     fun navigateTo(screen: Screen) {
         screenBackStack.add(screen)
     }
@@ -107,6 +124,18 @@ fun MainAppNav() {
 
     BackHandler(enabled = screenBackStack.size > 1) {
         navigateBack()
+    }
+
+    // Notification tap deep link (see MainActivity.consumeDeepLink /
+    // YoFirebaseMessagingService) — reacts whenever PendingDeepLink.movieId
+    // changes, including a tap while the app is already open, since that
+    // updates the same observable state via onNewIntent().
+    LaunchedEffect(PendingDeepLink.movieId) {
+        val movieId = PendingDeepLink.movieId
+        if (!movieId.isNullOrBlank()) {
+            navigateTo(Screen.Detail(movieId))
+            PendingDeepLink.movieId = null
+        }
     }
 
     val showBottomNav = when (currentScreen) {
@@ -367,5 +396,34 @@ fun MainAppNav() {
             },
             onDismiss = { repository.clearApiKeyIssue() }
         )
+    }
+
+    // A required update takes priority — no reason to let someone keep
+    // dismissing/working around key issues on a version the backend has
+    // said is no longer supported. An optional one only shows if there's
+    // no forced dialog already up, and only until the user dismisses it
+    // once (updateDialogDismissed) — no re-nagging every recomposition.
+    when (val state = appUpdateState) {
+        is AppUpdateState.Required -> {
+            UpdateDialog(
+                versionName = state.versionName,
+                releaseNotes = state.releaseNotes,
+                apkUrl = state.apkUrl,
+                isForced = true,
+                onDismiss = {}
+            )
+        }
+        is AppUpdateState.Optional -> {
+            if (apiKeyIssue == null && !updateDialogDismissed) {
+                UpdateDialog(
+                    versionName = state.versionName,
+                    releaseNotes = state.releaseNotes,
+                    apkUrl = state.apkUrl,
+                    isForced = false,
+                    onDismiss = { updateDialogDismissed = true }
+                )
+            }
+        }
+        else -> {}
     }
 }
