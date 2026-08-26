@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Lets the app prompt the user to install a downloaded update APK
+         directly, instead of only being able to open it in a browser. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".YoApplication"
@@ -26,6 +29,7 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden|layoutDirection|density"
             android:supportsPictureInPicture="true">
             <intent-filter>
@@ -33,6 +37,40 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Receives push notifications (new movies) sent to the
+             "new_movies" topic — see YoFirebaseMessagingService.kt -->
+        <service
+            android:name=".push.YoFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Default notification channel/icon metadata FCM uses when a
+             message arrives while the app is backgrounded/killed (the
+             system builds the notification itself in that case, using
+             these instead of onMessageReceived). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="new_movies" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
+
+        <!-- Exposes downloaded files (the update APK) to the system
+             package installer without needing a raw file:// Uri, which is
+             blocked by FileProvider/StrictMode on modern Android. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
     </application>
 
 </manifest>
