@@ -93,7 +93,7 @@ fun UpdateDialog(
                     // a second button — this is the "auto in-app install"
                     // part; the OS still owns the actual install
                     // confirmation screen from here.
-                    ApkInstaller.installApk(context)
+                    ApkInstaller.installApkAndTerminate(context)
                 },
                 onFailure = { message -> downloadState = DownloadUiState.Failed(message) }
             )
