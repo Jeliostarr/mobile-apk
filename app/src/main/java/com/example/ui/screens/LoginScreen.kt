@@ -132,7 +132,7 @@ fun LoginScreen(
                     painter = painterResource(id = R.drawable.yocinema_logo_1786014644709),
                     contentDescription = "YOCINEMA Logo",
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(38.dp)
                         .shadow(8.dp, CircleShape, clip = false)
                         .clip(CircleShape)
                         .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
@@ -140,7 +140,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "YOCINEMA",
-                    fontSize = 20.sp,
+                    fontSize = 19.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.sp,
                     color = YoTextPrimary
@@ -156,7 +156,7 @@ fun LoginScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Box(
                 modifier = Modifier
@@ -178,7 +178,7 @@ fun LoginScreen(
                 )
 
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     OutlinedTextField(
@@ -235,7 +235,7 @@ fun LoginScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Button(
                         onClick = {
@@ -258,7 +258,7 @@ fun LoginScreen(
                         enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp),
+                            .height(46.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = YoPrimaryViolet,
@@ -272,7 +272,7 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedButton(
                         onClick = {
@@ -281,7 +281,7 @@ fun LoginScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp),
+                            .height(42.dp),
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, YoBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = YoTextPrimary)
@@ -298,7 +298,7 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             TutorialBanner(
                 onOpenInYouTube = {
@@ -321,26 +321,39 @@ fun LoginScreen(
 }
 
 /**
- * A single slim row instead of a full 16:9 video block — same "watch the
- * tutorial" affordance (thumbnail + play icon, taps out to YouTube) without
- * costing nearly as much vertical space.
+ * A wide landscape thumbnail (not a full 16:9 block — that was too tall to
+ * fit a no-scroll screen — but sized to actually read as a video player
+ * rather than a barely-visible icon) with a play button overlay; tapping
+ * hands off to the YouTube app.
  */
 @Composable
 private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(8.dp, RoundedCornerShape(16.dp), clip = false)
             .clip(RoundedCornerShape(16.dp))
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
             .clickable(onClick = onOpenInYouTube)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(10.dp)
     ) {
+        Text(
+            text = "New here? Watch the tutorial to get your API key",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = YoTextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Box(
             modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .fillMaxWidth()
+                .height(92.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFF15151A))
         ) {
             if (TUTORIAL_THUMBNAIL_URL != null) {
@@ -350,11 +363,21 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))
+                            )
+                        )
+                )
             }
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(24.dp)
+                    .size(42.dp)
+                    .shadow(6.dp, CircleShape, clip = false)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center
@@ -363,36 +386,24 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Watch on YouTube",
                     tint = YoPrimaryViolet,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("YouTube", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                Spacer(modifier = Modifier.width(2.dp))
+                Icon(
+                    imageVector = Icons.Default.OpenInNew,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(11.dp)
                 )
             }
         }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "New here? Watch the tutorial",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = YoTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "How to get your API key",
-                fontSize = 11.sp,
-                color = YoTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Icon(
-            imageVector = Icons.Default.OpenInNew,
-            contentDescription = null,
-            tint = YoTextMuted,
-            modifier = Modifier.size(14.dp)
-        )
     }
 }
