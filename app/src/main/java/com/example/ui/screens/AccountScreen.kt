@@ -293,7 +293,7 @@ fun AccountScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "YOCINEMA v1.0.0",
+                        text = "YOCINEMA v${com.example.BuildConfig.VERSION_NAME}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = YoTextMuted.copy(alpha = 0.6f)
