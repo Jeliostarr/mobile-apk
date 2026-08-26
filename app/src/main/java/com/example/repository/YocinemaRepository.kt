@@ -14,6 +14,8 @@ import com.example.data.local.MovieCacheEntity
 import com.example.data.local.TokenManager
 import com.example.data.local.WatchlistEntity
 import com.example.data.model.AccountUser
+import com.example.data.model.AppUpdateState
+import com.example.data.model.AppVersionResponse
 import com.example.data.model.BASE_URL
 import com.example.data.model.CastDetail
 import com.example.data.model.Episode
@@ -182,6 +184,43 @@ class YocinemaRepository(context: Context) {
             if (response.isSuccessful) response.body()?.actualUser else null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Fetches the backend's current version config. Returns null on any
+     * failure (offline, server down, route not yet mounted) — callers
+     * should treat null as "couldn't check, don't block the user".
+     */
+    suspend fun checkAppVersion(): AppVersionResponse? {
+        return try {
+            val response = api.getAppVersion()
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Compares the installed version against the backend's config to
+     * decide what (if anything) the app should tell the user about it.
+     * [currentVersionCode] should be BuildConfig.VERSION_CODE from the
+     * call site — kept as a parameter rather than read here so this stays
+     * easily testable and doesn't need an Android Context.
+     */
+    fun classifyAppUpdate(currentVersionCode: Int, response: AppVersionResponse): AppUpdateState {
+        val latest = response.actualLatestVersionCode
+        val minSupported = response.actualMinSupportedVersionCode
+        val versionName = response.actualLatestVersionName
+        val releaseNotes = response.actualReleaseNotes
+        val apkUrl = response.actualApkUrl
+
+        return when {
+            currentVersionCode < minSupported || response.actualForceUpdate ->
+                AppUpdateState.Required(versionName, releaseNotes, apkUrl)
+            currentVersionCode < latest ->
+                AppUpdateState.Optional(versionName, releaseNotes, apkUrl)
+            else -> AppUpdateState.UpToDate
         }
     }
 
