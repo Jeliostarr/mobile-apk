@@ -109,4 +109,30 @@ object ApkInstaller {
         }
         context.startActivity(intent)
     }
+
+    /**
+     * Fires the install prompt, then kills this process shortly after.
+     *
+     * This matters specifically because MainActivity uses launchMode
+     * "singleTop" (needed for notification deep-links) — without this,
+     * reopening the app after installing (whether via the system
+     * installer's own "Open" button or the launcher icon) can just resume
+     * THIS still-alive process instead of starting a genuinely fresh one.
+     * A running process keeps executing the code it already loaded into
+     * memory even after the APK on disk has been replaced — which is
+     * exactly why the force-update dialog was reappearing right after a
+     * successful install. Killing the process ourselves guarantees the
+     * next launch actually picks up the new code.
+     */
+    fun installApkAndTerminate(context: Context) {
+        installApk(context)
+        // Small delay so the system installer's own screen actually gets
+        // a chance to come to the foreground before we pull the process
+        // out from under it — killing immediately can race the intent
+        // launch on slower devices.
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            android.os.Process.killProcess(android.os.Process.myPid())
+            kotlin.system.exitProcess(0)
+        }, 1000)
+    }
 }
