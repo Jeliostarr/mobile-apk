@@ -388,3 +388,60 @@ data class ViewProgressRequest(
     val viewerId: String,
     val watchedSeconds: Long
 )
+
+/**
+ * Same envelope situation as KeysResponse/MeResponse — responseWrapper.js
+ * wraps this route's res.json({...}) inside {success, data: {...}}, so the
+ * real fields live at data.* here, not at the root. actualX getters are
+ * what callers should read.
+ */
+@JsonClass(generateAdapter = true)
+data class AppVersionResponse(
+    val latestVersionCode: Int? = null,
+    val latestVersionName: String? = null,
+    val minSupportedVersionCode: Int? = null,
+    val apkUrl: String? = null,
+    val releaseNotes: String? = null,
+    val forceUpdate: Boolean? = null,
+    val data: AppVersionDataWrapper? = null
+) {
+    val actualLatestVersionCode: Int get() = latestVersionCode ?: data?.latestVersionCode ?: 0
+    val actualLatestVersionName: String get() = latestVersionName ?: data?.latestVersionName ?: ""
+    val actualMinSupportedVersionCode: Int get() = minSupportedVersionCode ?: data?.minSupportedVersionCode ?: 0
+    val actualApkUrl: String get() = apkUrl ?: data?.apkUrl ?: ""
+    val actualReleaseNotes: String get() = releaseNotes ?: data?.releaseNotes ?: ""
+    val actualForceUpdate: Boolean get() = forceUpdate ?: data?.forceUpdate ?: false
+}
+
+@JsonClass(generateAdapter = true)
+data class AppVersionDataWrapper(
+    val latestVersionCode: Int? = null,
+    val latestVersionName: String? = null,
+    val minSupportedVersionCode: Int? = null,
+    val apkUrl: String? = null,
+    val releaseNotes: String? = null,
+    val forceUpdate: Boolean? = null
+)
+
+/**
+ * What the app should do about an available update, decided by comparing
+ * the installed BuildConfig.VERSION_CODE against the backend's config (see
+ * YocinemaRepository.classifyAppUpdate).
+ */
+sealed class AppUpdateState {
+    object UpToDate : AppUpdateState()
+
+    /** Below latest but still >= minSupported — a dismissible nudge. */
+    data class Optional(
+        val versionName: String,
+        val releaseNotes: String,
+        val apkUrl: String
+    ) : AppUpdateState()
+
+    /** Below minSupported, or forceUpdate is set — non-dismissible. */
+    data class Required(
+        val versionName: String,
+        val releaseNotes: String,
+        val apkUrl: String
+    ) : AppUpdateState()
+}
