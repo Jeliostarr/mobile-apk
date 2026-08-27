@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Notification small-icon — silhouette of the real YOCINEMA reel-and-play
+  logo (gold reel, 6 sprocket holes, center play triangle). Android renders
+  status-bar icons using ONLY this image's alpha channel (API 21+), so the
+  gold gradient/color from the real logo is dropped here — only the shape
+  matters. The very fine sprocket perforations along the real logo's outer
+  rim are also dropped: at 24dp they'd just render as noise, not detail.
+
+  fillColor value itself doesn't affect rendering (only alpha does); opaque
+  black is the standard convention for these assets.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="
+            M12,2 A10,10 0 1,0 12,22 A10,10 0 1,0 12,2 Z
+            M12,5.5 A6.5,6.5 0 1,0 12,18.5 A6.5,6.5 0 1,0 12,5.5 Z
+            M10.5,3.75 A1.5,1.5 0 1,0 13.5,3.75 A1.5,1.5 0 1,0 10.5,3.75 Z
+            M17.64,7.87 A1.5,1.5 0 1,0 20.64,7.87 A1.5,1.5 0 1,0 17.64,7.87 Z
+            M17.64,16.12 A1.5,1.5 0 1,0 20.64,16.12 A1.5,1.5 0 1,0 17.64,16.12 Z
+            M10.5,20.25 A1.5,1.5 0 1,0 13.5,20.25 A1.5,1.5 0 1,0 10.5,20.25 Z
+            M3.36,16.12 A1.5,1.5 0 1,0 6.36,16.12 A1.5,1.5 0 1,0 3.36,16.12 Z
+            M3.36,7.87 A1.5,1.5 0 1,0 6.36,7.87 A1.5,1.5 0 1,0 3.36,7.87 Z
+            M10.3,8.8 L15.7,12 L10.3,15.2 Z" />
+</vector>
