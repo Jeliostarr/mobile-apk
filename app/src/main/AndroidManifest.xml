@@ -57,7 +57,7 @@
             android:value="new_movies" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
+            android:resource="@drawable/ic_notification" />
 
         <!-- Exposes downloaded files (the update APK) to the system
              package installer without needing a raw file:// Uri, which is
