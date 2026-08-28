@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -98,27 +97,8 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF0A0A0C), Color(0xFF16141C), Color(0xFF0A0A0C))
-                )
-            )
+            .background(YoBaseBackground)
     ) {
-        // One subtle glow behind the header — enough to keep the screen from
-        // feeling flat without adding visual clutter or taking up layout space.
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-40).dp)
-                .size(220.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(YoPrimaryViolet.copy(alpha = 0.22f), Color.Transparent)
-                    ),
-                    shape = CircleShape
-                )
-        )
-
         // No scroll — everything sized to fit one screen, centered as a unit.
         Column(
             modifier = Modifier
@@ -156,7 +136,7 @@ fun LoginScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Box(
                 modifier = Modifier
@@ -178,7 +158,7 @@ fun LoginScreen(
                 )
 
                 Column(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     OutlinedTextField(
@@ -235,7 +215,7 @@ fun LoginScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Button(
                         onClick = {
@@ -272,7 +252,7 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     OutlinedButton(
                         onClick = {
@@ -298,7 +278,7 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             TutorialBanner(
                 onOpenInYouTube = {
@@ -336,7 +316,7 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
             .background(YoSurface)
             .border(1.dp, YoBorder, RoundedCornerShape(16.dp))
             .clickable(onClick = onOpenInYouTube)
-            .padding(10.dp)
+            .padding(8.dp)
     ) {
         Text(
             text = "New here? Watch the tutorial to get your API key",
@@ -347,12 +327,12 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
             overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(92.dp)
+                .height(118.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFF15151A))
         ) {
@@ -376,7 +356,7 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(42.dp)
+                    .size(52.dp)
                     .shadow(6.dp, CircleShape, clip = false)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.92f)),
@@ -386,7 +366,7 @@ private fun TutorialBanner(onOpenInYouTube: () -> Unit) {
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Watch on YouTube",
                     tint = YoPrimaryViolet,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
             Row(

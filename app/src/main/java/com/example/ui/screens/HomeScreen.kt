@@ -23,9 +23,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -718,10 +716,10 @@ fun RailHeader(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.MoreHoriz,
+                imageVector = Icons.Default.GridView,
                 contentDescription = "View All",
                 tint = YoTextMuted,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }
