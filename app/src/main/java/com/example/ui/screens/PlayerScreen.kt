@@ -11,8 +11,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +39,6 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
@@ -81,6 +82,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -101,6 +104,7 @@ import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "PlayerScreen"
 
@@ -141,6 +145,11 @@ fun PlayerScreen(
 
     // ─── New: lock, volume/brightness swipe, double-tap seek, hold-for-2x ───
     var isLocked by remember { mutableStateOf(false) }
+    // Controls whether the small unlock icon is currently shown — behaves
+    // like the normal controls (auto-hides after a few seconds, tapping
+    // the screen while locked brings it back) rather than staying
+    // permanently on screen.
+    var showLockHint by remember { mutableStateOf(true) }
 
     val audioManager = remember {
         context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
@@ -173,6 +182,14 @@ fun PlayerScreen(
         val params = win.attributes
         params.screenBrightness = value.coerceIn(0.01f, 1f)
         win.attributes = params
+    }
+
+    LaunchedEffect(isLocked) {
+        if (isLocked) {
+            showLockHint = true
+            delay(3000)
+            showLockHint = false
+        }
     }
 
     // Mutable current position within the series — lets "Play Next" and
@@ -395,11 +412,28 @@ fun PlayerScreen(
         // control buttons rendered further down, so a tap that lands on an
         // actual button (back, play/pause, seek bar, etc) is consumed by
         // that button first and never reaches these zones underneath.
+        //
+        // Each zone uses ONE unified gesture detector (playerZoneGestures
+        // below) rather than a separate detectTapGestures +
+        // detectVerticalDragGestures pair — running two independent
+        // detectors on the same touch stream let them race each other:
+        // a real double-tap always has tiny jitter between the two taps,
+        // and the drag detector could pick that up and consume it before
+        // the tap detector saw it, which is what was breaking double-tap
+        // (and making it seem like only one direction ever worked).
         if (loadError == null) {
             fun revertFastForwardIfNeeded() {
                 if (isFastForwarding) {
                     isFastForwarding = false
                     playerManager.exoPlayer.setPlaybackSpeed(playbackSpeed)
+                }
+            }
+
+            fun revealLockHint() {
+                showLockHint = true
+                scope.launch {
+                    delay(3000)
+                    showLockHint = false
                 }
             }
 
@@ -410,8 +444,10 @@ fun PlayerScreen(
                     .fillMaxHeight()
                     .fillMaxWidth(0.5f)
                     .pointerInput(isLocked) {
-                        detectTapGestures(
-                            onTap = { if (!isLocked) isControlsVisible = !isControlsVisible },
+                        playerZoneGestures(
+                            onSingleTap = {
+                                if (isLocked) revealLockHint() else isControlsVisible = !isControlsVisible
+                            },
                             onDoubleTap = {
                                 if (!isLocked) {
                                     playerManager.exoPlayer.seekTo(
@@ -424,34 +460,28 @@ fun PlayerScreen(
                                     }
                                 }
                             },
-                            onLongPress = {
+                            onLongPressStart = {
                                 if (!isLocked) {
                                     isFastForwarding = true
                                     playerManager.exoPlayer.setPlaybackSpeed(2f)
                                 }
                             },
-                            onPress = {
-                                tryAwaitRelease()
-                                revertFastForwardIfNeeded()
-                            }
-                        )
-                    }
-                    .pointerInput(isLocked) {
-                        if (isLocked) return@pointerInput
-                        detectVerticalDragGestures(
-                            onDragStart = { showBrightnessIndicator = true },
-                            onDragEnd = {
-                                scope.launch {
-                                    delay(800)
-                                    showBrightnessIndicator = false
+                            onLongPressEnd = { revertFastForwardIfNeeded() },
+                            onDragStart = { if (!isLocked) showBrightnessIndicator = true },
+                            onVerticalDrag = { deltaY ->
+                                if (!isLocked) {
+                                    val delta = -deltaY / size.height.toFloat()
+                                    brightnessLevel = (brightnessLevel + delta).coerceIn(0f, 1f)
+                                    applyBrightness(brightnessLevel)
                                 }
                             },
-                            onDragCancel = { showBrightnessIndicator = false },
-                            onVerticalDrag = { change, dragAmount ->
-                                change.consume()
-                                val delta = -dragAmount / size.height.toFloat()
-                                brightnessLevel = (brightnessLevel + delta).coerceIn(0f, 1f)
-                                applyBrightness(brightnessLevel)
+                            onDragEnd = {
+                                if (!isLocked) {
+                                    scope.launch {
+                                        delay(800)
+                                        showBrightnessIndicator = false
+                                    }
+                                }
                             }
                         )
                     }
@@ -484,8 +514,10 @@ fun PlayerScreen(
                     .fillMaxHeight()
                     .fillMaxWidth(0.5f)
                     .pointerInput(isLocked) {
-                        detectTapGestures(
-                            onTap = { if (!isLocked) isControlsVisible = !isControlsVisible },
+                        playerZoneGestures(
+                            onSingleTap = {
+                                if (isLocked) revealLockHint() else isControlsVisible = !isControlsVisible
+                            },
                             onDoubleTap = {
                                 if (!isLocked) {
                                     playerManager.exoPlayer.seekTo(
@@ -498,38 +530,32 @@ fun PlayerScreen(
                                     }
                                 }
                             },
-                            onLongPress = {
+                            onLongPressStart = {
                                 if (!isLocked) {
                                     isFastForwarding = true
                                     playerManager.exoPlayer.setPlaybackSpeed(2f)
                                 }
                             },
-                            onPress = {
-                                tryAwaitRelease()
-                                revertFastForwardIfNeeded()
-                            }
-                        )
-                    }
-                    .pointerInput(isLocked) {
-                        if (isLocked) return@pointerInput
-                        detectVerticalDragGestures(
-                            onDragStart = { showVolumeIndicator = true },
-                            onDragEnd = {
-                                scope.launch {
-                                    delay(800)
-                                    showVolumeIndicator = false
+                            onLongPressEnd = { revertFastForwardIfNeeded() },
+                            onDragStart = { if (!isLocked) showVolumeIndicator = true },
+                            onVerticalDrag = { deltaY ->
+                                if (!isLocked) {
+                                    val delta = -deltaY / size.height.toFloat()
+                                    volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
+                                    audioManager.setStreamVolume(
+                                        AudioManager.STREAM_MUSIC,
+                                        (volumeLevel * maxVolume).toInt(),
+                                        0
+                                    )
                                 }
                             },
-                            onDragCancel = { showVolumeIndicator = false },
-                            onVerticalDrag = { change, dragAmount ->
-                                change.consume()
-                                val delta = -dragAmount / size.height.toFloat()
-                                volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
-                                audioManager.setStreamVolume(
-                                    AudioManager.STREAM_MUSIC,
-                                    (volumeLevel * maxVolume).toInt(),
-                                    0
-                                )
+                            onDragEnd = {
+                                if (!isLocked) {
+                                    scope.launch {
+                                        delay(800)
+                                        showVolumeIndicator = false
+                                    }
+                                }
                             }
                         )
                     }
@@ -837,26 +863,25 @@ fun PlayerScreen(
                                         else AspectRatioFrameLayout.RESIZE_MODE_FIT
                                     }
                                 )
-                                ControlIconButton(
-                                    icon = Icons.Default.PictureInPicture,
-                                    contentDescription = "Picture in picture",
-                                    size = 40.dp,
-                                    onClick = { activity?.enterPictureInPictureModeSafely() }
-                                )
                             }
                         }
                     }
                 }
             }
 
-            // Persistent unlock affordance — the ONE thing still reachable
-            // while locked. Deliberately outside the AnimatedVisibility
-            // above (which is now gated off entirely while locked) so it's
-            // always tappable regardless of the normal show/hide timer.
-            if (isLocked) {
+            // Unlock affordance — reachable while locked, but now behaves
+            // like the normal controls: fades out a few seconds after
+            // locking, and a tap anywhere in either gesture zone (see
+            // revealLockHint above) brings it back rather than leaving it
+            // permanently on screen.
+            AnimatedVisibility(
+                visible = isLocked && showLockHint,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
                         .padding(start = 16.dp)
                         .size(48.dp)
                         .shadow(6.dp, CircleShape, clip = false)
@@ -1050,6 +1075,88 @@ private fun ControlIconButton(
     }
 }
 
+/**
+ * Single unified gesture recognizer for one player zone — tap, double-tap,
+ * long-press(-and-release), and vertical drag, all arbitrated from ONE
+ * pointer event stream instead of two independent detectors racing each
+ * other. That race was the actual cause of double-tap becoming unreliable
+ * (a real double-tap always has a little jitter between taps, and a
+ * separate drag detector watching the same stream could consume that
+ * jitter as the start of a drag before the tap detector ever saw it).
+ *
+ * Per gesture: wait for the first down, then watch for up to
+ * [longPressTimeoutMs] for either (a) enough vertical movement to count as
+ * a drag, or (b) release. If neither happens before the timeout, it's a
+ * long-press. If released quickly with no real movement, wait briefly for
+ * a second down to decide tap vs double-tap.
+ */
+private suspend fun PointerInputScope.playerZoneGestures(
+    onSingleTap: () -> Unit,
+    onDoubleTap: () -> Unit,
+    onLongPressStart: () -> Unit,
+    onLongPressEnd: () -> Unit,
+    onDragStart: () -> Unit,
+    onVerticalDrag: (deltaY: Float) -> Unit,
+    onDragEnd: () -> Unit
+) {
+    val longPressTimeoutMs = viewConfiguration.longPressTimeoutMillis
+    val touchSlop = viewConfiguration.touchSlop
+    val doubleTapTimeoutMs = 300L
+
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val pointerId = down.id
+        var isDrag = false
+
+        val releasedBeforeTimeout = withTimeoutOrNull(longPressTimeoutMs) {
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == pointerId } ?: return@withTimeoutOrNull true
+                if (!change.pressed) return@withTimeoutOrNull true
+                if (kotlin.math.abs(change.positionChange().y) > touchSlop) {
+                    isDrag = true
+                    change.consume()
+                    return@withTimeoutOrNull false
+                }
+            }
+            @Suppress("UNREACHABLE_CODE")
+            true
+        }
+
+        when {
+            isDrag -> {
+                onDragStart()
+                drag(pointerId) { change ->
+                    change.consume()
+                    onVerticalDrag(change.positionChange().y)
+                }
+                onDragEnd()
+            }
+
+            releasedBeforeTimeout == null -> {
+                // Timed out while still held with no real movement — long press.
+                onLongPressStart()
+                waitForUpOrCancellation()
+                onLongPressEnd()
+            }
+
+            else -> {
+                // Released quickly without dragging — tap candidate. Wait
+                // briefly for a second down to decide tap vs double-tap.
+                val secondDown = withTimeoutOrNull(doubleTapTimeoutMs) {
+                    awaitFirstDown(requireUnconsumed = false)
+                }
+                if (secondDown != null) {
+                    waitForUpOrCancellation()
+                    onDoubleTap()
+                } else {
+                    onSingleTap()
+                }
+            }
+        }
+    }
+}
+
 /** Brief "-10s"/"+10s" bump shown centered in whichever half of the screen was double-tapped. */
 @Composable
 private fun SeekBumpIndicator(forward: Boolean) {
@@ -1124,16 +1231,4 @@ private fun SpinningLoader(color: Color = YoPrimaryViolet, size: androidx.compos
         color = color,
         strokeWidth = 3.dp
     )
-}
-
-private fun Activity.enterPictureInPictureModeSafely() {
-    try {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
 }
