@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
+import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
@@ -10,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,13 +29,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.BrightnessLow
+import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -88,6 +100,7 @@ import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoTextMuted
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val TAG = "PlayerScreen"
 
@@ -126,6 +139,42 @@ fun PlayerScreen(
     var showSpeedMenu by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
+    // ─── New: lock, volume/brightness swipe, double-tap seek, hold-for-2x ───
+    var isLocked by remember { mutableStateOf(false) }
+
+    val audioManager = remember {
+        context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+    }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var volumeLevel by remember {
+        mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
+    }
+    // Screen-brightness override lives on the Activity's own window — no
+    // special permission needed (unlike writing the system-wide setting),
+    // and it's reset back to "use system default" in the DisposableEffect
+    // below so it never leaks into other screens after leaving the player.
+    var brightnessLevel by remember {
+        mutableFloatStateOf(
+            try {
+                Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128) / 255f
+            } catch (e: Exception) {
+                0.5f
+            }
+        )
+    }
+    var showVolumeIndicator by remember { mutableStateOf(false) }
+    var showBrightnessIndicator by remember { mutableStateOf(false) }
+    // true = forward (right side double-tap), false = back (left side), null = hidden
+    var seekIndicatorSide by remember { mutableStateOf<Boolean?>(null) }
+    var isFastForwarding by remember { mutableStateOf(false) }
+
+    fun applyBrightness(value: Float) {
+        val win = activity?.window ?: return
+        val params = win.attributes
+        params.screenBrightness = value.coerceIn(0.01f, 1f)
+        win.attributes = params
+    }
+
     // Mutable current position within the series — lets "Play Next" and
     // the episode picker advance playback in place without needing the
     // caller/nav graph to re-launch this screen with new args.
@@ -158,6 +207,13 @@ fun PlayerScreen(
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             activity?.window?.let { win ->
+                // -1f (BRIGHTNESS_OVERRIDE_NONE) hands control back to the
+                // system default — without this, whatever level the user
+                // last dragged to here would stick on every other screen
+                // in the app too.
+                val params = win.attributes
+                params.screenBrightness = -1f
+                win.attributes = params
                 WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -307,9 +363,6 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { isControlsVisible = !isControlsVisible })
-            }
     ) {
         if (loadError == null) {
             AndroidView(
@@ -335,6 +388,199 @@ fun PlayerScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        // ─── Gesture zones — left half (brightness + rewind), right half
+        // (volume + forward). Placed above the video but below the real
+        // control buttons rendered further down, so a tap that lands on an
+        // actual button (back, play/pause, seek bar, etc) is consumed by
+        // that button first and never reaches these zones underneath.
+        if (loadError == null) {
+            fun revertFastForwardIfNeeded() {
+                if (isFastForwarding) {
+                    isFastForwarding = false
+                    playerManager.exoPlayer.setPlaybackSpeed(playbackSpeed)
+                }
+            }
+
+            // Left zone — brightness drag, rewind double-tap
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.5f)
+                    .pointerInput(isLocked) {
+                        detectTapGestures(
+                            onTap = { if (!isLocked) isControlsVisible = !isControlsVisible },
+                            onDoubleTap = {
+                                if (!isLocked) {
+                                    playerManager.exoPlayer.seekTo(
+                                        (playerManager.exoPlayer.currentPosition - 10_000).coerceAtLeast(0)
+                                    )
+                                    seekIndicatorSide = false
+                                    scope.launch {
+                                        delay(600)
+                                        if (seekIndicatorSide == false) seekIndicatorSide = null
+                                    }
+                                }
+                            },
+                            onLongPress = {
+                                if (!isLocked) {
+                                    isFastForwarding = true
+                                    playerManager.exoPlayer.setPlaybackSpeed(2f)
+                                }
+                            },
+                            onPress = {
+                                tryAwaitRelease()
+                                revertFastForwardIfNeeded()
+                            }
+                        )
+                    }
+                    .pointerInput(isLocked) {
+                        if (isLocked) return@pointerInput
+                        detectVerticalDragGestures(
+                            onDragStart = { showBrightnessIndicator = true },
+                            onDragEnd = {
+                                scope.launch {
+                                    delay(800)
+                                    showBrightnessIndicator = false
+                                }
+                            },
+                            onDragCancel = { showBrightnessIndicator = false },
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                val delta = -dragAmount / size.height.toFloat()
+                                brightnessLevel = (brightnessLevel + delta).coerceIn(0f, 1f)
+                                applyBrightness(brightnessLevel)
+                            }
+                        )
+                    }
+            ) {
+                AnimatedVisibility(
+                    visible = seekIndicatorSide == false,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    SeekBumpIndicator(forward = false)
+                }
+                AnimatedVisibility(
+                    visible = showBrightnessIndicator,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    LevelIndicator(
+                        level = brightnessLevel,
+                        icon = if (brightnessLevel < 0.5f) Icons.Default.BrightnessLow else Icons.Default.BrightnessHigh
+                    )
+                }
+            }
+
+            // Right zone — volume drag, forward double-tap
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.5f)
+                    .pointerInput(isLocked) {
+                        detectTapGestures(
+                            onTap = { if (!isLocked) isControlsVisible = !isControlsVisible },
+                            onDoubleTap = {
+                                if (!isLocked) {
+                                    playerManager.exoPlayer.seekTo(
+                                        (playerManager.exoPlayer.currentPosition + 10_000).coerceAtMost(durationMs)
+                                    )
+                                    seekIndicatorSide = true
+                                    scope.launch {
+                                        delay(600)
+                                        if (seekIndicatorSide == true) seekIndicatorSide = null
+                                    }
+                                }
+                            },
+                            onLongPress = {
+                                if (!isLocked) {
+                                    isFastForwarding = true
+                                    playerManager.exoPlayer.setPlaybackSpeed(2f)
+                                }
+                            },
+                            onPress = {
+                                tryAwaitRelease()
+                                revertFastForwardIfNeeded()
+                            }
+                        )
+                    }
+                    .pointerInput(isLocked) {
+                        if (isLocked) return@pointerInput
+                        detectVerticalDragGestures(
+                            onDragStart = { showVolumeIndicator = true },
+                            onDragEnd = {
+                                scope.launch {
+                                    delay(800)
+                                    showVolumeIndicator = false
+                                }
+                            },
+                            onDragCancel = { showVolumeIndicator = false },
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                val delta = -dragAmount / size.height.toFloat()
+                                volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
+                                audioManager.setStreamVolume(
+                                    AudioManager.STREAM_MUSIC,
+                                    (volumeLevel * maxVolume).toInt(),
+                                    0
+                                )
+                            }
+                        )
+                    }
+            ) {
+                AnimatedVisibility(
+                    visible = seekIndicatorSide == true,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    SeekBumpIndicator(forward = true)
+                }
+                AnimatedVisibility(
+                    visible = showVolumeIndicator,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    LevelIndicator(
+                        level = volumeLevel,
+                        icon = when {
+                            volumeLevel <= 0f -> Icons.Default.VolumeOff
+                            volumeLevel < 0.5f -> Icons.Default.VolumeDown
+                            else -> Icons.Default.VolumeUp
+                        }
+                    )
+                }
+            }
+
+            // Hold-for-2x indicator — centered near the top, visible from
+            // either zone since long-press is symmetric on both sides.
+            AnimatedVisibility(
+                visible = isFastForwarding,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 90.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.FastForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("2x speed", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
 
         if (loadError != null) {
@@ -406,7 +652,7 @@ fun PlayerScreen(
 
         if (loadError == null) {
             AnimatedVisibility(
-                visible = isControlsVisible,
+                visible = isControlsVisible && !isLocked,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.fillMaxSize()
@@ -568,6 +814,20 @@ fun PlayerScreen(
                             Text("${formatTime(displayPos)} / ${formatTime(durationMs)}", color = Color.White, fontSize = 13.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ControlIconButton(
+                                    icon = Icons.Default.LockOpen,
+                                    contentDescription = "Lock",
+                                    size = 40.dp,
+                                    onClick = {
+                                        isLocked = true
+                                        // Hides the normal controls the same
+                                        // instant — the AnimatedVisibility
+                                        // gate below (isControlsVisible &&
+                                        // !isLocked) picks this up immediately
+                                        // rather than waiting for the
+                                        // auto-hide timer.
+                                    }
+                                )
+                                ControlIconButton(
                                     icon = Icons.Default.AspectRatio,
                                     contentDescription = "Resize",
                                     size = 40.dp,
@@ -586,6 +846,31 @@ fun PlayerScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // Persistent unlock affordance — the ONE thing still reachable
+            // while locked. Deliberately outside the AnimatedVisibility
+            // above (which is now gated off entirely while locked) so it's
+            // always tappable regardless of the normal show/hide timer.
+            if (isLocked) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 16.dp)
+                        .size(48.dp)
+                        .shadow(6.dp, CircleShape, clip = false)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .clickable { isLocked = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Unlock",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
         }
@@ -762,6 +1047,73 @@ private fun ControlIconButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(imageVector = icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(size * 0.5f))
+    }
+}
+
+/** Brief "-10s"/"+10s" bump shown centered in whichever half of the screen was double-tapped. */
+@Composable
+private fun SeekBumpIndicator(forward: Boolean) {
+    Column(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = if (forward) Icons.Default.FastForward else Icons.Default.FastRewind,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(30.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = if (forward) "+10s" else "-10s",
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/** Vertical pill showing the current volume/brightness level while dragging — same shape used for both. */
+@Composable
+private fun LevelIndicator(level: Float, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Column(
+        modifier = Modifier
+            .width(56.dp)
+            .height(150.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(vertical = 14.dp, horizontal = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+
+        Box(
+            modifier = Modifier
+                .width(6.dp)
+                .weight(1f)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Color.White.copy(alpha = 0.25f)),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(level.coerceIn(0f, 1f))
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(YoPrimaryViolet)
+            )
+        }
+
+        Text(
+            text = "${(level * 100).toInt()}%",
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
