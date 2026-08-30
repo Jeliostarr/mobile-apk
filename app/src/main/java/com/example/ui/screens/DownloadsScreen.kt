@@ -216,6 +216,7 @@ fun ActiveDownloadRow(
     val formattedTotal = if (download.totalBytes > 0) formatBytes(download.totalBytes) else "..."
     val isDownloading = download.status == DownloadEntity.STATUS_DOWNLOADING
     val isPaused = download.status == DownloadEntity.STATUS_PAUSED
+    val isFailed = download.status == DownloadEntity.STATUS_FAILED
 
     Row(
         modifier = Modifier
@@ -312,13 +313,18 @@ fun ActiveDownloadRow(
                 val statusText = when {
                     isDownloading -> formatSpeed(download.speedBytesPerSec)
                     isPaused -> "Paused"
+                    isFailed -> "Failed — tap retry"
                     else -> download.status
                 }
                 Text(
                     text = statusText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isDownloading) YoPrimaryViolet else YoTextMuted,
+                    color = when {
+                        isDownloading -> YoPrimaryViolet
+                        isFailed -> YoDestructive
+                        else -> YoTextMuted
+                    },
                     maxLines = 1,
                     softWrap = false
                 )
@@ -332,9 +338,13 @@ fun ActiveDownloadRow(
                 IconButton(onClick = onPause) {
                     Icon(Icons.Default.Pause, contentDescription = "Pause", tint = YoPrimaryViolet)
                 }
-            } else if (isPaused) {
+            } else if (isPaused || isFailed) {
                 IconButton(onClick = onResume) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Resume", tint = YoPrimaryViolet)
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = if (isFailed) "Retry" else "Resume",
+                        tint = if (isFailed) YoDestructive else YoPrimaryViolet
+                    )
                 }
             }
 
