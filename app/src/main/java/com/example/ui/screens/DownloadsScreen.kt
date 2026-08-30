@@ -264,7 +264,7 @@ fun ActiveDownloadRow(
             )
 
             val subtitle = buildString {
-                download.vjName?.let { append("by $it") }
+                download.vjName?.let { append("By Vj $it") }
                 if (download.seasonNumber != null && download.episodeNumber != null) {
                     if (isNotEmpty()) append(" · ")
                     append("S${download.seasonNumber} E${download.episodeNumber}")
@@ -413,7 +413,7 @@ fun CompletedDownloadRow(
             )
 
             val subtitle = buildString {
-                download.vjName?.let { append("by $it") }
+                download.vjName?.let { append("By Vj $it") }
                 if (download.seasonNumber != null && download.episodeNumber != null) {
                     if (isNotEmpty()) append(" · ")
                     append("S${download.seasonNumber} E${download.episodeNumber}")
