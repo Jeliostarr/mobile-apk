@@ -44,12 +44,17 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads ORDER BY updatedAt DESC")
     fun getAllDownloads(): Flow<List<DownloadEntity>>
 
-    // ✅ Explicitly includes PAUSED so paused downloads stay in the active tab.
+    // Includes PAUSED (so paused downloads stay in the active tab) and
+    // FAILED (so a genuinely non-retryable failure still shows up with a
+    // retry option, instead of silently vanishing from both tabs the way
+    // network-loss failures were before DownloadWorker started treating
+    // IOException as PAUSED specifically — this is the safety net for
+    // whatever other failure mode turns up next).
     // Ordered by rowid (insertion order) instead of updatedAt — updatedAt
     // changes on every progress tick, which was reshuffling the list
     // every second while multiple downloads ran. rowid never changes for
     // an existing row, so each download stays put once it starts.
-    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING', 'PAUSED') ORDER BY rowid ASC")
+    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING', 'PAUSED', 'FAILED') ORDER BY rowid ASC")
     fun getActiveDownloads(): Flow<List<DownloadEntity>>
 
     @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' ORDER BY updatedAt DESC")
