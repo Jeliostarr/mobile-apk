@@ -185,6 +185,29 @@ class DownloadWorker(
             // writing STATUS_FAILED silently overwrote PAUSED, which is
             // why paused downloads were disappearing from the Active tab.
             throw e
+        } catch (e: java.io.IOException) {
+            // Losing internet mid-download throws here (SocketException,
+            // UnknownHostException, SocketTimeoutException, ConnectException,
+            // SSLException — all IOException subclasses), NOT
+            // CancellationException — WorkManager doesn't cancel the Job
+            // just because a socket read failed, so the branch above never
+            // fires for this. This was landing in the generic catch below
+            // and getting marked FAILED, which is why losing connection
+            // made a download vanish entirely: getActiveDownloads() only
+            // selects QUEUED/DOWNLOADING/PAUSED, so a FAILED row is invisible
+            // in both tabs even though it's still sitting in the database —
+            // matching "disappears" and "redownloading resumes it" exactly,
+            // since the temp file and row were never actually gone.
+            //
+            // A lost connection is transient and retryable, the same as a
+            // manual pause — so it gets the same treatment: PAUSED, not
+            // FAILED, and Result.retry() so WorkManager itself re-runs this
+            // worker automatically once the network constraint below is
+            // satisfied again, on top of the manual Resume button already
+            // working the same way it does for a manual pause.
+            e.printStackTrace()
+            downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_PAUSED)
+            Result.retry()
         } catch (e: Exception) {
             e.printStackTrace()
             downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
@@ -262,9 +285,23 @@ fun startDownloadWorker(
         DownloadWorker.KEY_EP_NUM to (epNum ?: -1)
     )
 
+    // Without this, WorkManager has no idea the worker even cares about
+    // connectivity — it just runs it, the socket read fails mid-transfer,
+    // and everything falls to the IOException catch in doWork() to sort
+    // out. With it, WorkManager itself won't start (or will hold) this
+    // worker while offline, and re-runs it automatically the moment the
+    // network comes back — the IOException catch is still there as a
+    // backstop for a connection that drops mid-transfer before WorkManager
+    // reacts, but this constraint is what makes reconnection automatic
+    // instead of requiring the user to tap Resume themselves.
+    val constraints = androidx.work.Constraints.Builder()
+        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+        .build()
+
     val request = androidx.work.OneTimeWorkRequestBuilder<DownloadWorker>()
         .setInputData(data)
         .addTag(downloadId) // for cancellation
+        .setConstraints(constraints)
         .build()
 
     androidx.work.WorkManager.getInstance(context).enqueue(request)
