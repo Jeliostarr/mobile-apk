@@ -1106,26 +1106,46 @@ private suspend fun PointerInputScope.playerZoneGestures(
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         val pointerId = down.id
+        val startPosition = down.position
         var isDrag = false
+        var timedOut = false
 
-        val releasedBeforeTimeout = withTimeoutOrNull(longPressTimeoutMs) {
+        val completed = withTimeoutOrNull(longPressTimeoutMs) {
             while (true) {
                 val event = awaitPointerEvent()
-                val change = event.changes.firstOrNull { it.id == pointerId } ?: return@withTimeoutOrNull true
-                if (!change.pressed) return@withTimeoutOrNull true
-                if (kotlin.math.abs(change.positionChange().y) > touchSlop) {
+                val change = event.changes.firstOrNull { it.id == pointerId }
+                if (change == null || !change.pressed) return@withTimeoutOrNull
+                // Cumulative displacement from where the finger first went
+                // down — NOT the delta since the previous event. Consecutive
+                // touch samples during a real drag are usually only a few
+                // pixels apart, far under the slop threshold individually,
+                // so comparing each event's own tiny delta against slop
+                // almost never triggered — this is why the indicator could
+                // appear (drag got detected eventually, rarely) but then
+                // seemed to just sit there not responding to the rest of
+                // the drag. Comparing against the ORIGINAL down position
+                // is the correct way to detect "has the finger moved far
+                // enough to count as a drag yet".
+                val totalDeltaY = change.position.y - startPosition.y
+                if (kotlin.math.abs(totalDeltaY) > touchSlop) {
                     isDrag = true
                     change.consume()
-                    return@withTimeoutOrNull false
+                    return@withTimeoutOrNull
                 }
             }
             @Suppress("UNREACHABLE_CODE")
-            true
+            Unit
         }
+        if (completed == null) timedOut = true
 
         when {
             isDrag -> {
                 onDragStart()
+                // Once actively dragging, per-event positionChange() (the
+                // delta since the LAST event, not since down) is exactly
+                // what's wanted here — it's what makes each incremental
+                // movement translate into a smooth, continuously updating
+                // level rather than one single jump.
                 drag(pointerId) { change ->
                     change.consume()
                     onVerticalDrag(change.positionChange().y)
@@ -1133,7 +1153,7 @@ private suspend fun PointerInputScope.playerZoneGestures(
                 onDragEnd()
             }
 
-            releasedBeforeTimeout == null -> {
+            timedOut -> {
                 // Timed out while still held with no real movement — long press.
                 onLongPressStart()
                 waitForUpOrCancellation()
