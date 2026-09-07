@@ -13,6 +13,8 @@ import com.example.data.local.DownloadEntity
 import com.example.repository.YocinemaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -37,11 +39,50 @@ class DownloadWorker(
         val db = AppDatabase.getInstance(context)
         val downloadDao = db.downloadDao()
 
+        // Serializes every doWork() call for the same downloadId within
+        // this process. enqueueUniqueWork(REPLACE) (see startDownloadWorker
+        // below) stops WorkManager from ever INTENDING to run two workers
+        // for the same download, but there's still a small timing gap
+        // between "WorkManager cancels the old worker" and "that worker's
+        // coroutine actually notices isStopped and returns" — without this
+        // lock, a resume tapped inside that gap could still start a second
+        // doWork() that opens the same temp file while the first one is
+        // mid-write. This lock makes that second call simply wait its turn
+        // instead of racing.
+        val mutex = downloadMutexes.getOrPut(downloadId) { Mutex() }
+        mutex.withLock {
+            // A worker that was queued behind the lock above can wake up
+            // AFTER the download already finished legitimately (e.g. the
+            // holder of the lock just completed it) — without this check
+            // it would still be a "zombie" that goes on to re-run the
+            // download loop or, worse, eventually write a non-COMPLETED
+            // status over top of a row that already finished correctly.
+            // This is exactly what was making a fully completed download
+            // disappear from the Completed tab.
+            val alreadyDone = downloadDao.getDownloadById(downloadId)
+            if (alreadyDone?.status == DownloadEntity.STATUS_COMPLETED) {
+                return@withLock Result.success()
+            }
+
+            runDownload(downloadId, movieId, episodeId, title, seasonNum, epNum, repository, downloadDao)
+        }
+    }
+
+    private suspend fun runDownload(
+        downloadId: String,
+        movieId: String,
+        episodeId: String?,
+        title: String,
+        seasonNum: Int?,
+        epNum: Int?,
+        repository: YocinemaRepository,
+        downloadDao: com.example.data.local.DownloadDao
+    ): Result {
         // Get movie details (for metadata)
         val movie = repository.getMovieDetail(movieId)
         if (movie == null) {
             downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
-            return@withContext Result.failure()
+            return Result.failure()
         }
         val downloadUrl = repository.getDownloadMediaUrl(movie, seasonNum, epNum)
 
@@ -96,16 +137,31 @@ class DownloadWorker(
             val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful && response.code != 206) {
                 downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
-                return@withContext Result.failure()
+                return Result.failure()
             }
 
             val body = response.body ?: run {
                 downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
-                return@withContext Result.failure()
+                return Result.failure()
             }
 
             val contentLength = body.contentLength()
-            val totalBytes = if (response.code == 206) existingBytes + contentLength else contentLength
+            // Prefer the server's own authoritative total from the
+            // Content-Range header ("bytes start-end/total") over
+            // existingBytes + contentLength — the local calculation is
+            // only as good as existingBytes being exactly right at this
+            // instant, and while the lock above should now guarantee
+            // that, reading the number the server itself reports removes
+            // the dependency on local file state entirely as a second,
+            // independent safety net.
+            val totalBytes = if (response.code == 206) {
+                response.header("Content-Range")
+                    ?.substringAfterLast('/')
+                    ?.toLongOrNull()
+                    ?: (existingBytes + contentLength)
+            } else {
+                contentLength
+            }
             downloadDao.updateProgress(downloadId, existingBytes, totalBytes, 0, DownloadEntity.STATUS_DOWNLOADING)
 
             // Write to temp file (append)
@@ -131,7 +187,7 @@ class DownloadWorker(
                     withContext(NonCancellable) {
                         downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
                     }
-                    return@withContext Result.retry()
+                    return Result.retry()
                 }
 
                 outputStream.write(buffer, 0, bytesRead)
@@ -150,7 +206,7 @@ class DownloadWorker(
                         withContext(NonCancellable) {
                             downloadDao.updateProgress(downloadId, downloaded, totalBytes, 0, DownloadEntity.STATUS_PAUSED)
                         }
-                        return@withContext Result.retry()
+                        return Result.retry()
                     }
                     val speed = (bytesSinceLastUpdate * 1000) / delta
                     downloadDao.updateProgress(downloadId, downloaded, totalBytes, speed, DownloadEntity.STATUS_DOWNLOADING)
@@ -166,7 +222,7 @@ class DownloadWorker(
             val publicUri = moveToPublicDownloads(tempFile, safeFilename, title)
             if (publicUri == null) {
                 downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
-                return@withContext Result.failure()
+                return Result.failure()
             }
 
             // Mark completed in DB with the public URI
@@ -259,6 +315,15 @@ class DownloadWorker(
         const val KEY_TITLE = "title"
         const val KEY_SEASON_NUM = "season_num"
         const val KEY_EP_NUM = "ep_num"
+
+        // One Mutex per active downloadId, shared across every DownloadWorker
+        // instance in this process — see the comment in doWork() for why
+        // this exists on top of enqueueUniqueWork(REPLACE). Entries are
+        // never explicitly removed; ConcurrentHashMap.getOrPut means a
+        // stale Mutex for a finished download just sits unused (cheap,
+        // just a handful of bytes) rather than needing careful cleanup
+        // that could itself race with a new download starting.
+        private val downloadMutexes = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
     }
 }
 
@@ -304,5 +369,23 @@ fun startDownloadWorker(
         .setConstraints(constraints)
         .build()
 
-    androidx.work.WorkManager.getInstance(context).enqueue(request)
+    // enqueueUniqueWork + REPLACE, not plain enqueue(). This is the actual
+    // root fix for the "many pause/resume actions corrupt the file"
+    // bug: plain enqueue() let every Resume tap start a BRAND NEW worker
+    // instance even if the previous one hadn't finished shutting down
+    // yet, and with nothing stopping two workers from opening the same
+    // temp file in append mode at once, rapid pause/resume cycles could
+    // spawn several workers all writing to the same file concurrently —
+    // that's what was corrupting the file and making its size jump
+    // around. REPLACE tells WorkManager there must only ever be one
+    // worker running under this downloadId; a new request cancels
+    // whatever was there first. See the in-worker Mutex in
+    // DownloadWorker.doWork() for the second half of this fix — it closes
+    // the small remaining timing gap between WorkManager cancelling the
+    // old worker and that worker's coroutine actually finishing.
+    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+        downloadId,
+        androidx.work.ExistingWorkPolicy.REPLACE,
+        request
+    )
 }
