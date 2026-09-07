@@ -145,7 +145,7 @@ class DownloadWorker(
             requestBuilder.header("Range", "bytes=$existingBytes-")
         }
 
-        try {
+        return try {
             val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful && response.code != 206) {
                 downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_FAILED)
