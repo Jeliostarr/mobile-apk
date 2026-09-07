@@ -86,7 +86,19 @@ class DownloadWorker(
         }
         val downloadUrl = repository.getDownloadMediaUrl(movie, seasonNum, epNum)
 
-        val safeFilename = "${title.replace(Regex("[^a-zA-Z0-9._-]"), "_")}.mp4"
+        // Every episode of a series was passing the SAME title (the
+        // series' own title, not anything episode-specific) into the
+        // saved filename below — season/episode numbers were already
+        // being received correctly right here as function parameters,
+        // they just weren't being used yet. That's why every episode
+        // showed up with an identical filename in the phone's Downloads
+        // folder / file manager, with nothing to tell them apart.
+        val episodeSuffix = if (seasonNum != null && epNum != null) {
+            "_S${seasonNum.toString().padStart(2, '0')}E${epNum.toString().padStart(2, '0')}"
+        } else {
+            ""
+        }
+        val safeFilename = "${(title + episodeSuffix).replace(Regex("[^a-zA-Z0-9._-]"), "_")}.mp4"
 
         // Temp file in internal cache (supports resume)
         val cacheDir = context.cacheDir
