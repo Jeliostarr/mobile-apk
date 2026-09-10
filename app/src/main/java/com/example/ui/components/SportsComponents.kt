@@ -45,6 +45,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.SportsLeague
 import com.example.data.model.SportsMatch
 import com.example.ui.theme.YoBorder
+import com.example.ui.theme.YoLiveRed
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
@@ -64,7 +65,7 @@ fun LiveBadge(compact: Boolean = false) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFE53935))
+            .background(YoLiveRed)
             .padding(horizontal = if (compact) 8.dp else 10.dp, vertical = if (compact) 3.dp else 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -124,7 +125,7 @@ fun MatchCard(
     match: SportsMatch,
     onClick: () -> Unit
 ) {
-    val accentColor = if (match.live) Color(0xFFE53935) else YoPrimaryViolet
+    val accentColor = if (match.live) YoLiveRed else YoPrimaryViolet
 
     Row(
         modifier = Modifier
