@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -516,7 +517,8 @@ fun HomeScreen(
             onAccountClick = onAccountClick
         )
 
-        if (isLoading) {
+        Crossfade(targetState = isLoading, label = "homeContent") { loading ->
+        if (loading) {
             HomeSkeleton()
         } else {
             PullToRefreshBox(
@@ -612,6 +614,7 @@ fun HomeScreen(
                 }
             }
             }
+        }
         }
     }
 }
