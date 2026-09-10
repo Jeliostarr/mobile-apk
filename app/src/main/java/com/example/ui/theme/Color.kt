@@ -35,6 +35,10 @@ val YoRatingGold = Color(0xFFE8B44A)
 // was previously copy-pasted as a raw hex in three different files.
 val YoLiveRed = Color(0xFFE53935)
 
+// Same story as YoLiveRed: a universal warning amber, previously
+// redefined independently (same hex, different names) in two files.
+val YoWarningAmber = Color(0xFFFFA726)
+
 /** For Brush.linearGradient(colors = YoGlowGradient, ...) — the signature 135° violet→cyan glow. */
 val YoGlowGradient = listOf(YoPrimaryViolet, YoAccentCyan)
 
