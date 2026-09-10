@@ -50,6 +50,7 @@ import coil.compose.SubcomposeAsyncImage
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
+import com.example.data.model.isNull_orEmpty
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
 import com.example.ui.components.MovieGridSkeleton
@@ -369,5 +370,3 @@ fun SearchResultRow(
         }
     }
 }
-
-private fun String?.isNull_orEmpty(): Boolean = this == null || this.trim().isEmpty()

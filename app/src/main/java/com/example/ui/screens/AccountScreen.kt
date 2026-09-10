@@ -83,12 +83,9 @@ import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoSuccess
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import com.example.ui.theme.YoWarningAmber
 import com.example.ui.util.BiometricCopyHelper
 import kotlinx.coroutines.launch
-
-// Amber used for the "daily limit used up" status — not assumed to exist as
-// a theme token, so it's defined locally here instead of importing one.
-private val YoWarningAmber = Color(0xFFFFA726)
 
 @Composable
 fun AccountScreen(

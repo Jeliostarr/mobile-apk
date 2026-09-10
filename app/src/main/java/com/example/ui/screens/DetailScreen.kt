@@ -64,6 +64,7 @@ import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Episode
 import com.example.data.model.Movie
 import com.example.data.model.formatDuration
+import com.example.data.model.isNull_orEmpty
 import android.widget.Toast
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.media3.common.MediaItem
@@ -748,5 +749,3 @@ fun DetailScreen(
     }
 }
 
-
-private fun String?.isNull_orEmpty(): Boolean = this == null || this.trim().isEmpty()
