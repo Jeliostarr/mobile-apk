@@ -42,8 +42,7 @@ import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
-
-private val WarningAmber = androidx.compose.ui.graphics.Color(0xFFFFA726)
+import com.example.ui.theme.YoWarningAmber
 
 /**
  * The one global "your key can't be used right now" modal — surfaces
@@ -161,11 +160,11 @@ private fun titleFor(issue: ApiKeyIssue): String = when (issue) {
 
 private fun iconFor(issue: ApiKeyIssue): Pair<androidx.compose.ui.graphics.vector.ImageVector, androidx.compose.ui.graphics.Color> =
     when (issue) {
-        is ApiKeyIssue.Expired -> Icons.Default.HourglassBottom to WarningAmber
-        is ApiKeyIssue.RateLimited -> Icons.Default.Speed to WarningAmber
-        is ApiKeyIssue.Paused -> Icons.Default.PauseCircle to WarningAmber
+        is ApiKeyIssue.Expired -> Icons.Default.HourglassBottom to YoWarningAmber
+        is ApiKeyIssue.RateLimited -> Icons.Default.Speed to YoWarningAmber
+        is ApiKeyIssue.Paused -> Icons.Default.PauseCircle to YoWarningAmber
         is ApiKeyIssue.Revoked, is ApiKeyIssue.Deleted, is ApiKeyIssue.Suspended -> Icons.Default.Block to YoDestructive
         is ApiKeyIssue.AccountInactive -> Icons.Default.PersonOff to YoDestructive
         is ApiKeyIssue.Missing, is ApiKeyIssue.Invalid -> Icons.Default.VpnKeyOff to YoDestructive
-        is ApiKeyIssue.Other -> Icons.Default.Key to WarningAmber
+        is ApiKeyIssue.Other -> Icons.Default.Key to YoWarningAmber
     }
