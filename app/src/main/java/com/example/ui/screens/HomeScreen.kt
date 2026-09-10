@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -79,7 +80,10 @@ import com.example.ui.components.VJChip
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
-import com.example.ui.theme.YoPrimaryAmber
+import com.example.ui.theme.YoGlowGradient
+import com.example.ui.theme.YoLiveRed
+import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoRatingGold
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -176,7 +180,7 @@ fun HeroSliderPager(
                                 Icon(
                                     imageVector = Icons.Default.Star,
                                     contentDescription = null,
-                                    tint = YoPrimaryAmber,
+                                    tint = YoRatingGold,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -236,7 +240,7 @@ fun HeroSliderPager(
                             modifier = Modifier.height(36.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = YoPrimaryAmber,
+                                containerColor = YoPrimaryViolet,
                                 contentColor = YoBaseBackground
                             ),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
@@ -287,7 +291,13 @@ fun HeroSliderPager(
                             .padding(2.dp)
                             .size(if (isSelected) 9.dp else 7.dp)
                             .clip(CircleShape)
-                            .background(if (isSelected) YoPrimaryAmber else YoBorder)
+                            .background(
+                                brush = if (isSelected) {
+                                    Brush.linearGradient(YoGlowGradient)
+                                } else {
+                                    SolidColor(YoBorder)
+                                }
+                            )
                     )
                 }
             }
@@ -631,7 +641,7 @@ fun HomeSearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = YoPrimaryAmber,
+                tint = YoPrimaryViolet,
                 modifier = Modifier.size(20.dp)
             )
 
@@ -648,7 +658,7 @@ fun HomeSearchBar(
                 Icon(
                     imageVector = Icons.Default.VideoLibrary,
                     contentDescription = "Library",
-                    tint = YoPrimaryAmber,
+                    tint = YoPrimaryViolet,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -657,7 +667,7 @@ fun HomeSearchBar(
                 Icon(
                     imageVector = Icons.Default.Download,
                     contentDescription = "Downloads",
-                    tint = YoPrimaryAmber,
+                    tint = YoPrimaryViolet,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -666,7 +676,7 @@ fun HomeSearchBar(
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Account",
-                    tint = YoPrimaryAmber,
+                    tint = YoPrimaryViolet,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -692,7 +702,7 @@ fun RailHeader(
                     .width(4.dp)
                     .height(18.dp)
                     .clip(CircleShape)
-                    .background(YoPrimaryAmber)
+                    .background(Brush.verticalGradient(YoGlowGradient))
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -803,7 +813,7 @@ fun HomeSportsRail(
 
 @Composable
 private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
-    val accentColor = if (match.live) Color(0xFFE53935) else YoPrimaryAmber
+    val accentColor = if (match.live) YoLiveRed else YoPrimaryViolet
 
     Column(
         modifier = Modifier

@@ -202,6 +202,51 @@ fun ExploreScreen(
             }
         }
 
+        // Country facet doubles as the "region" browse the person actually
+        // wants (Indian movies, K-Drama, Nollywood, etc.) — the backend
+        // already tags movies with `country` and the repository already
+        // filters on it (selectedCountry above), this row was just never
+        // rendered. Only shown when the backend actually returns values,
+        // same guard as the VJ/Year rows below.
+        if (!facets.countries.isNullOrEmpty()) {
+            val countryOptions = listOf("All") + facets.countries!!
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Region:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = YoTextMuted,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+                items(countryOptions) { c ->
+                    val isSelected = (c == selectedCountry)
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedCountry = c },
+                        label = { Text(c, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = YoPrimaryViolet.copy(alpha = 0.2f),
+                            selectedLabelColor = YoPrimaryViolet,
+                            containerColor = YoSurface,
+                            labelColor = YoTextMuted
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (isSelected) YoPrimaryViolet else YoBorder,
+                            selectedBorderColor = YoPrimaryViolet,
+                            enabled = true,
+                            selected = isSelected
+                        )
+                    )
+                }
+            }
+        }
+
         if (!facets.vjs.isNullOrEmpty()) {
             val vjOptions = listOf("All") + facets.vjs!!
             LazyRow(

@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +76,7 @@ import com.example.ui.theme.YoAccentCyan
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoDestructive
+import com.example.ui.theme.YoGlowGradient
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
@@ -332,7 +334,7 @@ private fun ProfileCard(
                     modifier = Modifier
                         .size(50.dp)
                         .clip(CircleShape)
-                        .background(YoPrimaryViolet),
+                        .background(Brush.linearGradient(YoGlowGradient)),
                     contentAlignment = Alignment.Center
                 ) {
                     // Was a generic Person icon — swapped for the app's own
@@ -419,7 +421,7 @@ private fun BalanceCard(
             .padding(horizontal = 16.dp)
             .shadow(6.dp, RoundedCornerShape(18.dp), clip = false)
             .clip(RoundedCornerShape(18.dp))
-            .background(YoPrimaryViolet)
+            .background(Brush.linearGradient(YoGlowGradient))
             .padding(18.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
