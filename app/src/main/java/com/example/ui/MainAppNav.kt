@@ -4,8 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +53,8 @@ import com.example.ui.screens.VJCatalogueScreen
 import com.example.ui.screens.VJListScreen
 import com.example.ui.theme.YoBaseBackground
 import kotlinx.coroutines.delay
+
+private enum class NavDirection { FORWARD, BACKWARD, LATERAL }
 
 sealed class Screen {
     object Home : Screen()
@@ -112,14 +118,35 @@ fun MainAppNav() {
         )
     }
 
+    // Screen.equals() lets AnimatedContent's own targetState diffing work,
+    // but it can't tell push from pop from a lateral tab switch — those
+    // need genuinely different motion (forward = slide from the right,
+    // back = slide from the left, tab switch = plain crossfade) or every
+    // transition ends up feeling like the same flat cut regardless of
+    // where the person actually is in the flow. Each nav function below
+    // sets this alongside mutating the backstack, so it's always current
+    // by the time AnimatedContent reads it during the same recomposition.
+    var navDirection by remember { mutableStateOf(NavDirection.LATERAL) }
+
     fun navigateTo(screen: Screen) {
+        navDirection = NavDirection.FORWARD
         screenBackStack.add(screen)
     }
 
     fun navigateBack() {
         if (screenBackStack.size > 1) {
+            navDirection = NavDirection.BACKWARD
             screenBackStack.removeAt(screenBackStack.lastIndex)
         }
+    }
+
+    // Bottom-tab switches and login/logout resets aren't a push or a pop —
+    // they replace the whole stack with a single fresh root — so they get
+    // their own helper rather than being misclassified as one of the above.
+    fun switchRoot(screen: Screen) {
+        navDirection = NavDirection.LATERAL
+        screenBackStack.clear()
+        screenBackStack.add(screen)
     }
 
     BackHandler(enabled = screenBackStack.size > 1) {
@@ -175,8 +202,7 @@ fun MainAppNav() {
                             BottomTab.Account -> Screen.Account
                         }
                         if (currentScreen != targetScreen) {
-                            screenBackStack.clear()
-                            screenBackStack.add(targetScreen)
+                            switchRoot(targetScreen)
                         }
                     }
                 )
@@ -190,7 +216,39 @@ fun MainAppNav() {
         ) {
             AnimatedContent(
                 targetState = currentScreen,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                transitionSpec = {
+                    // Direction communicates hierarchy the way native
+                    // push/pop navigation does: forward content enters
+                    // fully from the right while the outgoing screen only
+                    // drifts a quarter of the way out (a cheap parallax
+                    // that reads as "behind" rather than "replaced"), and
+                    // back reverses it exactly. Tab switches are lateral,
+                    // not hierarchical, so they stay a plain crossfade.
+                    when (navDirection) {
+                        NavDirection.FORWARD -> (
+                            slideInHorizontally(
+                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                            ) { fullWidth -> fullWidth } + fadeIn(tween(220))
+                        ) togetherWith (
+                            fadeOut(tween(180)) + slideOutHorizontally(
+                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                            ) { fullWidth -> -fullWidth / 4 }
+                        )
+
+                        NavDirection.BACKWARD -> (
+                            slideInHorizontally(
+                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                            ) { fullWidth -> -fullWidth / 4 } + fadeIn(tween(220))
+                        ) togetherWith (
+                            fadeOut(tween(180)) + slideOutHorizontally(
+                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                            ) { fullWidth -> fullWidth }
+                        )
+
+                        NavDirection.LATERAL ->
+                            fadeIn(tween(200)) togetherWith fadeOut(tween(150))
+                    }
+                },
                 label = "ScreenTransition"
             ) { screen ->
                 when (screen) {
@@ -275,8 +333,7 @@ fun MainAppNav() {
                                 if (repository.isLoggedIn()) navigateBack()
                             },
                             onLoginSuccess = {
-                                screenBackStack.clear()
-                                screenBackStack.add(Screen.Home)
+                                switchRoot(Screen.Home)
                                 currentTab = BottomTab.Home
                             }
                         )
@@ -386,8 +443,7 @@ fun MainAppNav() {
                 repository.clearApiKeyIssue()
                 currentTab = BottomTab.Account
                 if (currentScreen !is Screen.Account) {
-                    screenBackStack.clear()
-                    screenBackStack.add(Screen.Account)
+                    switchRoot(Screen.Account)
                 }
             },
             onPurchase = {
