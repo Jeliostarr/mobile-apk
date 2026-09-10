@@ -29,22 +29,12 @@ val YoSuccess = Color(0xFF34D399)
 // old primary's exact value, so this also isn't a totally arbitrary choice.
 val YoRatingGold = Color(0xFFE8B44A)
 
+// Also deliberately outside the violet/cyan system, same reasoning as
+// YoRatingGold — a "LIVE" indicator reads universally as red, and that's
+// worth more than brand consistency here. Single source of truth for it;
+// was previously copy-pasted as a raw hex in three different files.
+val YoLiveRed = Color(0xFFE53935)
+
 /** For Brush.linearGradient(colors = YoGlowGradient, ...) — the signature 135° violet→cyan glow. */
 val YoGlowGradient = listOf(YoPrimaryViolet, YoAccentCyan)
 
-// ─────────────────────────────────────────────────────────────
-// Back-compat aliases — DO NOT use these in new code.
-// "Amber" no longer describes the palette; these exist only so the
-// dozen+ screens still referencing the old names keep compiling
-// while each one gets migrated to the real names above. Delete a
-// line here once its last call site is updated.
-// ─────────────────────────────────────────────────────────────
-
-@Deprecated("Renamed in the Neon Night redesign.", ReplaceWith("YoPrimaryViolet"))
-val YoPrimaryAmber = YoPrimaryViolet
-
-@Deprecated("Renamed in the Neon Night redesign.", ReplaceWith("YoPrimaryVioletPress"))
-val YoPrimaryAmberPress = YoPrimaryVioletPress
-
-@Deprecated("Renamed in the Neon Night redesign.", ReplaceWith("YoSuccess"))
-val YoSuccessGreen = YoSuccess
