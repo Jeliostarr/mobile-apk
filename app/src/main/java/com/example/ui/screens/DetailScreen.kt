@@ -468,6 +468,14 @@ fun DetailScreen(
                                         color = YoTextMuted
                                     )
                                 }
+
+                                if (!m.country.isNull_orEmpty()) {
+                                    Text(
+                                        text = m.country!!,
+                                        fontSize = 13.sp,
+                                        color = YoTextMuted
+                                    )
+                                }
                             }
 
                             if (!m.genre.isNull_orEmpty()) {
