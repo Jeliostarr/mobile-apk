@@ -317,6 +317,8 @@ fun HomeScreen(
     onWatchlistClick: () -> Unit,
     onDownloadsClick: () -> Unit,
     onAccountClick: () -> Unit,
+    onNonTranslatedClick: () -> Unit,
+    onNigerianClick: () -> Unit,
     onViewAllVJsClick: () -> Unit,
     onVJClick: (String) -> Unit,
     onViewAllCategoryClick: (title: String, sort: String?, type: String?, genre: String?) -> Unit,
@@ -511,11 +513,11 @@ fun HomeScreen(
             .fillMaxSize()
             .background(YoBaseBackground)
     ) {
-        HomeSearchBar(
-            onSearchClick = onSearchClick,
-            onWatchlistClick = onWatchlistClick,
-            onDownloadsClick = onDownloadsClick,
-            onAccountClick = onAccountClick
+        HomeSearchBar(onSearchClick = onSearchClick)
+
+        MoviesDemoNavRow(
+            onNonTranslatedClick = onNonTranslatedClick,
+            onNigerianClick = onNigerianClick
         )
 
         Crossfade(targetState = isLoading, label = "homeContent") { loading ->
@@ -622,10 +624,7 @@ fun HomeScreen(
 
 @Composable
 fun HomeSearchBar(
-    onSearchClick: () -> Unit,
-    onWatchlistClick: () -> Unit,
-    onDownloadsClick: () -> Unit,
-    onAccountClick: () -> Unit
+    onSearchClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -657,34 +656,65 @@ fun HomeSearchBar(
                 color = YoTextMuted,
                 modifier = Modifier.weight(1f)
             )
-
-            IconButton(onClick = onWatchlistClick, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = Icons.Default.VideoLibrary,
-                    contentDescription = "Library",
-                    tint = YoPrimaryViolet,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            IconButton(onClick = onDownloadsClick, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = "Downloads",
-                    tint = YoPrimaryViolet,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            IconButton(onClick = onAccountClick, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Account",
-                    tint = YoPrimaryViolet,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
+    }
+}
+
+@Composable
+fun MoviesDemoNavRow(
+    onNonTranslatedClick: () -> Unit,
+    onNigerianClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        MoviesDemoNavCard(
+            emoji = "\uD83C\uDF10", // globe — general non-translated/original catalog
+            label = "Non-Translated",
+            onClick = onNonTranslatedClick,
+            modifier = Modifier.weight(1f)
+        )
+        MoviesDemoNavCard(
+            emoji = "\uD83C\uDDF3\uD83C\uDDEC", // Nigerian flag
+            label = "Nigerian Movies",
+            onClick = onNigerianClick,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun MoviesDemoNavCard(
+    emoji: String,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Brush.linearGradient(YoGlowGradient.map { it.copy(alpha = 0.16f) }))
+            .border(1.dp, YoPrimaryViolet.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = emoji, fontSize = 16.sp)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = YoTextPrimary,
+            maxLines = 2,
+            lineHeight = 14.sp,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
     }
 }
 
