@@ -155,6 +155,9 @@ private fun titleFor(issue: ApiKeyIssue): String = when (issue) {
     is ApiKeyIssue.Expired -> "Key expired"
     is ApiKeyIssue.AccountInactive -> "Account inactive"
     is ApiKeyIssue.RateLimited -> "Daily limit reached"
+    // MainAppNav routes this to MoviesDemoAccessDialog instead — this
+    // branch only exists so the `when` above stays exhaustive.
+    is ApiKeyIssue.MoviesDemoNotEnabled -> "Not enabled yet"
     is ApiKeyIssue.Other -> "Something's wrong with this key"
 }
 
@@ -166,5 +169,6 @@ private fun iconFor(issue: ApiKeyIssue): Pair<androidx.compose.ui.graphics.vecto
         is ApiKeyIssue.Revoked, is ApiKeyIssue.Deleted, is ApiKeyIssue.Suspended -> Icons.Default.Block to YoDestructive
         is ApiKeyIssue.AccountInactive -> Icons.Default.PersonOff to YoDestructive
         is ApiKeyIssue.Missing, is ApiKeyIssue.Invalid -> Icons.Default.VpnKeyOff to YoDestructive
+        is ApiKeyIssue.MoviesDemoNotEnabled -> Icons.Default.Movie to YoWarningAmber
         is ApiKeyIssue.Other -> Icons.Default.Key to YoWarningAmber
     }
