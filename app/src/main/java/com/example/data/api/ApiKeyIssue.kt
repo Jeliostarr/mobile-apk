@@ -23,6 +23,11 @@ sealed class ApiKeyIssue(val message: String, val canSwitchKey: Boolean = true, 
     object Expired : ApiKeyIssue("This API key has expired.")
     object AccountInactive : ApiKeyIssue("Your account is inactive.", canSwitchKey = false)
     object RateLimited : ApiKeyIssue("You've used up today's request limit for this key.", canPurchase = true)
+    // Distinct from the generic Other case below because it needs its own
+    // dialog (MoviesDemoAccessDialog) — Telegram/WhatsApp contact buttons
+    // for free activation, not the generic switch-key/purchase actions,
+    // since this isn't something switching keys or buying a plan fixes.
+    object MoviesDemoNotEnabled : ApiKeyIssue("This key isn't enabled for non-translated/Nigerian movies yet.", canSwitchKey = false, canPurchase = false)
     data class Other(val detail: String) : ApiKeyIssue(detail)
 }
 
@@ -47,6 +52,7 @@ object ApiIssueClassifier {
             code == 429 -> ApiKeyIssue.RateLimited
             code == 401 && text.contains("required") -> ApiKeyIssue.Missing
             code == 401 -> ApiKeyIssue.Invalid
+            code == 403 && text.contains("not enabled for movies-demo access") -> ApiKeyIssue.MoviesDemoNotEnabled
             code == 403 && text.contains("revoked") -> ApiKeyIssue.Revoked
             code == 403 && text.contains("deleted") -> ApiKeyIssue.Deleted
             code == 403 && text.contains("paused") -> ApiKeyIssue.Paused
