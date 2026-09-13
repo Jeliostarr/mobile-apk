@@ -6,6 +6,7 @@ import com.example.data.api.ApiIssueReporter
 import com.example.data.api.ApiKeyIssue
 import com.example.data.api.AuthInterceptor
 import com.example.data.api.ResponseEnvelopeExtractor
+import com.example.data.api.MoviesDemoApi
 import com.example.data.api.YocinemaApi
 import com.example.data.local.AppDatabase
 import com.example.data.local.DownloadEntity
@@ -17,6 +18,7 @@ import com.example.data.model.AccountUser
 import com.example.data.model.AppUpdateState
 import com.example.data.model.AppVersionResponse
 import com.example.data.model.BASE_URL
+import com.example.data.model.MOVIES_DEMO_BASE_URL
 import com.example.data.model.CastDetail
 import com.example.data.model.Episode
 import com.example.data.model.FacetsResponse
@@ -90,6 +92,19 @@ class YocinemaRepository(context: Context) {
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
         .create(YocinemaApi::class.java)
+
+    // Separate project, separate backend, separate Retrofit client — but
+    // the SAME okHttpClient (same AuthInterceptor, same TokenManager), so
+    // the same signed-in key is sent as X-API-Key and any 401/403/429 from
+    // this API feeds the exact same apiKeyIssueFlow as the main one. A key
+    // without moviesDemoAccess granted shows up as
+    // ApiKeyIssue.MoviesDemoNotEnabled there.
+    val moviesDemoApi: MoviesDemoApi = Retrofit.Builder()
+        .baseUrl(MOVIES_DEMO_BASE_URL)
+        .client(okHttpClient)
+        .addConverterFactory(MoshiConverterFactory.create(moshi))
+        .build()
+        .create(MoviesDemoApi::class.java)
 
     val streamTokenManager = StreamTokenManager(api)
 
@@ -167,6 +182,7 @@ class YocinemaRepository(context: Context) {
                     is ApiKeyIssue.Expired -> "This key has expired"
                     is ApiKeyIssue.AccountInactive -> "Your account is inactive"
                     is ApiKeyIssue.RateLimited -> "Daily quota exhausted — resets at midnight UTC"
+                    is ApiKeyIssue.MoviesDemoNotEnabled -> classified.message
                     is ApiKeyIssue.Other -> classified.detail
                     null -> if (code >= 500) "Server temporarily unavailable" else "Authentication failed (Code $code)"
                 }
