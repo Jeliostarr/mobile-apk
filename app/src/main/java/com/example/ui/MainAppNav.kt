@@ -29,15 +29,20 @@ import com.example.PendingDeepLink
 import com.example.data.api.ApiKeyIssue
 import com.example.data.model.AppUpdateState
 import com.example.data.model.DASHBOARD_URL
+import com.example.data.model.MOVIES_DEMO_NIGERIA_COUNTRY
 import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ApiKeyIssueDialog
+import com.example.ui.components.MoviesDemoAccessDialog
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BottomTab
 import com.example.ui.components.LoadingScreen
 import com.example.ui.components.UpdateDialog
 import com.example.ui.screens.AccountScreen
 import com.example.ui.screens.CastDetailScreen
+import com.example.ui.screens.MoviesDemoBrowseScreen
+import com.example.ui.screens.MoviesDemoDetailScreen
+import com.example.ui.screens.MoviesDemoPlayerScreen
 import com.example.ui.screens.DetailScreen
 import com.example.ui.screens.DownloadsScreen
 import com.example.ui.screens.ExploreScreen
@@ -79,6 +84,17 @@ sealed class Screen {
     ) : Screen()
     data class VJCatalogue(val vjName: String) : Screen()
     data class CastDetail(val castId: String) : Screen()
+
+    // ── Movies-demo (non-translated / Nigerian) ──
+    data class MoviesDemoBrowse(val title: String, val countryFilter: String? = null) : Screen()
+    data class MoviesDemoDetail(val detailPath: String) : Screen()
+    data class MoviesDemoPlayer(
+        val detailPath: String,
+        val title: String,
+        val seasonNum: Int? = null,
+        val epNum: Int? = null,
+        val isTrailer: Boolean = false
+    ) : Screen()
 
     // ── Sports ──
     object SportsHome : Screen()
@@ -269,6 +285,12 @@ fun MainAppNav() {
                                 currentTab = BottomTab.Account
                                 navigateTo(Screen.Account)
                             },
+                            onNonTranslatedClick = {
+                                navigateTo(Screen.MoviesDemoBrowse(title = "Non-Translated Movies"))
+                            },
+                            onNigerianClick = {
+                                navigateTo(Screen.MoviesDemoBrowse(title = "Nigerian Movies", countryFilter = MOVIES_DEMO_NIGERIA_COUNTRY))
+                            },
                             onViewAllVJsClick = { navigateTo(Screen.VJList) },
                             onVJClick = { vjName -> navigateTo(Screen.VJCatalogue(vjName)) },
                             onViewAllCategoryClick = { title, sort, type, genre ->
@@ -404,6 +426,42 @@ fun MainAppNav() {
                         )
                     }
 
+                    is Screen.MoviesDemoBrowse -> {
+                        MoviesDemoBrowseScreen(
+                            title = screen.title,
+                            countryFilter = screen.countryFilter,
+                            repository = repository,
+                            onBackClick = { navigateBack() },
+                            onItemClick = { detailPath -> navigateTo(Screen.MoviesDemoDetail(detailPath)) }
+                        )
+                    }
+
+                    is Screen.MoviesDemoDetail -> {
+                        MoviesDemoDetailScreen(
+                            detailPath = screen.detailPath,
+                            repository = repository,
+                            onBackClick = { navigateBack() },
+                            onPlayClick = { path, title, seasonNum, epNum ->
+                                navigateTo(Screen.MoviesDemoPlayer(detailPath = path, title = title, seasonNum = seasonNum, epNum = epNum))
+                            },
+                            onTrailerClick = { path, title ->
+                                navigateTo(Screen.MoviesDemoPlayer(detailPath = path, title = title, isTrailer = true))
+                            }
+                        )
+                    }
+
+                    is Screen.MoviesDemoPlayer -> {
+                        MoviesDemoPlayerScreen(
+                            detailPath = screen.detailPath,
+                            title = screen.title,
+                            seasonNum = screen.seasonNum,
+                            epNum = screen.epNum,
+                            isTrailer = screen.isTrailer,
+                            repository = repository,
+                            onBackClick = { navigateBack() }
+                        )
+                    }
+
                     // ── Sports ──
                     is Screen.SportsHome -> {
                         SportsScreen(
@@ -437,21 +495,25 @@ fun MainAppNav() {
     }
 
     apiKeyIssue?.let { issue ->
-        ApiKeyIssueDialog(
-            issue = issue,
-            onSwitchKey = {
-                repository.clearApiKeyIssue()
-                currentTab = BottomTab.Account
-                if (currentScreen !is Screen.Account) {
-                    switchRoot(Screen.Account)
-                }
-            },
-            onPurchase = {
-                repository.clearApiKeyIssue()
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DASHBOARD_URL)))
-            },
-            onDismiss = { repository.clearApiKeyIssue() }
-        )
+        if (issue is com.example.data.api.ApiKeyIssue.MoviesDemoNotEnabled) {
+            MoviesDemoAccessDialog(onDismiss = { repository.clearApiKeyIssue() })
+        } else {
+            ApiKeyIssueDialog(
+                issue = issue,
+                onSwitchKey = {
+                    repository.clearApiKeyIssue()
+                    currentTab = BottomTab.Account
+                    if (currentScreen !is Screen.Account) {
+                        switchRoot(Screen.Account)
+                    }
+                },
+                onPurchase = {
+                    repository.clearApiKeyIssue()
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DASHBOARD_URL)))
+                },
+                onDismiss = { repository.clearApiKeyIssue() }
+            )
+        }
     }
 
     // A required update takes priority — no reason to let someone keep
