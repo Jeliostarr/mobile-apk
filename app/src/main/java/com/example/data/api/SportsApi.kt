@@ -1,23 +1,13 @@
 package com.example.data.api
 
-import okhttp3.ResponseBody
+import com.example.data.model.SportsItemEnvelope
+import com.example.data.model.SportsLeaguesEnvelope
+import com.example.data.model.SportsListEnvelope
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 
-/**
- * Client for the new sports API at movie-bo-api.vercel.app.
- * Authenticated with the same X-API-Key as MoviesDemoApi (injected by AuthInterceptor).
- *
- * Endpoints:
- *   GET /api/sports/leagues
- *   GET /api/sports/live
- *   GET /api/sports/schedule
- *   GET /api/sports/events/{id}
- *
- * The legacy /api/v1/sports/* backend is not used anymore.
- */
 interface SportsApi {
 
     @GET("api/sports/leagues")
