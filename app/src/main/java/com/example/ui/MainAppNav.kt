@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,33 +25,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.collectAsState
 import com.example.PendingDeepLink
 import com.example.data.api.ApiKeyIssue
 import com.example.data.model.AppUpdateState
 import com.example.data.model.DASHBOARD_URL
 import com.example.data.model.MOVIES_DEMO_NIGERIA_COUNTRY
-import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ApiKeyIssueDialog
-import com.example.ui.components.MoviesDemoAccessDialog
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.BottomTab
 import com.example.ui.components.LoadingScreen
+import com.example.ui.components.MoviesDemoAccessDialog
 import com.example.ui.components.UpdateDialog
 import com.example.ui.screens.AccountScreen
 import com.example.ui.screens.CastDetailScreen
-import com.example.ui.screens.MoviesDemoBrowseScreen
-import com.example.ui.screens.MoviesDemoDetailScreen
-import com.example.ui.screens.MoviesDemoHomeScreen
-import com.example.ui.screens.MoviesDemoPlayerScreen
-import com.example.ui.screens.MoviesDemoSearchScreen
 import com.example.ui.screens.DetailScreen
 import com.example.ui.screens.DownloadsScreen
 import com.example.ui.screens.ExploreScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.LoginScreen
+import com.example.ui.screens.MoviesDemoBrowseScreen
+import com.example.ui.screens.MoviesDemoDetailScreen
+import com.example.ui.screens.MoviesDemoHomeScreen
+import com.example.ui.screens.MoviesDemoPlayerScreen
+import com.example.ui.screens.MoviesDemoSearchScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SportsMatchDetailScreen
@@ -88,9 +87,7 @@ sealed class Screen {
     data class CastDetail(val castId: String) : Screen()
 
     // ── Movies-demo (non-translated / Nigerian) ──
-    // Home-style landing (hero + rails) for tapping into either category.
     data class MoviesDemoBrowse(val title: String, val countryFilter: String? = null) : Screen()
-    // Paginated grid — "View All" from a rail, a specific genre, or search results.
     data class MoviesDemoList(
         val title: String,
         val countryFilter: String? = null,
@@ -110,14 +107,22 @@ sealed class Screen {
     // ── Sports ──
     object SportsHome : Screen()
     data class SportsDetail(val matchId: String) : Screen()
-    data class SportsPlayer(val matchId: String, val streamId: Int? = null) : Screen()
+    data class SportsPlayer(
+        val matchId: String,
+        val streamUrl: String,
+        val title: String
+    ) : Screen()
 }
 
 @Composable
 fun MainAppNav() {
     val context = LocalContext.current
     val repository = remember { YocinemaRepository(context) }
-    val sportsRepository = remember { SportsRepository(repository.api) }
+    // SportsRepository is built inside YocinemaRepository alongside the
+    // other Retrofit services — same okHttpClient, same AuthInterceptor,
+    // same X-API-Key. Nothing to construct here.
+    val sportsRepository = repository.sportsRepository
+
     val apiKeyIssue by repository.apiKeyIssueFlow.collectAsState()
 
     val initialScreen = if (repository.isLoggedIn()) Screen.Home else Screen.Login
@@ -131,10 +136,6 @@ fun MainAppNav() {
         showSplash = false
     }
 
-    // App-update check — runs once per process on launch. A failed/offline
-    // check just leaves appUpdateState null, which renders nothing; this
-    // should never block someone from using the app when they can't reach
-    // the version-check endpoint at all.
     var appUpdateState by remember { mutableStateOf<AppUpdateState?>(null) }
     var updateDialogDismissed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -145,14 +146,6 @@ fun MainAppNav() {
         )
     }
 
-    // Screen.equals() lets AnimatedContent's own targetState diffing work,
-    // but it can't tell push from pop from a lateral tab switch — those
-    // need genuinely different motion (forward = slide from the right,
-    // back = slide from the left, tab switch = plain crossfade) or every
-    // transition ends up feeling like the same flat cut regardless of
-    // where the person actually is in the flow. Each nav function below
-    // sets this alongside mutating the backstack, so it's always current
-    // by the time AnimatedContent reads it during the same recomposition.
     var navDirection by remember { mutableStateOf(NavDirection.LATERAL) }
 
     fun navigateTo(screen: Screen) {
@@ -167,9 +160,6 @@ fun MainAppNav() {
         }
     }
 
-    // Bottom-tab switches and login/logout resets aren't a push or a pop —
-    // they replace the whole stack with a single fresh root — so they get
-    // their own helper rather than being misclassified as one of the above.
     fun switchRoot(screen: Screen) {
         navDirection = NavDirection.LATERAL
         screenBackStack.clear()
@@ -180,10 +170,6 @@ fun MainAppNav() {
         navigateBack()
     }
 
-    // Notification tap deep link (see MainActivity.consumeDeepLink /
-    // YoFirebaseMessagingService) — reacts whenever PendingDeepLink.movieId
-    // changes, including a tap while the app is already open, since that
-    // updates the same observable state via onNewIntent().
     LaunchedEffect(PendingDeepLink.movieId) {
         val movieId = PendingDeepLink.movieId
         if (!movieId.isNullOrBlank()) {
@@ -193,7 +179,12 @@ fun MainAppNav() {
     }
 
     val showBottomNav = when (currentScreen) {
-        is Screen.Home, is Screen.Explore, is Screen.Downloads, is Screen.Library, is Screen.Account, is Screen.SportsHome -> true
+        is Screen.Home,
+        is Screen.Explore,
+        is Screen.Downloads,
+        is Screen.Library,
+        is Screen.Account,
+        is Screen.SportsHome -> true
         else -> false
     }
 
@@ -244,13 +235,6 @@ fun MainAppNav() {
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
-                    // Direction communicates hierarchy the way native
-                    // push/pop navigation does: forward content enters
-                    // fully from the right while the outgoing screen only
-                    // drifts a quarter of the way out (a cheap parallax
-                    // that reads as "behind" rather than "replaced"), and
-                    // back reverses it exactly. Tab switches are lateral,
-                    // not hierarchical, so they stay a plain crossfade.
                     when (navDirection) {
                         NavDirection.FORWARD -> (
                             slideInHorizontally(
@@ -285,9 +269,7 @@ fun MainAppNav() {
                             sportsRepository = sportsRepository,
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
                             onSearchClick = { navigateTo(Screen.Search()) },
-                            onWatchlistClick = {
-                                navigateTo(Screen.Library)
-                            },
+                            onWatchlistClick = { navigateTo(Screen.Library) },
                             onDownloadsClick = {
                                 currentTab = BottomTab.Downloads
                                 navigateTo(Screen.Downloads)
@@ -300,7 +282,12 @@ fun MainAppNav() {
                                 navigateTo(Screen.MoviesDemoBrowse(title = "Non-Translated Movies"))
                             },
                             onNigerianClick = {
-                                navigateTo(Screen.MoviesDemoBrowse(title = "Nigerian Movies", countryFilter = MOVIES_DEMO_NIGERIA_COUNTRY))
+                                navigateTo(
+                                    Screen.MoviesDemoBrowse(
+                                        title = "Nigerian Movies",
+                                        countryFilter = MOVIES_DEMO_NIGERIA_COUNTRY
+                                    )
+                                )
                             },
                             onViewAllVJsClick = { navigateTo(Screen.VJList) },
                             onVJClick = { vjName -> navigateTo(Screen.VJCatalogue(vjName)) },
@@ -347,7 +334,7 @@ fun MainAppNav() {
                         LibraryScreen(
                             repository = repository,
                             onMovieClick = { movieId -> navigateTo(Screen.Detail(movieId)) },
-                            onPlayHistoryClick = { movieId, seasonNum, epNum, posMs ->
+                            onPlayHistoryClick = { movieId, seasonNum, epNum, _ ->
                                 navigateTo(
                                     Screen.Player(
                                         movieId = movieId,
@@ -445,7 +432,12 @@ fun MainAppNav() {
                             onBackClick = { navigateBack() },
                             onItemClick = { detailPath -> navigateTo(Screen.MoviesDemoDetail(detailPath)) },
                             onSearchClick = {
-                                navigateTo(Screen.MoviesDemoSearch(title = screen.title, countryFilter = screen.countryFilter))
+                                navigateTo(
+                                    Screen.MoviesDemoSearch(
+                                        title = screen.title,
+                                        countryFilter = screen.countryFilter
+                                    )
+                                )
                             },
                             onViewAllClick = { railTitle, genre, sort ->
                                 navigateTo(
@@ -489,7 +481,14 @@ fun MainAppNav() {
                             repository = repository,
                             onBackClick = { navigateBack() },
                             onPlayClick = { path, title, seasonNum, epNum ->
-                                navigateTo(Screen.MoviesDemoPlayer(detailPath = path, title = title, seasonNum = seasonNum, epNum = epNum))
+                                navigateTo(
+                                    Screen.MoviesDemoPlayer(
+                                        detailPath = path,
+                                        title = title,
+                                        seasonNum = seasonNum,
+                                        epNum = epNum
+                                    )
+                                )
                             }
                         )
                     }
@@ -518,8 +517,14 @@ fun MainAppNav() {
                             matchId = screen.matchId,
                             sportsRepository = sportsRepository,
                             onBackClick = { navigateBack() },
-                            onWatch = { matchId, streamId ->
-                                navigateTo(Screen.SportsPlayer(matchId = matchId, streamId = streamId))
+                            onWatch = { matchId, streamUrl ->
+                                navigateTo(
+                                    Screen.SportsPlayer(
+                                        matchId = matchId,
+                                        streamUrl = streamUrl,
+                                        title = ""
+                                    )
+                                )
                             }
                         )
                     }
@@ -527,8 +532,8 @@ fun MainAppNav() {
                     is Screen.SportsPlayer -> {
                         SportsPlayerScreen(
                             matchId = screen.matchId,
-                            initialStreamId = screen.streamId,
-                            sportsRepository = sportsRepository,
+                            streamUrl = screen.streamUrl,
+                            title = screen.title,
                             onBackClick = { navigateBack() }
                         )
                     }
@@ -538,7 +543,7 @@ fun MainAppNav() {
     }
 
     apiKeyIssue?.let { issue ->
-        if (issue is com.example.data.api.ApiKeyIssue.MoviesDemoNotEnabled) {
+        if (issue is ApiKeyIssue.MoviesDemoNotEnabled) {
             MoviesDemoAccessDialog(onDismiss = { repository.clearApiKeyIssue() })
         } else {
             ApiKeyIssueDialog(
@@ -559,11 +564,6 @@ fun MainAppNav() {
         }
     }
 
-    // A required update takes priority — no reason to let someone keep
-    // dismissing/working around key issues on a version the backend has
-    // said is no longer supported. An optional one only shows if there's
-    // no forced dialog already up, and only until the user dismisses it
-    // once (updateDialogDismissed) — no re-nagging every recomposition.
     when (val state = appUpdateState) {
         is AppUpdateState.Required -> {
             UpdateDialog(
