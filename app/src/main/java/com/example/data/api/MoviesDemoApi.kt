@@ -3,6 +3,7 @@ package com.example.data.api
 import com.example.data.model.MdBrowseResponse
 import com.example.data.model.MdCaptionsResponse
 import com.example.data.model.MdDetails
+import com.example.data.model.MdFiltersResponse
 import com.example.data.model.MdSeasonsResponse
 import com.example.data.model.MdStreamResponse
 import retrofit2.Response
@@ -32,6 +33,11 @@ interface MoviesDemoApi {
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20
     ): Response<MdBrowseResponse>
+
+    @GET("api/browse")
+    suspend fun browseFilters(
+        @Query("filters") filters: Boolean = true
+    ): Response<MdFiltersResponse>
 
     @GET("api/trending")
     suspend fun trending(
