@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -185,16 +186,6 @@ fun SportsPlayerScreen(
     }
 }
 
-/**
- * The stream URL is always a proxy URL of the form
- *   https://movie-bo-api.vercel.app/api/stream?url=<encoded-original>
- * so the real media extension lives inside the `url` query parameter, not
- * in the outer path. Inspect that parameter to decide HLS vs DASH vs MP4.
- *
- * Live sports streams are HLS (.m3u8). Highlights and replay are MP4.
- * Without this, hardcoding APPLICATION_M3U8 makes MP4 playback fail with
- * "media source unsupported" even after the proxy 403 is fixed.
- */
 private fun inferMimeType(streamUrl: String): String {
     val underlying = runCatching {
         Uri.parse(streamUrl).getQueryParameter("url") ?: streamUrl
