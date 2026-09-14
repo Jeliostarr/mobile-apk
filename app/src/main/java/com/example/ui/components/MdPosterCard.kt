@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -38,7 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.MdSubject
-import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoBaseBackground
+import com.example.ui.theme.YoGlowGradient
 import com.example.ui.theme.YoRatingGold
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
@@ -99,14 +101,14 @@ fun MdPosterCard(
                     .align(Alignment.TopStart)
                     .padding(8.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(YoPrimaryViolet.copy(alpha = 0.85f))
+                    .background(Brush.linearGradient(YoGlowGradient))
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = if (subject.type == "tv") "SERIES" else "MOVIE",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = YoTextPrimary,
+                    color = YoBaseBackground,
                     letterSpacing = 0.5.sp
                 )
             }
@@ -123,11 +125,11 @@ fun MdPosterCard(
             overflow = TextOverflow.Ellipsis
         )
 
-        val firstGenre = subject.genre?.split(",")?.firstOrNull()?.trim()
-        val subtitleLine = firstGenre ?: subject.effectiveCountry
-        if (!subtitleLine.isNullOrBlank()) {
+        val metaLine = listOfNotNull(subject.formattedDuration, subject.primaryGenre ?: subject.effectiveCountry)
+            .joinToString("  •  ")
+        if (metaLine.isNotBlank()) {
             Text(
-                text = subtitleLine,
+                text = metaLine,
                 fontSize = 11.sp,
                 color = YoTextMuted,
                 maxLines = 1,

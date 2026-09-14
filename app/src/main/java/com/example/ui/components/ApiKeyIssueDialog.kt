@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.MovieFilter
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.Speed
@@ -170,6 +170,6 @@ private fun iconFor(issue: ApiKeyIssue): Pair<androidx.compose.ui.graphics.vecto
         is ApiKeyIssue.Revoked, is ApiKeyIssue.Deleted, is ApiKeyIssue.Suspended -> Icons.Default.Block to YoDestructive
         is ApiKeyIssue.AccountInactive -> Icons.Default.PersonOff to YoDestructive
         is ApiKeyIssue.Missing, is ApiKeyIssue.Invalid -> Icons.Default.VpnKeyOff to YoDestructive
-        is ApiKeyIssue.MoviesDemoNotEnabled -> Icons.Default.MovieFilter to YoWarningAmber
+        is ApiKeyIssue.MoviesDemoNotEnabled -> Icons.Default.Lock to YoWarningAmber
         is ApiKeyIssue.Other -> Icons.Default.Key to YoWarningAmber
     }
