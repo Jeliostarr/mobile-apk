@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -213,11 +214,12 @@ private fun MdHeroPager(items: List<MdSubject>, onItemClick: (String) -> Unit) {
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
             )
             Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
-                if (!item.effectiveRating.isNullOrBlank()) {
+                val rating = item.effectiveRating
+                if (!rating.isNullOrBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Star, contentDescription = null, tint = YoRatingGold, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(item.effectiveRating, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(rating, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                 }

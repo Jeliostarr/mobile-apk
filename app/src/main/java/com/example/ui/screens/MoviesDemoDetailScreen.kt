@@ -138,7 +138,7 @@ fun MoviesDemoDetailScreen(
             }
         } else {
             val d = details!!
-            val statusBarHeight = androidx.compose.foundation.layout.WindowInsets.statusBars
+            val statusBarHeight = androidx.compose.foundation.layout.WindowInsets.Companion.statusBars
                 .asPaddingValues().calculateTopPadding()
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
