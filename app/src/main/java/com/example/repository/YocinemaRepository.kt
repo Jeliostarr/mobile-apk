@@ -7,6 +7,7 @@ import com.example.data.api.ApiKeyIssue
 import com.example.data.api.AuthInterceptor
 import com.example.data.api.ResponseEnvelopeExtractor
 import com.example.data.api.MoviesDemoApi
+import com.example.data.api.SportsApi
 import com.example.data.api.YocinemaApi
 import com.example.data.local.AppDatabase
 import com.example.data.local.DownloadEntity
@@ -105,6 +106,20 @@ class YocinemaRepository(context: Context) {
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
         .create(MoviesDemoApi::class.java)
+
+    // Sports API — same Vercel backend as movies-demo, same base URL, same
+    // okHttpClient (so the same AuthInterceptor adds X-API-Key and any
+    // 401/403/429 from here also feeds apiKeyIssueFlow). Just a different
+    // Retrofit interface on the same host. The repository wrapper collapses
+    // the envelope/DTO handling so screens can consume domain models only.
+    val sportsApi: SportsApi = Retrofit.Builder()
+        .baseUrl(MOVIES_DEMO_BASE_URL)
+        .client(okHttpClient)
+        .addConverterFactory(MoshiConverterFactory.create(moshi))
+        .build()
+        .create(SportsApi::class.java)
+
+    val sportsRepository = SportsRepository(sportsApi)
 
     val streamTokenManager = StreamTokenManager(api)
 
