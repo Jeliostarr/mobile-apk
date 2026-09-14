@@ -52,6 +52,7 @@ import com.example.data.model.Match
 import com.example.data.model.MatchStatus
 import com.example.data.model.MediaClip
 import com.example.data.model.Team
+import com.example.data.model.moviesDemoStreamUrl
 import com.example.repository.SportsRepository
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
@@ -110,6 +111,7 @@ fun SportsMatchDetailScreen(
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = YoPrimaryViolet)
             }
+
             match == null -> Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -126,6 +128,7 @@ fun SportsMatchDetailScreen(
                     modifier = Modifier.clickable { refreshTick++ },
                 )
             }
+
             else -> MatchDetailContent(
                 match = match!!,
                 onWatch = onWatch,
@@ -148,7 +151,7 @@ private fun MatchDetailContent(
         if (match.canWatchLive && !match.liveStreamUrl.isNullOrBlank()) {
             item {
                 WatchLiveButton(
-                    onClick = { onWatch(match.id, match.liveStreamUrl) },
+                    onClick = { onWatch(match.id, moviesDemoStreamUrl(match.liveStreamUrl)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
@@ -161,7 +164,7 @@ private fun MatchDetailContent(
                 MediaSection(
                     title = "Channels",
                     clips = match.channels,
-                    onClipClick = { onWatch(match.id, it.url) },
+                    onClipClick = { onWatch(match.id, moviesDemoStreamUrl(it.url)) },
                 )
             }
         }
@@ -171,7 +174,7 @@ private fun MatchDetailContent(
                 MediaSection(
                     title = "Highlights",
                     clips = match.highlights,
-                    onClipClick = { onWatch(match.id, it.url) },
+                    onClipClick = { onWatch(match.id, moviesDemoStreamUrl(it.url)) },
                 )
             }
         }
@@ -181,7 +184,7 @@ private fun MatchDetailContent(
                 MediaSection(
                     title = "Full Replay",
                     clips = match.replay,
-                    onClipClick = { onWatch(match.id, it.url) },
+                    onClipClick = { onWatch(match.id, moviesDemoStreamUrl(it.url)) },
                 )
             }
         }
