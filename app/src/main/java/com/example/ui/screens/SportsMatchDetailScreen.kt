@@ -6,19 +6,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,23 +39,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.data.model.SportsMatchDetailResponse
-import com.example.data.model.SportsStream
+import com.example.data.model.Match
+import com.example.data.model.MatchStatus
+import com.example.data.model.MediaClip
+import com.example.data.model.Team
 import com.example.repository.SportsRepository
-import com.example.ui.components.LiveBadge
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
+import com.example.ui.theme.YoLiveRed
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoSurface
+import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 import com.example.ui.util.SportsTimeUtils
@@ -61,290 +68,370 @@ fun SportsMatchDetailScreen(
     matchId: String,
     sportsRepository: SportsRepository,
     onBackClick: () -> Unit,
-    onWatch: (matchId: String, streamId: Int) -> Unit
+    onWatch: (matchId: String, mediaUrl: String) -> Unit,
 ) {
-    var detail by remember { mutableStateOf<SportsMatchDetailResponse?>(null) }
+    var match by remember { mutableStateOf<Match?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var loadError by remember { mutableStateOf<String?>(null) }
-    var selectedStream by remember { mutableStateOf<SportsStream?>(null) }
     var refreshTick by remember { mutableStateOf(0) }
 
     LaunchedEffect(matchId, refreshTick) {
         isLoading = true
-        loadError = null
-        val result = sportsRepository.getMatchDetail(matchId)
-        if (result?.match == null) {
-            loadError = "Match not found — it may have been removed."
-        } else {
-            detail = result
-            // Default to the highest quality available (HD > MD > SD is the
-            // order Nova returns them in, so just prefer the last entry).
-            selectedStream = result.streams.lastOrNull()
-        }
+        match = sportsRepository.getMatch(matchId)
         isLoading = false
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(YoBaseBackground)
+            .background(YoBaseBackground),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBackClick) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = YoTextPrimary)
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = YoTextPrimary,
+                )
             }
             Text(
-                text = "Match Details",
+                text = "Match",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
-                color = YoTextPrimary
+                color = YoTextPrimary,
             )
         }
 
         when {
-            isLoading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = YoPrimaryViolet)
-                }
+            isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = YoPrimaryViolet)
             }
-            loadError != null -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text("⚠️", fontSize = 28.sp)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(loadError ?: "", color = YoTextMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        "Tap to retry",
-                        color = YoPrimaryViolet,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { refreshTick++ }
-                    )
-                }
+            match == null -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("Match not found", color = YoTextMuted, fontSize = 15.sp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "Retry",
+                    color = YoPrimaryViolet,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { refreshTick++ },
+                )
             }
-            else -> {
-                val match = detail?.match
-                val streams = detail?.streams ?: emptyList()
+            else -> MatchDetailContent(
+                match = match!!,
+                onWatch = onWatch,
+            )
+        }
+    }
+}
 
-                Column(
+@Composable
+private fun MatchDetailContent(
+    match: Match,
+    onWatch: (String, String) -> Unit,
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        item { ScoreboardHero(match) }
+
+        if (match.canWatchLive && !match.liveStreamUrl.isNullOrBlank()) {
+            item {
+                WatchLiveButton(
+                    onClick = { onWatch(match.id, match.liveStreamUrl) },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp)
-                ) {
-                    // Hero card — gradient wash behind the matchup so this
-                    // reads as the focal point of the screen instead of
-                    // floating on the same flat background as everything else.
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(10.dp, RoundedCornerShape(24.dp), clip = false)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(YoPrimaryViolet.copy(alpha = 0.20f), YoSurface)
-                                )
-                            )
-                            .padding(20.dp)
-                    ) {
-                        // League + status
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (match?.league?.img != null) {
-                                AsyncImage(
-                                    model = match.league.img,
-                                    contentDescription = match.league.name,
-                                    modifier = Modifier.size(18.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                            }
-                            Text(
-                                text = match?.league?.name ?: "Football",
-                                color = YoTextMuted,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (match?.live == true) {
-                                LiveBadge()
-                            } else {
-                                Text(
-                                    text = "${SportsTimeUtils.formatDay(match?.kickoff)} · ${SportsTimeUtils.formatTime(match?.kickoff)}",
-                                    color = YoTextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                )
+            }
+        }
 
-                        Spacer(modifier = Modifier.height(28.dp))
+        if (match.channels.isNotEmpty()) {
+            item {
+                MediaSection(
+                    title = "Channels",
+                    clips = match.channels,
+                    onClipClick = { onWatch(match.id, it.url) },
+                )
+            }
+        }
 
-                        // Matchup
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            BigTeam(name = match?.home?.name, imageUrl = match?.home?.img)
-                            Text("VS", color = YoTextMuted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            BigTeam(name = match?.away?.name, imageUrl = match?.away?.img)
-                        }
-                    }
+        if (match.highlights.isNotEmpty()) {
+            item {
+                MediaSection(
+                    title = "Highlights",
+                    clips = match.highlights,
+                    onClipClick = { onWatch(match.id, it.url) },
+                )
+            }
+        }
 
-                    Spacer(modifier = Modifier.height(28.dp))
-
-                    val canWatch = match?.live == true && streams.isNotEmpty()
-
-                    if (canWatch) {
-                        Text(
-                            text = "Choose quality",
-                            color = YoTextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            streams.forEach { stream ->
-                                val isSelected = stream.id == selectedStream?.id
-                                Column(
-                                    modifier = Modifier
-                                        .let { if (isSelected) it.shadow(6.dp, RoundedCornerShape(12.dp), clip = false) else it }
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) YoPrimaryViolet else YoSurface)
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isSelected) Color.Transparent else YoBorder,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable { selectedStream = stream }
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = stream.label,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) YoBaseBackground else YoTextPrimary
-                                        )
-                                        if (isSelected) {
-                                            Spacer(modifier = Modifier.width(5.dp))
-                                            Icon(
-                                                imageVector = Icons.Filled.CheckCircle,
-                                                contentDescription = "Selected",
-                                                tint = YoBaseBackground,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
-                                    if (stream.quality != null) {
-                                        Text(
-                                            text = stream.quality,
-                                            fontSize = 11.sp,
-                                            color = if (isSelected) YoBaseBackground.copy(alpha = 0.7f) else YoTextMuted
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Button(
-                            onClick = {
-                                selectedStream?.let { s -> onWatch(matchId, s.id) }
-                            },
-                            enabled = selectedStream != null,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = YoPrimaryViolet,
-                                contentColor = YoBaseBackground
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .shadow(8.dp, RoundedCornerShape(14.dp), clip = false)
-                                .height(54.dp)
-                        ) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Watch Live",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(YoSurface)
-                                .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
-                                .padding(20.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = if (match?.live == true)
-                                        "No stream found for this match right now."
-                                    else
-                                        "Stream isn't available yet check back closer to kickoff.",
-                                    color = YoTextMuted,
-                                    fontSize = 13.sp,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    "Refresh",
-                                    color = YoPrimaryViolet,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.clickable { refreshTick++ }
-                                )
-                            }
-                        }
-                    }
-                }
+        if (match.replay.isNotEmpty()) {
+            item {
+                MediaSection(
+                    title = "Full Replay",
+                    clips = match.replay,
+                    onClipClick = { onWatch(match.id, it.url) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun BigTeam(name: String?, imageUrl: String?) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun ScoreboardHero(match: Match) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(YoPrimaryViolet.copy(alpha = 0.20f), YoSurface),
+                ),
+            )
+            .padding(20.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = match.league.ifBlank { "Football" },
+                    fontSize = 12.sp,
+                    color = YoTextMuted,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (match.round.isNotBlank()) {
+                    Text(
+                        text = " • ${match.round}",
+                        fontSize = 12.sp,
+                        color = YoTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            MatchStatusLine(match)
+            Spacer(Modifier.height(22.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BigTeam(match.home, Modifier.weight(1f))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.width(90.dp),
+                ) {
+                    val score = if (match.home.score != null && match.away.score != null) {
+                        "${match.home.score} - ${match.away.score}"
+                    } else {
+                        "vs"
+                    }
+                    Text(
+                        text = score,
+                        fontSize = if (match.home.score != null) 34.sp else 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = YoTextPrimary,
+                    )
+                }
+                BigTeam(match.away, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MatchStatusLine(match: Match) {
+    val (label, color) = when (match.status) {
+        MatchStatus.LIVE -> "LIVE" to YoLiveRed
+        MatchStatus.FINISHED -> "Full time" to YoTextMuted
+        MatchStatus.SCHEDULED -> "${SportsTimeUtils.formatDay(match.startTime?.toString())} · ${SportsTimeUtils.formatTime(match.startTime?.toString())}" to YoTextMuted
+        MatchStatus.POSTPONED -> "Postponed" to YoTextMuted
+        MatchStatus.CANCELLED -> "Cancelled" to YoTextMuted
+        MatchStatus.UNKNOWN -> "" to YoTextMuted
+    }
+    if (label.isNotBlank()) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            letterSpacing = if (match.status == MatchStatus.LIVE) 1.sp else 0.sp,
+        )
+    }
+}
+
+@Composable
+private fun BigTeam(team: Team, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(YoBorder.copy(alpha = 0.3f))
-                .border(1.dp, YoBorder, CircleShape),
-            contentAlignment = Alignment.Center
+                .background(YoSurfaceVariant),
+            contentAlignment = Alignment.Center,
         ) {
-            if (imageUrl != null) {
+            if (!team.logo.isNullOrBlank()) {
                 AsyncImage(
-                    model = imageUrl,
-                    contentDescription = name,
-                    modifier = Modifier.size(72.dp).clip(CircleShape),
-                    contentScale = ContentScale.Fit
+                    model = team.logo,
+                    contentDescription = team.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(56.dp),
+                )
+            } else {
+                Text(
+                    text = team.abbreviation.ifBlank { team.name.take(3).uppercase() },
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YoTextMuted,
                 )
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
-            text = name ?: "TBD",
-            color = YoTextPrimary,
+            text = team.name,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
+            color = YoTextPrimary,
             textAlign = TextAlign.Center,
-            modifier = Modifier.width(100.dp)
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun WatchLiveButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(54.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = YoPrimaryViolet,
+            contentColor = YoBaseBackground,
+        ),
+    ) {
+        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Watch Live", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+    }
+}
+
+@Composable
+private fun MediaSection(
+    title: String,
+    clips: List<MediaClip>,
+    onClipClick: (MediaClip) -> Unit,
+) {
+    Column {
+        Text(
+            text = title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = YoTextPrimary,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(clips, key = { it.id }) { clip ->
+                MediaCard(clip = clip, onClick = { onClipClick(clip) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaCard(clip: MediaClip, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(200.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                .background(YoSurfaceVariant),
+        ) {
+            if (!clip.cover.isNullOrBlank()) {
+                AsyncImage(
+                    model = clip.cover,
+                    contentDescription = clip.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            if (clip.durationSeconds != null && clip.durationSeconds > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = formatDuration(clip.durationSeconds),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
+            }
+        }
+        if (!clip.title.isNullOrBlank()) {
+            Text(
+                text = clip.title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = YoTextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(10.dp),
+            )
+        }
+    }
+}
+
+private fun formatDuration(seconds: Int): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%d:%02d".format(m, s)
 }

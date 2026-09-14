@@ -1,9 +1,11 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,21 +27,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -60,21 +55,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.FacetsResponse
+import com.example.data.model.Match
+import com.example.data.model.MatchStatus
 import com.example.data.model.Movie
-import com.example.data.model.SportsMatch
 import com.example.data.model.formatDuration
 import com.example.data.model.isNull_orEmpty
 import com.example.repository.SportsRepository
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.HomeSkeleton
-import com.example.ui.components.LiveBadge
+import com.example.ui.components.HomeSportsRail
 import com.example.ui.components.PosterCard
 import com.example.ui.components.VJBadgeChip
 import com.example.ui.components.VJChip
@@ -82,14 +76,12 @@ import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoGlowGradient
-import com.example.ui.theme.YoLiveRed
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoRatingGold
 import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
-import com.example.ui.util.SportsTimeUtils
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -333,17 +325,7 @@ fun HomeScreen(
     var isLoading by remember { mutableStateOf(popularMovies.isEmpty() && latestMovies.isEmpty()) }
     var isRefreshing by remember { mutableStateOf(false) }
 
-    // Sports rail: prefer live matches; if there aren't any right now, fall
-    // back to upcoming ones with a countdown instead of just hiding the rail.
-    var sportsMatches by remember { mutableStateOf<List<SportsMatch>>(emptyList()) }
-    var sportsHasLive by remember { mutableStateOf(false) }
-
-    // Hero carousel needs the same rich payload Detail screen uses
-    // (heroImage/cover + full description) — the list endpoint that
-    // populates popularMovies/latestMovies returns a lighter shape
-    // without those fields, which is why the hero was blank before.
-    // Seeded from the repository cache so a revisit doesn't blank the
-    // carousel out and silently re-fetch 5 movie details in the background.
+    var sportsMatches by remember { mutableStateOf<List<Match>>(emptyList()) }
     var heroMovies by remember { mutableStateOf(repository.cachedHeroMovies) }
 
     val scope = rememberCoroutineScope()
@@ -357,12 +339,6 @@ fun HomeScreen(
             isLoading = true
         }
         try {
-            // These four don't depend on each other — they were being
-            // fetched one after another (four full round trips before
-            // the genre batch even started), which was the main reason
-            // cold loads felt slow. Launching all four up front and
-            // awaiting them after means the wait is bounded by the
-            // slowest single call instead of the sum of all four.
             lateinit var pop: List<Movie>
             lateinit var lat: List<Movie>
             lateinit var ser: List<Movie>
@@ -383,15 +359,6 @@ fun HomeScreen(
             val allMoviesPool = (pop + lat + ser).distinctBy { it.id }
             val allGenres = facets.genres.orEmpty().filter { it.isNotBlank() }
 
-            // Genre rails used to each cost their own network round trip
-            // (one request per genre, fired in parallel) even though
-            // pop+lat+series had usually already pulled in most of the
-            // catalog's popular titles. Building each rail from that
-            // in-memory pool first — and only falling back to a network
-            // call on the rare genre with nothing in the pool — cuts
-            // this from "N extra requests every load" to "close to zero"
-            // on a typical catalog, which is most of what was making
-            // cold loads slow.
             val genreResults = coroutineScope {
                 allGenres.map { genre ->
                     async {
@@ -409,12 +376,6 @@ fun HomeScreen(
             }.filter { (_, movies) -> movies.isNotEmpty() }
                 .associate { it }
 
-            // VJs sorted by how many movies they've translated (using the
-            // same in-memory pool, same trade-off as genre rails above: an
-            // approximation from ~45 fetched titles rather than a full
-            // catalog-wide count, but no extra network calls needed for it).
-            // Facets is still the source of truth for WHICH vjs exist —
-            // this only decides the order they're shown in.
             val vjCounts = allMoviesPool
                 .mapNotNull { it.vjName?.takeIf { name -> name.isNotBlank() } }
                 .groupingBy { it }
@@ -446,42 +407,20 @@ fun HomeScreen(
 
     suspend fun fetchHomeSports() {
         try {
-            val live = sportsRepository.getMatches(status = "live", limit = 10)
-            val upcoming = sportsRepository.getMatches(status = "upcoming", limit = 10)
-            val upcomingSorted = upcoming.matches.sortedBy { it.kickoff ?: "" }
-            // Live matches lead the rail when there are any; upcoming ones
-            // fill out the rest of it right after — previously upcoming was
-            // only ever shown when there were zero live matches, which made
-            // the rail go nearly empty during quiet live moments even though
-            // there were perfectly good upcoming matches to show.
-            sportsMatches = (live.matches + upcomingSorted).distinctBy { it.id }.take(15)
-            sportsHasLive = live.matches.isNotEmpty()
+            val live = sportsRepository.getLive(limit = 10)
+            val schedule = if (live.isEmpty()) sportsRepository.getSchedule(limit = 10) else emptyList()
+            sportsMatches = live.ifEmpty { schedule }
         } catch (e: Exception) {
-            // Sports is a secondary rail on Home — a failure here shouldn't
-            // block or blank out the rest of the screen, it should just
-            // leave the rail hidden (see the isNotEmpty() check where it's
-            // rendered below).
+            // Sports is a secondary rail — failure should not blank the screen.
+            sportsMatches = emptyList()
         }
     }
 
     LaunchedEffect(Unit) {
-        // This used to run the full fetch burst unconditionally on every
-        // single composition of HomeScreen — i.e. every time the Home tab
-        // was reopened, even seconds after the last visit — which is the
-        // main reason it felt slow "every open". Now it's skipped entirely
-        // once a fresh cache exists; the screen just paints from cache
-        // instantly with zero network calls.
         scope.launch { fetchHomeMovies(forceRefresh = false) }
         scope.launch { fetchHomeSports() }
     }
 
-    // Fetch full detail (heroImage/cover + description) for just the
-    // handful of movies shown in the hero carousel — same call Detail
-    // screen makes, so the hero uses the identical image and has a
-    // description to show. Re-runs only when the underlying light list
-    // actually changes (not on every recomposition) — the ID comparison
-    // below is what makes a revisit with a fresh cache a no-op, since
-    // heroMovies is now seeded from the repository cache too.
     LaunchedEffect(popularMovies, latestMovies) {
         val lightHeroList = latestMovies.take(5).ifEmpty { popularMovies.take(5) }
         if (lightHeroList.isEmpty()) return@LaunchedEffect
@@ -521,111 +460,112 @@ fun HomeScreen(
         )
 
         Crossfade(targetState = isLoading, label = "homeContent") { loading ->
-        if (loading) {
-            HomeSkeleton()
-        } else {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = {
-                    scope.launch {
-                        isRefreshing = true
-                        fetchHomeMovies(forceRefresh = true)
-                        fetchHomeSports()
-                        isRefreshing = false
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                val heroList = heroMovies.ifEmpty { latestMovies.take(10).ifEmpty { popularMovies.take(10) } }
-                if (heroList.isNotEmpty()) {
-                    item {
-                        HeroSliderPager(
-                            movies = heroList,
-                            onMovieClick = onMovieClick
-                        )
-                    }
-                }
+            if (loading) {
+                HomeSkeleton()
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        scope.launch {
+                            isRefreshing = true
+                            fetchHomeMovies(forceRefresh = true)
+                            fetchHomeSports()
+                            isRefreshing = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        val heroList = heroMovies.ifEmpty {
+                            latestMovies.take(10).ifEmpty { popularMovies.take(10) }
+                        }
+                        if (heroList.isNotEmpty()) {
+                            item {
+                                HeroSliderPager(
+                                    movies = heroList,
+                                    onMovieClick = onMovieClick
+                                )
+                            }
+                        }
 
-                if (vjsList.isNotEmpty()) {
-                    item {
-                        RailHeader(
-                            title = "Translators",
-                            onViewAllClick = onViewAllVJsClick
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(vjsList) { vjName ->
-                                VJChip(
-                                    vjName = vjName,
-                                    onClick = { onVJClick(vjName) }
+                        if (vjsList.isNotEmpty()) {
+                            item {
+                                RailHeader(
+                                    title = "Translators",
+                                    onViewAllClick = onViewAllVJsClick
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    items(vjsList) { vjName ->
+                                        VJChip(
+                                            vjName = vjName,
+                                            onClick = { onVJClick(vjName) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (sportsMatches.isNotEmpty()) {
+                            item {
+                                val anyLive = sportsMatches.any { it.status == MatchStatus.LIVE }
+                                HomeSportsRail(
+                                    title = if (anyLive) "Football • Live" else "Football",
+                                    matches = sportsMatches,
+                                    onMatchClick = onMatchClick,
+                                    onViewAllClick = onViewAllSportsClick
+                                )
+                            }
+                        }
+
+                        if (latestMovies.isNotEmpty()) {
+                            item {
+                                MovieRailSection(
+                                    title = "Latest Releases",
+                                    movies = latestMovies,
+                                    onMovieClick = onMovieClick,
+                                    onViewAllClick = { onViewAllCategoryClick("Latest", "latest", null, null) }
+                                )
+                            }
+                        }
+
+                        if (seriesList.isNotEmpty()) {
+                            item {
+                                MovieRailSection(
+                                    title = "TV Series",
+                                    movies = seriesList,
+                                    onMovieClick = onMovieClick,
+                                    onViewAllClick = { onViewAllCategoryClick("Series", null, "series", null) }
+                                )
+                            }
+                        }
+
+                        genreMovies.forEach { (genre, movies) ->
+                            item(key = "genre-$genre") {
+                                MovieRailSection(
+                                    title = genre,
+                                    movies = movies,
+                                    onMovieClick = onMovieClick,
+                                    onViewAllClick = { onViewAllCategoryClick(genre, null, null, genre) }
                                 )
                             }
                         }
                     }
                 }
-
-                if (sportsMatches.isNotEmpty()) {
-                    item {
-                        HomeSportsRail(
-                            matches = sportsMatches,
-                            isLive = sportsHasLive,
-                            onMatchClick = onMatchClick,
-                            onViewAllClick = onViewAllSportsClick
-                        )
-                    }
-                }
-
-                if (latestMovies.isNotEmpty()) {
-                    item {
-                        MovieRailSection(
-                            title = "Latest Releases",
-                            movies = latestMovies,
-                            onMovieClick = onMovieClick,
-                            onViewAllClick = { onViewAllCategoryClick("Latest", "latest", null, null) }
-                        )
-                    }
-                }
-
-                if (seriesList.isNotEmpty()) {
-                    item {
-                        MovieRailSection(
-                            title = "TV Series",
-                            movies = seriesList,
-                            onMovieClick = onMovieClick,
-                            onViewAllClick = { onViewAllCategoryClick("Series", null, "series", null) }
-                        )
-                    }
-                }
-
-                genreMovies.forEach { (genre, movies) ->
-                    item(key = "genre-$genre") {
-                        MovieRailSection(
-                            title = genre,
-                            movies = movies,
-                            onMovieClick = onMovieClick,
-                            onViewAllClick = { onViewAllCategoryClick(genre, null, null, genre) }
-                        )
-                    }
-                }
             }
-            }
-        }
         }
     }
 }
 
 @Composable
-fun HomeSearchBar(
-    onSearchClick: () -> Unit
-) {
+fun HomeSearchBar(onSearchClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -647,9 +587,7 @@ fun HomeSearchBar(
                 tint = YoPrimaryViolet,
                 modifier = Modifier.size(20.dp)
             )
-
             Spacer(modifier = Modifier.width(10.dp))
-
             Text(
                 text = "Search Movies & Series",
                 fontSize = 14.sp,
@@ -673,13 +611,13 @@ fun MoviesDemoNavRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         MoviesDemoNavCard(
-            emoji = "\uD83C\uDF10", // globe — general non-translated/original catalog
+            emoji = "\uD83C\uDF10",
             label = "Non-Translated",
             onClick = onNonTranslatedClick,
             modifier = Modifier.weight(1f)
         )
         MoviesDemoNavCard(
-            emoji = "\uD83C\uDDF3\uD83C\uDDEC", // Nigerian flag
+            emoji = "\uD83C\uDDF3\uD83C\uDDEC",
             label = "Nigerian Movies",
             onClick = onNigerianClick,
             modifier = Modifier.weight(1f)
@@ -794,170 +732,5 @@ fun MovieRailSection(
                 )
             }
         }
-    }
-}
-/**
- * Football rail for Home — shows live matches when there are any, falling
- * back to upcoming ones with a live countdown otherwise. Uses its own
- * compact card (not SportsComponents' MatchCard, which is built for a
- * full-width vertical list, not a fixed-width horizontal rail item).
- */
-@Composable
-fun HomeSportsRail(
-    matches: List<SportsMatch>,
-    isLive: Boolean,
-    onMatchClick: (String) -> Unit,
-    onViewAllClick: () -> Unit
-) {
-    if (matches.isEmpty()) return
-
-    // Ticks periodically so an upcoming match's countdown actually counts
-    // down instead of being frozen at whatever it read when the rail first
-    // composed — shared by every card in the rail via a single timer.
-    var tick by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000)
-            tick++
-        }
-    }
-
-    Column {
-        RailHeader(
-            // The rail itself is a mix of live + upcoming now (each card
-            // shows its own live badge or countdown), so the header just
-            // flags whether anything's live right now rather than claiming
-            // the whole rail is one or the other.
-            title = if (isLive) "Football \u2022 Live" else "Football",
-            onViewAllClick = onViewAllClick
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(matches, key = { it.id }) { match ->
-                key(tick) {
-                    HomeMatchCard(match = match, onClick = { onMatchClick(match.id.toString()) })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeMatchCard(match: SportsMatch, onClick: () -> Unit) {
-    val accentColor = if (match.live) YoLiveRed else YoPrimaryViolet
-
-    Column(
-        modifier = Modifier
-            .width(150.dp)
-            .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
-            .clip(RoundedCornerShape(14.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(YoSurfaceVariant, YoSurface)
-                )
-            )
-            .border(1.dp, YoBorder, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (match.league?.img != null) {
-                AsyncImage(
-                    model = match.league.img,
-                    contentDescription = null,
-                    modifier = Modifier.size(11.dp),
-                    contentScale = ContentScale.Fit
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            Text(
-                text = match.league?.name ?: "Football",
-                fontSize = 9.sp,
-                color = YoTextMuted,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            if (match.live) {
-                LiveBadge(compact = true)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HomeTeamBadge(name = match.home?.name, imageUrl = match.home?.img)
-            Text("vs", fontSize = 9.sp, color = YoTextMuted, fontWeight = FontWeight.Bold)
-            HomeTeamBadge(name = match.away?.name, imageUrl = match.away?.img)
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(7.dp))
-                .background(accentColor.copy(alpha = 0.14f))
-                .padding(vertical = 5.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (match.live) {
-                    "Watch Live"
-                } else {
-                    SportsTimeUtils.formatCountdown(match.kickoff).ifBlank {
-                        SportsTimeUtils.formatTime(match.kickoff)
-                    }
-                },
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                color = accentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun HomeTeamBadge(name: String?, imageUrl: String?) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(50.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(YoBorder.copy(alpha = 0.3f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (!imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = name,
-                    modifier = Modifier.size(21.dp),
-                    contentScale = ContentScale.Fit
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = name ?: "TBD",
-            fontSize = 9.sp,
-            color = YoTextPrimary,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
     }
 }
