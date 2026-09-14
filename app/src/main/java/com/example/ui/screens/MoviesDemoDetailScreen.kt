@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -138,7 +140,7 @@ fun MoviesDemoDetailScreen(
             }
         } else {
             val d = details!!
-            val statusBarHeight = androidx.compose.foundation.layout.WindowInsets.Companion.statusBars
+            val statusBarHeight = WindowInsets.statusBars
                 .asPaddingValues().calculateTopPadding()
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
