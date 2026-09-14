@@ -534,6 +534,7 @@ fun MainAppNav() {
                             matchId = screen.matchId,
                             streamUrl = screen.streamUrl,
                             title = screen.title,
+                            repository = repository,   
                             onBackClick = { navigateBack() }
                         )
                     }
