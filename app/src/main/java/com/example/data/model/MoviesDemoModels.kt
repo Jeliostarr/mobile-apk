@@ -57,7 +57,29 @@ data class MdSubject(
     val effectiveCountry: String? get() = country?.ifBlank { null } ?: countryName?.ifBlank { null }
     val effectiveRating: String? get() = imdbRating?.ifBlank { null } ?: imdbRatingValue?.ifBlank { null }
     val isNigerian: Boolean get() = effectiveCountry.equals(MOVIES_DEMO_NIGERIA_COUNTRY, ignoreCase = true)
+
+    /** The scraped catalog isn't purely movies/series — wrestling, live events, and other non-fiction "other" content comes back mixed in with type=="other" (or occasionally hasResource==false, nothing actually playable). Every screen listing content should filter through this rather than showing raw browse/trending results as-is. */
+    val isPlayableTitle: Boolean get() = (type == "movie" || type == "tv") && hasResource != false
+
+    val primaryGenre: String? get() = genre?.split(",")?.firstOrNull()?.trim()?.ifBlank { null }
+    val formattedDuration: String? get() = duration?.takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m" }
 }
+
+/** True for content that actually belongs in a movies-demo feed — filters out non-movie/series scrape noise (wrestling, live events, anything type=="other"). When browsing the general non-translated catalog (countryFilter == null), also keeps Nigerian titles out since they have their own dedicated screen; when browsing a specific country, keeps only titles actually matching it. */
+fun List<MdSubject>.cleanedForFeed(countryFilter: String?): List<MdSubject> = filter { subject ->
+    if (!subject.isPlayableTitle) return@filter false
+    if (countryFilter == null && subject.isNigerian) return@filter false
+    if (countryFilter != null && !subject.effectiveCountry.equals(countryFilter, ignoreCase = true)) return@filter false
+    true
+}
+
+@JsonClass(generateAdapter = true)
+data class MdFiltersResponse(
+    val genres: List<String>? = null,
+    val countries: List<String>? = null,
+    val years: List<String>? = null,
+    val sortOptions: List<String>? = null
+)
 
 @JsonClass(generateAdapter = true)
 data class MdBrowseResponse(
@@ -159,8 +181,9 @@ data class MdStreamResponse(
         .filter { it.vipLocked != true && !it.url.isNullOrBlank() }
         .sortedByDescending { it.resolution ?: 0 }
 
-    val defaultQuality: MdQuality? get() = best_free?.takeIf { it.vipLocked != true && !it.url.isNullOrBlank() }
-        ?: freeQualities.firstOrNull()
+    /** Always the highest actual resolution available, not whatever the server's own best_free hint says — that hint has been wrong before, and "movies should start playing in high quality" means literally the best one on the list, not a server guess. */
+    val defaultQuality: MdQuality? get() = freeQualities.firstOrNull()
+        ?: best_free?.takeIf { it.vipLocked != true && !it.url.isNullOrBlank() }
 }
 
 @JsonClass(generateAdapter = true)
