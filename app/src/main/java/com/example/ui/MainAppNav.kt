@@ -42,7 +42,9 @@ import com.example.ui.screens.AccountScreen
 import com.example.ui.screens.CastDetailScreen
 import com.example.ui.screens.MoviesDemoBrowseScreen
 import com.example.ui.screens.MoviesDemoDetailScreen
+import com.example.ui.screens.MoviesDemoHomeScreen
 import com.example.ui.screens.MoviesDemoPlayerScreen
+import com.example.ui.screens.MoviesDemoSearchScreen
 import com.example.ui.screens.DetailScreen
 import com.example.ui.screens.DownloadsScreen
 import com.example.ui.screens.ExploreScreen
@@ -86,14 +88,23 @@ sealed class Screen {
     data class CastDetail(val castId: String) : Screen()
 
     // ── Movies-demo (non-translated / Nigerian) ──
+    // Home-style landing (hero + rails) for tapping into either category.
     data class MoviesDemoBrowse(val title: String, val countryFilter: String? = null) : Screen()
+    // Paginated grid — "View All" from a rail, a specific genre, or search results.
+    data class MoviesDemoList(
+        val title: String,
+        val countryFilter: String? = null,
+        val genre: String? = null,
+        val sort: String? = null,
+        val searchQuery: String? = null
+    ) : Screen()
+    data class MoviesDemoSearch(val title: String, val countryFilter: String? = null) : Screen()
     data class MoviesDemoDetail(val detailPath: String) : Screen()
     data class MoviesDemoPlayer(
         val detailPath: String,
         val title: String,
         val seasonNum: Int? = null,
-        val epNum: Int? = null,
-        val isTrailer: Boolean = false
+        val epNum: Int? = null
     ) : Screen()
 
     // ── Sports ──
@@ -427,7 +438,43 @@ fun MainAppNav() {
                     }
 
                     is Screen.MoviesDemoBrowse -> {
+                        MoviesDemoHomeScreen(
+                            title = screen.title,
+                            countryFilter = screen.countryFilter,
+                            repository = repository,
+                            onBackClick = { navigateBack() },
+                            onItemClick = { detailPath -> navigateTo(Screen.MoviesDemoDetail(detailPath)) },
+                            onSearchClick = {
+                                navigateTo(Screen.MoviesDemoSearch(title = screen.title, countryFilter = screen.countryFilter))
+                            },
+                            onViewAllClick = { railTitle, genre, sort ->
+                                navigateTo(
+                                    Screen.MoviesDemoList(
+                                        title = railTitle,
+                                        countryFilter = screen.countryFilter,
+                                        genre = genre,
+                                        sort = sort
+                                    )
+                                )
+                            }
+                        )
+                    }
+
+                    is Screen.MoviesDemoList -> {
                         MoviesDemoBrowseScreen(
+                            title = screen.title,
+                            countryFilter = screen.countryFilter,
+                            initialGenre = screen.genre,
+                            initialSort = screen.sort,
+                            searchQuery = screen.searchQuery,
+                            repository = repository,
+                            onBackClick = { navigateBack() },
+                            onItemClick = { detailPath -> navigateTo(Screen.MoviesDemoDetail(detailPath)) }
+                        )
+                    }
+
+                    is Screen.MoviesDemoSearch -> {
+                        MoviesDemoSearchScreen(
                             title = screen.title,
                             countryFilter = screen.countryFilter,
                             repository = repository,
@@ -443,9 +490,6 @@ fun MainAppNav() {
                             onBackClick = { navigateBack() },
                             onPlayClick = { path, title, seasonNum, epNum ->
                                 navigateTo(Screen.MoviesDemoPlayer(detailPath = path, title = title, seasonNum = seasonNum, epNum = epNum))
-                            },
-                            onTrailerClick = { path, title ->
-                                navigateTo(Screen.MoviesDemoPlayer(detailPath = path, title = title, isTrailer = true))
                             }
                         )
                     }
@@ -456,7 +500,6 @@ fun MainAppNav() {
                             title = screen.title,
                             seasonNum = screen.seasonNum,
                             epNum = screen.epNum,
-                            isTrailer = screen.isTrailer,
                             repository = repository,
                             onBackClick = { navigateBack() }
                         )
