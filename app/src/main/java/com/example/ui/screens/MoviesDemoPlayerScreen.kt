@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -35,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
@@ -43,12 +48,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.data.model.MdCaption
+import com.example.data.model.MdQuality
 import com.example.data.model.moviesDemoStreamUrl
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
+import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
+import com.example.ui.theme.YoTextPrimary
 
 private const val PLAYER_USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+private const val CAPTIONS_OFF = "off"
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -57,7 +68,6 @@ fun MoviesDemoPlayerScreen(
     title: String,
     seasonNum: Int?,
     epNum: Int?,
-    isTrailer: Boolean,
     repository: YocinemaRepository,
     onBackClick: () -> Unit
 ) {
@@ -67,8 +77,47 @@ fun MoviesDemoPlayerScreen(
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var exoPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
+    var qualities by remember { mutableStateOf<List<MdQuality>>(emptyList()) }
+    var captions by remember { mutableStateOf<List<MdCaption>>(emptyList()) }
+    var selectedQuality by remember { mutableStateOf<MdQuality?>(null) }
+    var selectedCaptionLang by remember { mutableStateOf(CAPTIONS_OFF) }
+    var showQualityMenu by remember { mutableStateOf(false) }
+    var showCaptionMenu by remember { mutableStateOf(false) }
 
     val onBack = rememberUpdatedState(onBackClick)
+    val apiKey = remember { repository.tokenManager.getApiKey() }
+
+    fun httpDataSourceFactory() = DefaultHttpDataSource.Factory()
+        .setUserAgent(PLAYER_USER_AGENT)
+        .setConnectTimeoutMs(15_000)
+        .setReadTimeoutMs(30_000)
+        .setAllowCrossProtocolRedirects(true)
+        .setDefaultRequestProperties(if (!apiKey.isNullOrBlank()) mapOf("X-API-Key" to apiKey) else emptyMap())
+
+    fun buildMediaItem(videoUrl: String): MediaItem {
+        val builder = MediaItem.Builder()
+            .setUri(Uri.parse(moviesDemoStreamUrl(videoUrl)))
+            .setMimeType(MimeTypes.VIDEO_MP4)
+
+        // Every available caption track is attached up front — switching
+        // languages later is then just a track-selection change on the
+        // already-loaded player, not a full reload. English gets
+        // SELECTION_FLAG_DEFAULT so it's the one actually playing at
+        // start when available; every other language is attached but not
+        // selected until the person picks it from the captions menu.
+        if (captions.isNotEmpty()) {
+            val subtitleConfigs = captions.mapNotNull { cap ->
+                val url = cap.url ?: return@mapNotNull null
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(moviesDemoStreamUrl(url)))
+                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                    .setLanguage(cap.lan ?: cap.lanName ?: "und")
+                    .setSelectionFlags(if (cap.isEnglish) C.SELECTION_FLAG_DEFAULT else 0)
+                    .build()
+            }
+            builder.setSubtitleConfigurations(subtitleConfigs)
+        }
+        return builder.build()
+    }
 
     // Same full-screen landscape treatment as the main PlayerScreen — locks
     // orientation and hides system bars for the duration of this screen,
@@ -93,11 +142,10 @@ fun MoviesDemoPlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    LaunchedEffect(detailPath, seasonNum, epNum, isTrailer) {
+    LaunchedEffect(detailPath, seasonNum, epNum) {
         isLoading = true
         loadError = null
 
-        val apiKey = repository.tokenManager.getApiKey()
         if (apiKey.isNullOrBlank()) {
             loadError = "No API key set"
             isLoading = false
@@ -105,67 +153,69 @@ fun MoviesDemoPlayerScreen(
         }
 
         try {
-            var videoUrl: String? = null
-            var subtitleUrl: String? = null
-
-            if (isTrailer) {
-                val res = repository.moviesDemoApi.details(detailPath)
-                videoUrl = if (res.isSuccessful) res.body()?.trailer?.url else null
+            val streamRes = if (seasonNum != null && epNum != null) {
+                repository.moviesDemoApi.tvStream(detailPath, seasonNum, epNum)
             } else {
-                val streamRes = if (seasonNum != null && epNum != null) {
-                    repository.moviesDemoApi.tvStream(detailPath, seasonNum, epNum)
-                } else {
-                    repository.moviesDemoApi.movieStream(detailPath)
-                }
-                val stream = if (streamRes.isSuccessful) streamRes.body() else null
-                videoUrl = stream?.defaultQuality?.url
-
-                // English captions by default when available — the reference
-                // site actually defaults subtitles to off, this is a
-                // deliberate improvement, not a copy of that behavior.
-                val capRes = repository.moviesDemoApi.captions(detailPath, seasonNum, epNum)
-                val captions = if (capRes.isSuccessful) capRes.body() else null
-                subtitleUrl = captions?.defaultCaption?.url
+                repository.moviesDemoApi.movieStream(detailPath)
             }
+            val stream = if (streamRes.isSuccessful) streamRes.body() else null
+            qualities = stream?.freeQualities ?: emptyList()
+            val defaultQ = stream?.defaultQuality
 
+            val capRes = repository.moviesDemoApi.captions(detailPath, seasonNum, epNum)
+            captions = (if (capRes.isSuccessful) capRes.body()?.captions else null)?.filter { !it.url.isNullOrBlank() } ?: emptyList()
+            selectedCaptionLang = captions.firstOrNull { it.isEnglish }?.lan ?: CAPTIONS_OFF
+
+            val videoUrl = defaultQ?.url
             if (videoUrl.isNullOrBlank()) {
                 loadError = "No playable video found for this title"
                 isLoading = false
                 return@LaunchedEffect
             }
-
-            val headers = mapOf("X-API-Key" to apiKey)
-            val dataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent(PLAYER_USER_AGENT)
-                .setConnectTimeoutMs(15_000)
-                .setReadTimeoutMs(30_000)
-                .setAllowCrossProtocolRedirects(true)
-                .setDefaultRequestProperties(headers)
-
-            val mediaItemBuilder = MediaItem.Builder()
-                .setUri(Uri.parse(moviesDemoStreamUrl(videoUrl)))
-                .setMimeType(MimeTypes.VIDEO_MP4)
-
-            if (!subtitleUrl.isNullOrBlank()) {
-                val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(moviesDemoStreamUrl(subtitleUrl)))
-                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                    .setLanguage("en")
-                    .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
-                    .build()
-                mediaItemBuilder.setSubtitleConfigurations(listOf(subtitleConfig))
-            }
+            selectedQuality = defaultQ
 
             val player = ExoPlayer.Builder(context)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
+                .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(httpDataSourceFactory()))
                 .build()
-            player.setMediaItem(mediaItemBuilder.build())
+            player.setMediaItem(buildMediaItem(videoUrl))
             player.playWhenReady = true
             player.prepare()
+            if (selectedCaptionLang == CAPTIONS_OFF) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
+            }
             exoPlayer = player
             isLoading = false
         } catch (e: Exception) {
             loadError = e.message ?: "Couldn't play this video"
             isLoading = false
+        }
+    }
+
+    fun switchQuality(quality: MdQuality) {
+        val url = quality.url ?: return
+        val player = exoPlayer ?: return
+        val position = player.currentPosition
+        val wasPlaying = player.isPlaying
+        selectedQuality = quality
+        player.setMediaItem(buildMediaItem(url), position)
+        player.playWhenReady = wasPlaying
+        player.prepare()
+    }
+
+    fun switchCaption(lang: String) {
+        val player = exoPlayer ?: return
+        selectedCaptionLang = lang
+        player.trackSelectionParameters = if (lang == CAPTIONS_OFF) {
+            player.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
+        } else {
+            player.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage(lang)
+                .build()
         }
     }
 
@@ -216,7 +266,7 @@ fun MoviesDemoPlayerScreen(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 16.dp, start = 64.dp, end = 16.dp)
+                    .padding(top = 16.dp, start = 64.dp, end = 130.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.45f))
                     .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -230,5 +280,57 @@ fun MoviesDemoPlayerScreen(
                 )
             }
         }
+
+        // Quality + captions — top-right, only shown once the player has
+        // something loaded to switch between.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp),
+        ) {
+            if (captions.isNotEmpty()) {
+                Box {
+                    IconButton(
+                        onClick = { showCaptionMenu = true },
+                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                    ) {
+                        Icon(Icons.Default.ClosedCaption, contentDescription = "Captions", tint = if (selectedCaptionLang != CAPTIONS_OFF) YoPrimaryViolet else Color.White)
+                    }
+                    DropdownMenu(expanded = showCaptionMenu, onDismissRequest = { showCaptionMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Off", color = if (selectedCaptionLang == CAPTIONS_OFF) YoPrimaryViolet else YoTextPrimary) },
+                            onClick = { switchCaption(CAPTIONS_OFF); showCaptionMenu = false }
+                        )
+                        captions.forEach { cap ->
+                            val lang = cap.lan ?: cap.lanName ?: return@forEach
+                            DropdownMenuItem(
+                                text = { Text(cap.lanName ?: lang, color = if (selectedCaptionLang == lang) YoPrimaryViolet else YoTextPrimary) },
+                                onClick = { switchCaption(lang); showCaptionMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
+            if (qualities.size > 1) {
+                Box {
+                    IconButton(
+                        onClick = { showQualityMenu = true },
+                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                    ) {
+                        Icon(Icons.Default.HighQuality, contentDescription = "Quality", tint = Color.White)
+                    }
+                    DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
+                        qualities.forEach { q ->
+                            val isSelected = q.resolution == selectedQuality?.resolution
+                            DropdownMenuItem(
+                                text = { Text("${q.resolution ?: "?"}P", color = if (isSelected) YoPrimaryViolet else YoTextPrimary) },
+                                onClick = { switchQuality(q); showQualityMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
+

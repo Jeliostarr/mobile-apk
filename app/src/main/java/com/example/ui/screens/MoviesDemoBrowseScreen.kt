@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.MdSubject
+import com.example.data.model.cleanedForFeed
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.MdPosterCard
 import com.example.ui.components.MovieGridSkeleton
@@ -57,6 +58,9 @@ import kotlinx.coroutines.launch
 fun MoviesDemoBrowseScreen(
     title: String,
     countryFilter: String?,
+    initialGenre: String? = null,
+    initialSort: String? = null,
+    searchQuery: String? = null,
     repository: YocinemaRepository,
     onBackClick: () -> Unit,
     onItemClick: (String) -> Unit
@@ -82,20 +86,28 @@ fun MoviesDemoBrowseScreen(
             2 -> "tv"
             else -> null
         }
-        val response = repository.moviesDemoApi.browse(
-            type = typeParam,
-            country = countryFilter,
-            page = targetPage,
-            limit = 24
-        )
+        val response = if (!searchQuery.isNullOrBlank()) {
+            repository.moviesDemoApi.search(query = searchQuery, limit = 24)
+        } else {
+            repository.moviesDemoApi.browse(
+                type = typeParam,
+                genre = initialGenre,
+                country = countryFilter,
+                sort = initialSort,
+                page = targetPage,
+                limit = 24
+            )
+        }
         val body = if (response.isSuccessful) response.body() else null
-        val results = body?.effectiveItems ?: emptyList()
+        val results = (body?.effectiveItems ?: emptyList()).cleanedForFeed(countryFilter)
         items = if (append) items + results else results
-        hasMore = results.size >= 24
+        // Search is a single page (the API doesn't paginate it), so never
+        // show Load More there regardless of result count.
+        hasMore = searchQuery.isNullOrBlank() && results.size >= 24
         loadFailed = body == null
     }
 
-    LaunchedEffect(selectedTab, countryFilter) {
+    LaunchedEffect(selectedTab, countryFilter, initialGenre, initialSort, searchQuery) {
         isLoading = true
         page = 1
         scope.launch {

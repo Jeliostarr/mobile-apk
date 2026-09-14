@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -58,10 +58,12 @@ import com.example.data.model.MdDetails
 import com.example.data.model.MdQuality
 import com.example.data.model.moviesDemoDownloadFilename
 import com.example.data.model.moviesDemoDownloadUrl
+import com.example.data.model.moviesDemoStreamUrl
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
+import com.example.ui.theme.YoGlowGradient
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoRatingGold
 import com.example.ui.theme.YoSurface
@@ -71,14 +73,13 @@ import com.example.ui.theme.YoTextPrimary
 import com.example.ui.util.MoviesDemoDownloader
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(androidx.media3.common.util.UnstableApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MoviesDemoDetailScreen(
     detailPath: String,
     repository: YocinemaRepository,
     onBackClick: () -> Unit,
-    onPlayClick: (detailPath: String, title: String, seasonNum: Int?, epNum: Int?) -> Unit,
-    onTrailerClick: (detailPath: String, title: String) -> Unit
+    onPlayClick: (detailPath: String, title: String, seasonNum: Int?, epNum: Int?) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -88,14 +89,21 @@ fun MoviesDemoDetailScreen(
     var season by remember { mutableIntStateOf(1) }
     var episode by remember { mutableIntStateOf(1) }
     var showDownloadSheet by remember { mutableStateOf(false) }
+    var isPlayingTrailer by remember { mutableStateOf(false) }
     var downloadQualities by remember { mutableStateOf<List<MdQuality>>(emptyList()) }
     var loadingQualities by remember { mutableStateOf(false) }
+    var seasonsInfo by remember { mutableStateOf<com.example.data.model.MdSeasonsResponse?>(null) }
 
     LaunchedEffect(detailPath) {
         isLoading = true
         val response = repository.moviesDemoApi.details(detailPath)
-        details = if (response.isSuccessful) response.body() else null
+        val d = if (response.isSuccessful) response.body() else null
+        details = d
         isLoading = false
+        if (d?.type == "tv") {
+            val seasonsRes = repository.moviesDemoApi.seasons(detailPath)
+            seasonsInfo = if (seasonsRes.isSuccessful) seasonsRes.body() else null
+        }
     }
 
     fun openDownloadSheet() {
@@ -130,15 +138,26 @@ fun MoviesDemoDetailScreen(
             }
         } else {
             val d = details!!
+            val statusBarHeight = androidx.compose.foundation.layout.WindowInsets.statusBars
+                .asPaddingValues().calculateTopPadding()
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    // The Box below defines the layout height everything else in
+                    // this LazyColumn flows around (a normal 3:4 cover). The
+                    // image inside is drawn taller than that — extended upward
+                    // by exactly the status bar's height and offset to match —
+                    // so it visually reaches the true top of the screen instead
+                    // of stopping at the Scaffold's inset padding, without
+                    // pushing every other section down by that same amount.
+                    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f)) {
+                        val imageHeight = maxWidth * (4f / 3f) + statusBarHeight
                         SubcomposeAsyncImage(
                             model = d.cover,
                             contentDescription = d.title,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(3f / 4f),
+                                .height(imageHeight)
+                                .offset(y = -statusBarHeight),
                             contentScale = ContentScale.Crop,
                             loading = { YoCinemaLogoPlaceholder() },
                             error = { YoCinemaLogoPlaceholder() }
@@ -153,7 +172,7 @@ fun MoviesDemoDetailScreen(
                         IconButton(
                             onClick = onBackClick,
                             modifier = Modifier
-                                .padding(12.dp)
+                                .padding(top = statusBarHeight + 8.dp, start = 12.dp)
                                 .clip(CircleShape)
                                 .background(Color.Black.copy(alpha = 0.4f))
                         ) {
@@ -222,7 +241,10 @@ fun MoviesDemoDetailScreen(
                     }
                 }
 
-                // ── Trailer: tap to play, never autoplay — full-screen once tapped ──
+                // ── Trailer: tap to play, never autoplay — plays inline right
+                // here rather than rotating to full-screen, since it's a
+                // short clip the person is previewing, not committing to
+                // watch like the movie itself. ──
                 if (!d.trailer?.url.isNullOrBlank()) {
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -233,24 +255,37 @@ fun MoviesDemoDetailScreen(
                                     .fillMaxWidth()
                                     .aspectRatio(16f / 9f)
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(YoSurfaceVariant)
-                                    .clickable { onTrailerClick(detailPath, (d.title ?: "Trailer") + " — Trailer") }
+                                    .background(Color.Black)
                             ) {
-                                SubcomposeAsyncImage(
-                                    model = d.trailer?.cover ?: d.cover,
-                                    contentDescription = "Trailer",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    loading = { YoCinemaLogoPlaceholder() },
-                                    error = { YoCinemaLogoPlaceholder() }
-                                )
-                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
-                                Icon(
-                                    imageVector = Icons.Default.PlayCircle,
-                                    contentDescription = "Play trailer",
-                                    tint = Color.White,
-                                    modifier = Modifier.align(Alignment.Center).size(56.dp)
-                                )
+                                if (isPlayingTrailer) {
+                                    InlineTrailerPlayer(
+                                        trailerUrl = d.trailer?.url ?: "",
+                                        apiKey = repository.tokenManager.getApiKey()
+                                    )
+                                } else {
+                                    SubcomposeAsyncImage(
+                                        model = d.trailer?.cover ?: d.cover,
+                                        contentDescription = "Trailer",
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clickable { isPlayingTrailer = true },
+                                        contentScale = ContentScale.Crop,
+                                        loading = { YoCinemaLogoPlaceholder() },
+                                        error = { YoCinemaLogoPlaceholder() }
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.25f))
+                                            .clickable { isPlayingTrailer = true }
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.PlayCircle,
+                                        contentDescription = "Play trailer",
+                                        tint = Color.White,
+                                        modifier = Modifier.align(Alignment.Center).size(56.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -279,17 +314,54 @@ fun MoviesDemoDetailScreen(
 
                 if (d.type == "tv") {
                     item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Season", fontSize = 12.sp, color = YoTextMuted)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            NumberStepper(value = season, onChange = { season = it.coerceAtLeast(1) })
-                            Spacer(modifier = Modifier.width(20.dp))
-                            Text("Episode", fontSize = 12.sp, color = YoTextMuted)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            NumberStepper(value = episode, onChange = { episode = it.coerceAtLeast(1) })
+                        val info = seasonsInfo
+                        val seasonCount = info?.seasonCount ?: info?.seasons?.size ?: 1
+                        val currentSeasonData = info?.seasons?.firstOrNull { it.season == season }
+                        val episodeCount = currentSeasonData?.maxEp ?: 1
+
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                            Text(
+                                "Season",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YoTextMuted,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items((1..seasonCount).toList()) { s ->
+                                    MdSelectableChip(
+                                        label = "S$s",
+                                        selected = s == season,
+                                        onClick = { season = s; episode = 1 }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "Episode",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YoTextMuted,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items((1..episodeCount).toList()) { e ->
+                                    MdSelectableChip(
+                                        label = "$e",
+                                        selected = e == episode,
+                                        onClick = { episode = e }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -432,25 +504,55 @@ private fun MdCastChip(member: MdCastMember) {
 }
 
 @Composable
-private fun NumberStepper(value: Int, onChange: (Int) -> Unit) {
-    Row(
+private fun MdSelectableChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(YoSurfaceVariant),
-        verticalAlignment = Alignment.CenterVertically
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) Brush.linearGradient(YoGlowGradient) else Brush.linearGradient(listOf(YoSurfaceVariant, YoSurfaceVariant)))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        IconButton(onClick = { onChange(value - 1) }, modifier = Modifier.size(32.dp)) {
-            Text("–", color = YoTextPrimary, fontWeight = FontWeight.Bold)
-        }
         Text(
-            text = value.toString(),
-            color = YoTextPrimary,
+            text = label,
+            color = if (selected) YoBaseBackground else YoTextPrimary,
             fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            fontSize = 13.sp
         )
-        IconButton(onClick = { onChange(value + 1) }, modifier = Modifier.size(32.dp)) {
-            Text("+", color = YoTextPrimary, fontWeight = FontWeight.Bold)
-        }
+    }
+}
+
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun InlineTrailerPlayer(trailerUrl: String, apiKey: String?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var player by remember { mutableStateOf<androidx.media3.exoplayer.ExoPlayer?>(null) }
+
+    androidx.compose.runtime.DisposableEffect(trailerUrl) {
+        val headers = if (!apiKey.isNullOrBlank()) mapOf("X-API-Key" to apiKey) else emptyMap()
+        val dataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(headers)
+        val exo = androidx.media3.exoplayer.ExoPlayer.Builder(context)
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
+            .build()
+        exo.setMediaItem(androidx.media3.common.MediaItem.fromUri(android.net.Uri.parse(moviesDemoStreamUrl(trailerUrl))))
+        exo.playWhenReady = true
+        exo.prepare()
+        player = exo
+        onDispose { exo.release() }
+    }
+
+    val currentPlayer = player
+    if (currentPlayer != null) {
+        androidx.compose.ui.viewinterop.AndroidView(
+            factory = { ctx ->
+                androidx.media3.ui.PlayerView(ctx).apply {
+                    this.player = currentPlayer
+                    useController = true
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
