@@ -6,17 +6,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -52,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
@@ -140,26 +143,25 @@ fun MoviesDemoDetailScreen(
             }
         } else {
             val d = details!!
-            val statusBarHeight = WindowInsets.statusBars
-                .asPaddingValues().calculateTopPadding()
+            val statusBarHeight: Dp = WindowInsets.statusBars
+                .asPaddingValues()
+                .calculateTopPadding()
+
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
-                    // The Box below defines the layout height everything else in
-                    // this LazyColumn flows around (a normal 3:4 cover). The
-                    // image inside is drawn taller than that — extended upward
-                    // by exactly the status bar's height and offset to match —
-                    // so it visually reaches the true top of the screen instead
-                    // of stopping at the Scaffold's inset padding, without
-                    // pushing every other section down by that same amount.
-                    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f)) {
-                        val imageHeight = maxWidth * (4f / 3f) + statusBarHeight
+                    androidx.compose.foundation.layout.BoxWithConstraints(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(3f / 4f)
+                    ) {
+                        val imageHeight: Dp = maxWidth * (4f / 3f) + statusBarHeight
                         SubcomposeAsyncImage(
                             model = d.cover,
                             contentDescription = d.title,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(imageHeight)
-                                .offset(y = -statusBarHeight),
+                                .offset(y = statusBarHeight * -1f),
                             contentScale = ContentScale.Crop,
                             loading = { YoCinemaLogoPlaceholder() },
                             error = { YoCinemaLogoPlaceholder() }
@@ -243,10 +245,6 @@ fun MoviesDemoDetailScreen(
                     }
                 }
 
-                // ── Trailer: tap to play, never autoplay — plays inline right
-                // here rather than rotating to full-screen, since it's a
-                // short clip the person is previewing, not committing to
-                // watch like the movie itself. ──
                 if (!d.trailer?.url.isNullOrBlank()) {
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -305,7 +303,7 @@ fun MoviesDemoDetailScreen(
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(d.cast) { member -> MdCastChip(member) }
@@ -331,7 +329,7 @@ fun MoviesDemoDetailScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LazyRow(
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items((1..seasonCount).toList()) { s ->
@@ -353,7 +351,7 @@ fun MoviesDemoDetailScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LazyRow(
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items((1..episodeCount).toList()) { e ->
@@ -510,7 +508,10 @@ private fun MdSelectableChip(label: String, selected: Boolean, onClick: () -> Un
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) Brush.linearGradient(YoGlowGradient) else Brush.linearGradient(listOf(YoSurfaceVariant, YoSurfaceVariant)))
+            .background(
+                if (selected) Brush.linearGradient(YoGlowGradient)
+                else Brush.linearGradient(listOf(YoSurfaceVariant, YoSurfaceVariant))
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
@@ -526,7 +527,7 @@ private fun MdSelectableChip(label: String, selected: Boolean, onClick: () -> Un
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun InlineTrailerPlayer(trailerUrl: String, apiKey: String?) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var player by remember { mutableStateOf<androidx.media3.exoplayer.ExoPlayer?>(null) }
 
     androidx.compose.runtime.DisposableEffect(trailerUrl) {
@@ -535,7 +536,10 @@ private fun InlineTrailerPlayer(trailerUrl: String, apiKey: String?) {
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
         val exo = androidx.media3.exoplayer.ExoPlayer.Builder(context)
-            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
+                    .setDataSourceFactory(dataSourceFactory)
+            )
             .build()
         exo.setMediaItem(androidx.media3.common.MediaItem.fromUri(android.net.Uri.parse(moviesDemoStreamUrl(trailerUrl))))
         exo.playWhenReady = true
