@@ -8,6 +8,15 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+/**
+ * Retrofit interface for the sports API at movie-bo-api.vercel.app.
+ * Authenticated with the same X-API-Key as MoviesDemoApi — the same
+ * AuthInterceptor injects it, the same TokenManager stores it.
+ *
+ * All media URLs this returns are already worker tokens
+ * (cdn.yocinema.dpdns.org/m/<token>) — the app plays them as-is,
+ * no URL wrapping needed.
+ */
 interface SportsApi {
 
     @GET("api/sports/leagues")
