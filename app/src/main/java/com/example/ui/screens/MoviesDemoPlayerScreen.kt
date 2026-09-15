@@ -50,15 +50,14 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.data.model.MdCaption
 import com.example.data.model.MdQuality
-import com.example.data.model.moviesDemoStreamUrl
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.ModernLoader
 import com.example.ui.theme.YoPrimaryViolet
-import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
 
-private const val PLAYER_USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+private const val PLAYER_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 private const val CAPTIONS_OFF = "off"
 
 @OptIn(UnstableApi::class)
@@ -87,28 +86,28 @@ fun MoviesDemoPlayerScreen(
     val onBack = rememberUpdatedState(onBackClick)
     val apiKey = remember { repository.tokenManager.getApiKey() }
 
+    // Worker URLs don't need X-API-Key — the token itself is the
+    // credential. The header is harmless to send, but keeping the
+    // data source minimal means one less thing to break.
     fun httpDataSourceFactory() = DefaultHttpDataSource.Factory()
         .setUserAgent(PLAYER_USER_AGENT)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(30_000)
         .setAllowCrossProtocolRedirects(true)
-        .setDefaultRequestProperties(if (!apiKey.isNullOrBlank()) mapOf("X-API-Key" to apiKey) else emptyMap())
 
     fun buildMediaItem(videoUrl: String): MediaItem {
+        // The backend returns worker URLs — play them as-is.
         val builder = MediaItem.Builder()
-            .setUri(Uri.parse(moviesDemoStreamUrl(videoUrl)))
+            .setUri(Uri.parse(videoUrl))
             .setMimeType(MimeTypes.VIDEO_MP4)
 
-        // Every available caption track is attached up front — switching
-        // languages later is then just a track-selection change on the
-        // already-loaded player, not a full reload. English gets
-        // SELECTION_FLAG_DEFAULT so it's the one actually playing at
-        // start when available; every other language is attached but not
-        // selected until the person picks it from the captions menu.
+        // Subtitle URLs are worker tokens too. Attach them all up front so
+        // switching languages is just a track-selection change on the
+        // loaded player, not a reload.
         if (captions.isNotEmpty()) {
             val subtitleConfigs = captions.mapNotNull { cap ->
                 val url = cap.url ?: return@mapNotNull null
-                MediaItem.SubtitleConfiguration.Builder(Uri.parse(moviesDemoStreamUrl(url)))
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
                     .setMimeType(MimeTypes.APPLICATION_SUBRIP)
                     .setLanguage(cap.lan ?: cap.lanName ?: "und")
                     .setSelectionFlags(if (cap.isEnglish) C.SELECTION_FLAG_DEFAULT else 0)
@@ -119,9 +118,6 @@ fun MoviesDemoPlayerScreen(
         return builder.build()
     }
 
-    // Same full-screen landscape treatment as the main PlayerScreen — locks
-    // orientation and hides system bars for the duration of this screen,
-    // restores both on the way out.
     DisposableEffect(Unit) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -130,7 +126,8 @@ fun MoviesDemoPlayerScreen(
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             activity?.window?.let { win ->
-                WindowInsetsControllerCompat(win, win.decorView).show(WindowInsetsCompat.Type.systemBars())
+                WindowInsetsControllerCompat(win, win.decorView)
+                    .show(WindowInsetsCompat.Type.systemBars())
             }
         }
     }
@@ -138,7 +135,8 @@ fun MoviesDemoPlayerScreen(
     LaunchedEffect(Unit) {
         val win = activity?.window ?: return@LaunchedEffect
         val controller = WindowInsetsControllerCompat(win, win.decorView)
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
@@ -163,7 +161,9 @@ fun MoviesDemoPlayerScreen(
             val defaultQ = stream?.defaultQuality
 
             val capRes = repository.moviesDemoApi.captions(detailPath, seasonNum, epNum)
-            captions = (if (capRes.isSuccessful) capRes.body()?.captions else null)?.filter { !it.url.isNullOrBlank() } ?: emptyList()
+            captions = (if (capRes.isSuccessful) capRes.body()?.captions else null)
+                ?.filter { !it.url.isNullOrBlank() }
+                ?: emptyList()
             selectedCaptionLang = captions.firstOrNull { it.isEnglish }?.lan ?: CAPTIONS_OFF
 
             val videoUrl = defaultQ?.url
@@ -175,7 +175,10 @@ fun MoviesDemoPlayerScreen(
             selectedQuality = defaultQ
 
             val player = ExoPlayer.Builder(context)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(httpDataSourceFactory()))
+                .setMediaSourceFactory(
+                    DefaultMediaSourceFactory(context)
+                        .setDataSourceFactory(httpDataSourceFactory())
+                )
                 .build()
             player.setMediaItem(buildMediaItem(videoUrl))
             player.playWhenReady = true
@@ -259,7 +262,11 @@ fun MoviesDemoPlayerScreen(
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.45f))
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White
+            )
         }
 
         if (title.isNotBlank()) {
@@ -281,8 +288,6 @@ fun MoviesDemoPlayerScreen(
             }
         }
 
-        // Quality + captions — top-right, only shown once the player has
-        // something loaded to switch between.
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -292,20 +297,47 @@ fun MoviesDemoPlayerScreen(
                 Box {
                     IconButton(
                         onClick = { showCaptionMenu = true },
-                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
                     ) {
-                        Icon(Icons.Default.ClosedCaption, contentDescription = "Captions", tint = if (selectedCaptionLang != CAPTIONS_OFF) YoPrimaryViolet else Color.White)
+                        Icon(
+                            Icons.Default.ClosedCaption,
+                            contentDescription = "Captions",
+                            tint = if (selectedCaptionLang != CAPTIONS_OFF) YoPrimaryViolet else Color.White
+                        )
                     }
-                    DropdownMenu(expanded = showCaptionMenu, onDismissRequest = { showCaptionMenu = false }) {
+                    DropdownMenu(
+                        expanded = showCaptionMenu,
+                        onDismissRequest = { showCaptionMenu = false }
+                    ) {
                         DropdownMenuItem(
-                            text = { Text("Off", color = if (selectedCaptionLang == CAPTIONS_OFF) YoPrimaryViolet else YoTextPrimary) },
-                            onClick = { switchCaption(CAPTIONS_OFF); showCaptionMenu = false }
+                            text = {
+                                Text(
+                                    "Off",
+                                    color = if (selectedCaptionLang == CAPTIONS_OFF)
+                                        YoPrimaryViolet else YoTextPrimary
+                                )
+                            },
+                            onClick = {
+                                switchCaption(CAPTIONS_OFF)
+                                showCaptionMenu = false
+                            }
                         )
                         captions.forEach { cap ->
                             val lang = cap.lan ?: cap.lanName ?: return@forEach
                             DropdownMenuItem(
-                                text = { Text(cap.lanName ?: lang, color = if (selectedCaptionLang == lang) YoPrimaryViolet else YoTextPrimary) },
-                                onClick = { switchCaption(lang); showCaptionMenu = false }
+                                text = {
+                                    Text(
+                                        cap.lanName ?: lang,
+                                        color = if (selectedCaptionLang == lang)
+                                            YoPrimaryViolet else YoTextPrimary
+                                    )
+                                },
+                                onClick = {
+                                    switchCaption(lang)
+                                    showCaptionMenu = false
+                                }
                             )
                         }
                     }
@@ -315,16 +347,33 @@ fun MoviesDemoPlayerScreen(
                 Box {
                     IconButton(
                         onClick = { showQualityMenu = true },
-                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
                     ) {
-                        Icon(Icons.Default.HighQuality, contentDescription = "Quality", tint = Color.White)
+                        Icon(
+                            Icons.Default.HighQuality,
+                            contentDescription = "Quality",
+                            tint = Color.White
+                        )
                     }
-                    DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
+                    DropdownMenu(
+                        expanded = showQualityMenu,
+                        onDismissRequest = { showQualityMenu = false }
+                    ) {
                         qualities.forEach { q ->
                             val isSelected = q.resolution == selectedQuality?.resolution
                             DropdownMenuItem(
-                                text = { Text("${q.resolution ?: "?"}P", color = if (isSelected) YoPrimaryViolet else YoTextPrimary) },
-                                onClick = { switchQuality(q); showQualityMenu = false }
+                                text = {
+                                    Text(
+                                        "${q.resolution ?: "?"}P",
+                                        color = if (isSelected) YoPrimaryViolet else YoTextPrimary
+                                    )
+                                },
+                                onClick = {
+                                    switchQuality(q)
+                                    showQualityMenu = false
+                                }
                             )
                         }
                     }
@@ -333,4 +382,3 @@ fun MoviesDemoPlayerScreen(
         }
     }
 }
-
