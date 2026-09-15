@@ -494,27 +494,15 @@ fun MainAppNav() {
                     }
 
                     is Screen.MoviesDemoPlayer -> {
-    MoviesDemoPlayerScreen(
-        detailPath = screen.detailPath,
-        title = screen.title,
-        seasonNum = screen.seasonNum,
-        epNum = screen.epNum,
-        repository = repository,
-        onBackClick = { navigateBack() },
-        onEpisodeSelected = { season, episode ->
-            // Replace the top of the stack so back doesn't hop episode-by-episode.
-            screenBackStack.removeAt(screenBackStack.lastIndex)
-            navigateTo(
-                Screen.MoviesDemoPlayer(
-                    detailPath = screen.detailPath,
-                    title = screen.title,
-                    seasonNum = season,
-                    epNum = episode,
-                )
-            )
-        },
-    )
-}
+                        MoviesDemoPlayerScreen(
+                            detailPath = screen.detailPath,
+                            title = screen.title,
+                            seasonNum = screen.seasonNum,
+                            epNum = screen.epNum,
+                            repository = repository,
+                            onBackClick = { navigateBack() },
+                        )
+                    }
 
                     // ── Sports ──
                     is Screen.SportsHome -> {
@@ -541,16 +529,16 @@ fun MainAppNav() {
                         )
                     }
 
-                   is Screen.SportsPlayer -> {
-    SportsPlayerScreen(
-        matchId = screen.matchId,
-        streamUrl = screen.streamUrl,
-        title = screen.title,
-        sportsRepository = sportsRepository,
-        repository = repository,
-        onBackClick = { navigateBack() },
-    )
-}
+                    is Screen.SportsPlayer -> {
+                        SportsPlayerScreen(
+                            matchId = screen.matchId,
+                            streamUrl = screen.streamUrl,
+                            title = screen.title,
+                            sportsRepository = sportsRepository,
+                            repository = repository,
+                            onBackClick = { navigateBack() },
+                        )
+                    }
                 }
             }
         }
