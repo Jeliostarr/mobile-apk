@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -41,39 +42,7 @@ class PlayerManager(
     private val repository: YocinemaRepository,
     private val scope: CoroutineScope
 ) {
-    /**
-     * ── WHY STREAMING WAS SLOW IN THE APP BUT FAST IN THE BROWSER ──
-     *
-     * The play endpoint answers with a 307 to cdn.yocinema.dpdns.org and the
-     * real media is a single ~1.5 GB progressive MP4 (Accept-Ranges: bytes,
-     * moov atom at the END of the file). A browser resolves that redirect
-     * once, then keeps a pooled HTTP/2 connection to the CDN and range-reads.
-     *
-     * The old player did three things that made the same URL crawl:
-     *  1. It handed ExoPlayer the API URL, so EVERY open/seek/retry re-walked
-     *     the redirect chain (API on Vercel, x-vercel-cache: MISS, plus a
-     *     freshly minted CDN token) before a single video byte arrived.
-     *     ExoPlayer reopens the connection on every seek and on every retry,
-     *     so that round trip was paid over and over.
-     *  2. DefaultHttpDataSource (HttpURLConnection) — no connection pooling,
-     *     HTTP/1.1 only, and it re-does TLS on each reopen. OkHttp gives
-     *     HTTP/2 + keep-alive, which is exactly what the browser has.
-     *  3. Tiny default buffers for a high-bitrate 1080p MP4, plus a stall
-     *     detector that tore the whole playback down (re-fetch movie detail,
-     *     re-mint token, restart from zero) after 25 s of slow buffering —
-     *     which is why it sometimes never played at all.
-     *
-     * Fixes below: resolve the redirect ONCE and cache the final CDN URL for
-     * the session, OkHttp data source, explicit MIME type (no sniffing),
-     * bigger buffers, and a soft retry that resumes on the same CDN URL
-     * before falling back to a full token re-mint.
-     *
-     * Gradle (add if not present):
-     *   implementation "androidx.media3:media3-datasource-okhttp:$media3Version"
-     */
-
     private val streamHttpClient: OkHttpClient = OkHttpClient.Builder()
-        // Redirects are resolved manually so we can cache the final CDN URL.
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(true)
@@ -83,14 +52,7 @@ class PlayerManager(
 
     private val loadControl = DefaultLoadControl.Builder()
         .setAllocator(DefaultAllocator(true, 64 * 1024))
-        // Buffer generously: this is a single large progressive file, not a
-        // bitrate-adaptive stream, so a deep buffer is pure win on mobile.
-        .setBufferDurationsMs(
-            /* minBufferMs = */ 30_000,
-            /* maxBufferMs = */ 120_000,
-            /* bufferForPlaybackMs = */ 1_500,
-            /* bufferForPlaybackAfterRebufferMs = */ 3_000
-        )
+        .setBufferDurationsMs(30_000, 120_000, 1_500, 3_000)
         .setTargetBufferBytes(64 * 1024 * 1024)
         .setPrioritizeTimeOverSizeThresholds(true)
         .setBackBuffer(30_000, true)
@@ -100,6 +62,8 @@ class PlayerManager(
         .setHandleAudioBecomingNoisy(true)
         .setLoadControl(loadControl)
         .build()
+
+    // ─── Public state flows ───
 
     private val _isReconnecting = MutableStateFlow(false)
     val isReconnecting: StateFlow<Boolean> = _isReconnecting
@@ -119,13 +83,27 @@ class PlayerManager(
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering
 
+    // ─── Quality + caption state (non-translated, sports) ───
+
+    private val _qualities = MutableStateFlow<List<PlayerQuality>>(emptyList())
+    val qualities: StateFlow<List<PlayerQuality>> = _qualities
+
+    private val _captions = MutableStateFlow<List<PlayerCaption>>(emptyList())
+    val captions: StateFlow<List<PlayerCaption>> = _captions
+
+    private val _selectedQuality = MutableStateFlow<PlayerQuality?>(null)
+    val selectedQuality: StateFlow<PlayerQuality?> = _selectedQuality
+
+    private val _selectedCaptionLang = MutableStateFlow(CAPTIONS_OFF)
+    val selectedCaptionLang: StateFlow<String> = _selectedCaptionLang
+
+    // ─── Playback bookkeeping ───
+
     private var currentMovieId: String = ""
     private var currentEpisodeId: String? = null
     private var currentSeasonNum: Int? = null
     private var currentEpNum: Int? = null
     private var currentMediaUrl: String = ""
-
-    /** Final, already-redirect-resolved CDN URL for the current session. */
     private var resolvedMediaUrl: String? = null
 
     private var currentMovieForHistory: Movie? = null
@@ -136,9 +114,9 @@ class PlayerManager(
 
     private var lastRecordedPos: Long = 0L
     private var stallCheckJob: Job? = null
+    private var posJob: Job? = null
+    private var progressPingJob: Job? = null
 
-    // Retry accounting so a slow network can't trigger an endless
-    // teardown/restart loop (the old behaviour looked like "fails to play").
     private var softRetries: Int = 0
     private var hardRetries: Int = 0
 
@@ -146,11 +124,7 @@ class PlayerManager(
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
-                if (playing) {
-                    startPositionUpdates()
-                } else {
-                    stopPositionUpdates()
-                }
+                if (playing) startPositionUpdates() else stopPositionUpdates()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -166,10 +140,6 @@ class PlayerManager(
 
             override fun onPlayerError(error: PlaybackException) {
                 error.printStackTrace()
-                // Most failures here are transient network drops on a long
-                // progressive download. Retry the SAME resolved CDN URL from
-                // the current position first — that costs one request, versus
-                // a full detail fetch + token mint + redirect walk.
                 if (softRetries < 3 && resolvedMediaUrl != null) {
                     softRetries++
                     _isReconnecting.value = true
@@ -186,7 +156,8 @@ class PlayerManager(
         })
     }
 
-    private var posJob: Job? = null
+    // ─── Position updates + stall detection ───
+
     private fun startPositionUpdates() {
         posJob?.cancel()
         posJob = scope.launch {
@@ -210,10 +181,6 @@ class PlayerManager(
             }
         }
 
-        // Stall detector. Now it only fires when the player is genuinely stuck
-        // (buffering, no position progress) for 45s AND we haven't already
-        // rebuilt playback twice — a deep buffer plus soft retries handles the
-        // ordinary slow-network case without nuking the session.
         stallCheckJob?.cancel()
         stallCheckJob = scope.launch {
             var lastPos = -1L
@@ -240,8 +207,6 @@ class PlayerManager(
             }
         }
     }
-
-    private var progressPingJob: Job? = null
 
     private fun startProgressPing() {
         progressPingJob?.cancel()
@@ -297,6 +262,8 @@ class PlayerManager(
         }
     }
 
+    // ─── Public API ───
+
     fun playMedia(
         movieId: String,
         mediaUrl: String,
@@ -323,6 +290,82 @@ class PlayerManager(
         ensureMediaSession()
         loadAndPlaySource(mediaUrl, initialPositionMs)
     }
+
+    fun setQualities(list: List<PlayerQuality>, default: PlayerQuality? = null) {
+        _qualities.value = list
+        _selectedQuality.value = default ?: list.firstOrNull()
+    }
+
+    fun setCaptions(list: List<PlayerCaption>) {
+        _captions.value = list
+        _selectedCaptionLang.value = list.firstOrNull { it.isEnglish }?.language ?: CAPTIONS_OFF
+        applyCaptionSelection()
+    }
+
+    fun switchQuality(quality: PlayerQuality) {
+        val currentPos = exoPlayer.currentPosition
+        val wasPlaying = exoPlayer.isPlaying
+        val url = quality.url
+
+        scope.launch {
+            val uri = Uri.parse(url)
+            val isHls = url.contains(".m3u8", ignoreCase = true)
+            val factory = httpFactory(forApiHost = false)
+            val itemBuilder = MediaItem.Builder()
+                .setUri(uri)
+                .setMimeType(if (isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4)
+                .setMediaMetadata(buildMetadata())
+            if (_captions.value.isNotEmpty()) {
+                itemBuilder.setSubtitleConfigurations(buildSubtitleConfigs())
+            }
+            val mediaItem = itemBuilder.build()
+
+            val source = if (isHls) {
+                HlsMediaSource.Factory(factory)
+                    .setAllowChunklessPreparation(true)
+                    .createMediaSource(mediaItem)
+            } else {
+                ProgressiveMediaSource.Factory(factory)
+                    .setContinueLoadingCheckIntervalBytes(1024 * 1024)
+                    .createMediaSource(mediaItem)
+            }
+
+            exoPlayer.setMediaSource(source, currentPos)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = wasPlaying
+            _selectedQuality.value = quality
+            applyCaptionSelection()
+        }
+    }
+
+    fun switchCaption(language: String) {
+        _selectedCaptionLang.value = language
+        applyCaptionSelection()
+    }
+
+    private fun applyCaptionSelection() {
+        val lang = _selectedCaptionLang.value
+        exoPlayer.trackSelectionParameters = if (lang == CAPTIONS_OFF) {
+            exoPlayer.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
+        } else {
+            exoPlayer.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage(lang)
+                .build()
+        }
+    }
+
+    private fun buildSubtitleConfigs(): List<MediaItem.SubtitleConfiguration> =
+        _captions.value.mapNotNull { cap ->
+            val url = cap.url ?: return@mapNotNull null
+            MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
+                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                .setLanguage(cap.language ?: "und")
+                .setSelectionFlags(if (cap.isEnglish) C.SELECTION_FLAG_DEFAULT else 0)
+                .build()
+        }
 
     private fun ensureMediaSession() {
         if (mediaSession != null) return
@@ -353,18 +396,12 @@ class PlayerManager(
         return builder.build()
     }
 
-    /**
-     * Walks the 307 chain from the API to the real CDN URL ONCE, off the main
-     * thread, using a HEAD request (no media bytes downloaded). Everything
-     * afterwards — including seeks and retries — hits the CDN directly.
-     */
     private suspend fun resolveFinalUrl(url: String): String = withContext(Dispatchers.IO) {
         var current = url
         try {
             repeat(5) {
                 val builder = Request.Builder().url(current).head()
                     .header("User-Agent", STREAM_USER_AGENT)
-                // The API leg needs the key; the CDN leg must NOT receive it.
                 if (current.startsWith(com.example.data.model.BASE_URL)) {
                     repository.tokenManager.getApiKey()?.takeIf { it.isNotBlank() }?.let { key ->
                         builder.header("X-API-Key", key)
@@ -373,15 +410,14 @@ class PlayerManager(
                 streamHttpClient.newCall(builder.build()).execute().use { resp ->
                     val location = resp.header("Location")
                     if (resp.isRedirect && !location.isNullOrBlank()) {
-                        current = resp.request.url.resolve(location)?.toString() ?: return@withContext current
+                        current = resp.request.url.resolve(location)?.toString()
+                            ?: return@withContext current
                     } else {
                         return@withContext current
                     }
                 }
             }
         } catch (e: Exception) {
-            // Resolution is an optimisation, never a hard requirement:
-            // fall back to letting the data source follow redirects itself.
             e.printStackTrace()
         }
         current
@@ -407,8 +443,6 @@ class PlayerManager(
                 .setUserAgent(STREAM_USER_AGENT)
                 .setDefaultRequestProperties(headers)
         } catch (e: Throwable) {
-            // If the okhttp data source artifact is missing, degrade rather
-            // than crash — playback still works, just without HTTP/2 pooling.
             e.printStackTrace()
             DefaultHttpDataSource.Factory()
                 .setConnectTimeoutMs(15_000)
@@ -437,11 +471,13 @@ class PlayerManager(
                     val fileUri = if (uri0.scheme == null && url.startsWith("/")) {
                         Uri.fromFile(java.io.File(url))
                     } else uri0
-                    val localItem = MediaItem.Builder().setUri(fileUri).setMediaMetadata(metadata).build()
+                    val localItem = MediaItem.Builder()
+                        .setUri(fileUri)
+                        .setMediaMetadata(metadata)
+                        .build()
                     androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
                         .createMediaSource(localItem)
                 } else {
-                    // Resolve the redirect chain once per session, then reuse.
                     val playUrl = (if (reuseResolved) resolvedMediaUrl else null)
                         ?: resolveFinalUrl(url).also { resolvedMediaUrl = it }
                     _isReconnecting.value = false
@@ -451,14 +487,14 @@ class PlayerManager(
                     val onApiHost = playUrl.startsWith(com.example.data.model.BASE_URL)
                     val factory = httpFactory(onApiHost)
 
-                    // Declaring the MIME type skips container sniffing, which
-                    // for a moov-at-the-end MP4 otherwise costs extra requests
-                    // before the first frame shows.
-                    val mediaItem = MediaItem.Builder()
+                    val itemBuilder = MediaItem.Builder()
                         .setUri(uri)
                         .setMimeType(if (isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4)
                         .setMediaMetadata(metadata)
-                        .build()
+                    if (_captions.value.isNotEmpty()) {
+                        itemBuilder.setSubtitleConfigurations(buildSubtitleConfigs())
+                    }
+                    val mediaItem = itemBuilder.build()
 
                     if (isHls) {
                         HlsMediaSource.Factory(factory)
@@ -466,14 +502,13 @@ class PlayerManager(
                             .createMediaSource(mediaItem)
                     } else {
                         ProgressiveMediaSource.Factory(factory)
-                            // Fewer, larger reads → less overhead per second
-                            // of a high-bitrate file.
                             .setContinueLoadingCheckIntervalBytes(1024 * 1024)
                             .createMediaSource(mediaItem)
                     }
                 }
 
                 exoPlayer.setMediaSource(mediaSource)
+                applyCaptionSelection()
                 exoPlayer.prepare()
                 if (seekPosMs > 0) {
                     exoPlayer.seekTo(seekPosMs)
@@ -543,3 +578,24 @@ class PlayerManager(
         private const val STREAM_USER_AGENT = "YoCinema-Android-Player/1.0"
     }
 }
+
+// ─── Top-level types (outside PlayerManager, so the whole app can use them) ───
+
+/** A selectable video quality for the current content. */
+data class PlayerQuality(
+    val label: String,
+    val url: String,
+    val resolution: Int? = null,
+)
+
+/** A subtitle track. */
+data class PlayerCaption(
+    val language: String?,
+    val displayName: String?,
+    val url: String?,
+) {
+    val isEnglish: Boolean
+        get() = language.equals("en", true) || displayName.equals("English", true)
+}
+
+private const val CAPTIONS_OFF = "off"
