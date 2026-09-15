@@ -3,9 +3,9 @@ package com.example.data.model
 import java.time.Instant
 
 /**
- * Domain model the UI consumes. Converts the wire DTO into something the
- * screens don't have to reason about — status as an enum, times as Instant,
- * playability pre-computed.
+ * Domain models. Everything is pre-computed so screens don't have to
+ * reason about status strings, ISO timestamps, or which fields might
+ * be null.
  */
 
 enum class MatchStatus { SCHEDULED, LIVE, FINISHED, POSTPONED, CANCELLED, UNKNOWN }
@@ -54,7 +54,8 @@ fun SportsEventDto.toDomain(): Match {
     val end = parseIso(endTime)
     val isLive = status == "live"
 
-    // Only surface the live stream URL when the API says it is genuinely playable.
+    // Only surface a live stream URL when the API says it's playable.
+    // The API already wraps it in a worker token; we just pass it through.
     val liveUrl = liveStream.url?.takeIf { liveStream.available && isLive && it.isNotBlank() }
 
     return Match(
@@ -113,5 +114,9 @@ private fun mapStatus(raw: String): MatchStatus = when (raw) {
 
 private fun parseIso(value: String?): Instant? {
     if (value.isNullOrBlank()) return null
-    return try { Instant.parse(value) } catch (e: Exception) { null }
+    return try {
+        Instant.parse(value)
+    } catch (e: Exception) {
+        null
+    }
 }

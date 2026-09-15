@@ -3,8 +3,13 @@ package com.example.data.model
 import com.squareup.moshi.JsonClass
 
 /**
- * DTOs for the new sports API. Names match the JSON exactly — do not rename
- * without updating the corresponding JSON keys.
+ * Wire-format DTOs for the sports API. Field names match the JSON
+ * exactly — every property is nullable-or-defaulted so a missing key
+ * never causes Moshi to throw.
+ *
+ * The `url` fields on these DTOs are always worker tokens
+ * (cdn.yocinema.dpdns.org/m/<token>), never raw CDN URLs. The app plays
+ * them directly; no client-side wrapping is needed or wanted.
  */
 
 @JsonClass(generateAdapter = true)
@@ -27,9 +32,9 @@ data class SportsLeaguesEnvelope(
 
 @JsonClass(generateAdapter = true)
 data class SportsLeagueDto(
-    val id: String,
-    val name: String,
-    val localName: String = name,
+    val id: String = "",
+    val name: String = "",
+    val localName: String = "",
 )
 
 @JsonClass(generateAdapter = true)
@@ -57,18 +62,18 @@ data class SportsLiveStreamDto(
 
 @JsonClass(generateAdapter = true)
 data class SportsStreamDto(
-    val id: String,
+    val id: String = "",
     val title: String? = null,
-    val url: String,
+    val url: String = "",
     val cover: String? = null,
     val authorized: Boolean = false,
 )
 
 @JsonClass(generateAdapter = true)
 data class SportsMediaDto(
-    val id: String,
+    val id: String = "",
     val title: String? = null,
-    val url: String,
+    val url: String = "",
     val cover: String? = null,
     val durationSeconds: Int? = null,
     val createdAt: String? = null,
@@ -76,7 +81,7 @@ data class SportsMediaDto(
 
 @JsonClass(generateAdapter = true)
 data class SportsEventDto(
-    val id: String,
+    val id: String = "",
     val sport: String = "",
     val league: String = "",
     val leagueId: String = "",
