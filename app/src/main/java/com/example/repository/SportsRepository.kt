@@ -6,11 +6,10 @@ import com.example.data.model.SportsLeagueDto
 import com.example.data.model.toDomain
 
 /**
- * Sports data — fetched fresh every time. No caching: match status and stream
- * URLs change by the minute, and the API's signed stream URLs expire.
+ * Sports data — always fetched fresh. No caching: match status and
+ * stream URLs change by the minute, and worker tokens expire.
  *
- * Construct with the SportsApi instance built alongside MoviesDemoApi in
- * YoApplication / wherever you build your Retrofit services.
+ * The API returns worker URLs already, so the app plays them directly.
  */
 class SportsRepository(private val api: SportsApi) {
 

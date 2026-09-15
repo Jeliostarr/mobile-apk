@@ -6,8 +6,8 @@ import com.example.data.api.ApiIssueReporter
 import com.example.data.api.ApiKeyIssue
 import com.example.data.api.AuthInterceptor
 import com.example.data.api.ResponseEnvelopeExtractor
-import com.example.data.api.MoviesDemoApi
 import com.example.data.api.SportsApi
+import com.example.data.api.MoviesDemoApi
 import com.example.data.api.YocinemaApi
 import com.example.data.local.AppDatabase
 import com.example.data.local.DownloadEntity
@@ -100,18 +100,17 @@ class YocinemaRepository(context: Context) {
     // this API feeds the exact same apiKeyIssueFlow as the main one. A key
     // without moviesDemoAccess granted shows up as
     // ApiKeyIssue.MoviesDemoNotEnabled there.
-    val moviesDemoApi: MoviesDemoApi = Retrofit.Builder()
+        val moviesDemoApi: MoviesDemoApi = Retrofit.Builder()
         .baseUrl(MOVIES_DEMO_BASE_URL)
         .client(okHttpClient)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
         .create(MoviesDemoApi::class.java)
 
-    // Sports API — same Vercel backend as movies-demo, same base URL, same
-    // okHttpClient (so the same AuthInterceptor adds X-API-Key and any
-    // 401/403/429 from here also feeds apiKeyIssueFlow). Just a different
-    // Retrofit interface on the same host. The repository wrapper collapses
-    // the envelope/DTO handling so screens can consume domain models only.
+    // Sports API — same Vercel backend, same okHttpClient (same
+    // AuthInterceptor, same X-API-Key). Just a different Retrofit
+    // interface on the same host. The app plays the worker URLs the
+    // API returns directly; no client-side URL wrapping.
     val sportsApi: SportsApi = Retrofit.Builder()
         .baseUrl(MOVIES_DEMO_BASE_URL)
         .client(okHttpClient)
