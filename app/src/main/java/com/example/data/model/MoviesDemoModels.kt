@@ -15,26 +15,14 @@ const val MOVIES_DEMO_NIGERIA_COUNTRY = "Nigeria"
  * URL ever appears (a rolling-deploy edge case where the backend is
  * still emitting old URLs).
  */
-fun moviesDemoStreamUrl(mediaUrl: String): String {
-    if (mediaUrl.isBlank()) return ""
-    if (mediaUrl.startsWith("https://cdn.yocinema.dpdns.org/")) return mediaUrl
-    return "$MOVIES_DEMO_BASE_URL/api/stream?url=" +
-        java.net.URLEncoder.encode(mediaUrl, "UTF-8")
-}
-
 /**
- * Download URLs now come from the backend already wrapped — with the
- * filename + Content-Disposition: attachment baked into the token — so
- * the client just passes them through. `filename` parameter is ignored
- * but kept for source compatibility with existing call sites.
+ * The movies-demo backend now returns complete /api/stream URLs for
+ * non-translated and Nigerian content, and the caller just plays them.
+ * No client-side wrapping.
  */
-fun moviesDemoDownloadUrl(mediaUrl: String, @Suppress("UNUSED_PARAMETER") filename: String): String {
-    if (mediaUrl.isBlank()) return ""
-    if (mediaUrl.startsWith("https://cdn.yocinema.dpdns.org/")) return mediaUrl
-    return "$MOVIES_DEMO_BASE_URL/api/download?url=" +
-        java.net.URLEncoder.encode(mediaUrl, "UTF-8")
-}
+fun moviesDemoStreamUrl(mediaUrl: String): String = mediaUrl
 
+fun moviesDemoDownloadUrl(mediaUrl: String, @Suppress("UNUSED_PARAMETER") filename: String): String = mediaUrl
 /** Matches the reference site's own filename convention exactly (Oppenheimer_1080P.mp4 / Lucifer_S01E013_1080P.mp4), so files saved from the app look the same as files saved from the website. */
 fun moviesDemoDownloadFilename(title: String, resolution: Int, season: Int? = null, episode: Int? = null): String {
     val safeTitle = title.replace(Regex("[^\\w\\- ]"), "").trim().replace(Regex("\\s+"), "_")
