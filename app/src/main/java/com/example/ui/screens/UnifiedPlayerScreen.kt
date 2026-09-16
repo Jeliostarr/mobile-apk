@@ -277,7 +277,7 @@ fun UnifiedPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        if (loadError == null) {
+                if (loadError == null) {
             AndroidView(
                 factory = { ctx ->
                     try {
@@ -285,10 +285,15 @@ fun UnifiedPlayerScreen(
                             player = playerManager.exoPlayer
                             useController = false
                             this.resizeMode = resizeMode
-                            // Disable the default subtitle rendering — the
-                            // delay offset wouldn't apply otherwise. We
-                            // render cues ourselves below.
-                            subtitleView = null
+                            // Keep PlayerView's own subtitle renderer
+                            // invisible. The Media3 API here only exposes
+                            // a getter for subtitleView (no setter), so
+                            // we can't null it — alpha = 0 sticks
+                            // regardless of the visibility flips
+                            // PlayerView does internally when cues
+                            // arrive. We render cues ourselves below so
+                            // the user-set delay offset applies.
+                            subtitleView?.let { it.alpha = 0f }
                         }
                     } catch (e: Throwable) {
                         Log.e(TAG, "PlayerView failed", e)
@@ -300,7 +305,10 @@ fun UnifiedPlayerScreen(
                 update = { view ->
                     if (view is PlayerView) {
                         view.resizeMode = resizeMode
-                        view.subtitleView = null
+                        // Re-assert on every update pass — cheap, and
+                        // protects against PlayerView resetting alpha
+                        // between frames.
+                        view.subtitleView?.let { it.alpha = 0f }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
