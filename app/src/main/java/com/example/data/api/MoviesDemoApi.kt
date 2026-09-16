@@ -4,6 +4,7 @@ import com.example.data.model.MdBrowseResponse
 import com.example.data.model.MdCaptionsResponse
 import com.example.data.model.MdDetails
 import com.example.data.model.MdFiltersResponse
+import com.example.data.model.MdHomeResponse
 import com.example.data.model.MdSeasonsResponse
 import com.example.data.model.MdStreamResponse
 import retrofit2.Response
@@ -22,6 +23,16 @@ import retrofit2.http.Query
  * been granted access — see ApiKeyIssue.MoviesDemoNotEnabled.
  */
 interface MoviesDemoApi {
+
+    /**
+     * Full home feed — one call returns banners + every ordered section
+     * (SUBJECTS_MOVIE, CUSTOM, PLAY_LIST, APPOINTMENT_LIST) with the
+     * items already normalized. The MoviesDemoHomeScreen renders these
+     * straight as rails, so this replaces the previous fan-out of many
+     * browse() calls.
+     */
+    @GET("api/home")
+    suspend fun home(): Response<MdHomeResponse>
 
     @GET("api/browse")
     suspend fun browse(
