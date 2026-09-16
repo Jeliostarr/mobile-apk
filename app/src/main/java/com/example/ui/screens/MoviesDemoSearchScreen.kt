@@ -64,8 +64,9 @@ fun MoviesDemoSearchScreen(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    // Debounced live search — waits for a pause in typing rather than
-    // firing a request per keystroke.
+    // Debounced search. Search itself is NOT cached (user typed it,
+    // they expect live results), but we still route through the
+    // repository so all movies-demo calls come from one place.
     LaunchedEffect(query) {
         if (query.isBlank()) {
             results = emptyList()
@@ -74,8 +75,7 @@ fun MoviesDemoSearchScreen(
         }
         delay(400)
         isLoading = true
-        val response = repository.moviesDemoApi.search(query = query, limit = 30)
-        val body = if (response.isSuccessful) response.body() else null
+        val body = repository.moviesDemoRepository.search(query = query, limit = 30)
         results = (body?.effectiveItems ?: emptyList()).cleanedForFeed(countryFilter)
         hasSearched = true
         isLoading = false

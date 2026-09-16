@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.MdSubject
 import com.example.data.model.cleanedForFeed
+import com.example.repository.MdHomeRail
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.MdPosterCard
 import com.example.ui.components.MovieRailSkeleton
@@ -65,8 +66,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
-private data class MdRail(val title: String, val genre: String?, val sort: String?, val items: List<MdSubject>)
-
 @Composable
 fun MoviesDemoHomeScreen(
     title: String,
@@ -77,52 +76,83 @@ fun MoviesDemoHomeScreen(
     onSearchClick: () -> Unit,
     onViewAllClick: (railTitle: String, genre: String?, sort: String?) -> Unit
 ) {
-    var isLoading by remember { mutableStateOf(true) }
-    var heroItems by remember { mutableStateOf<List<MdSubject>>(emptyList()) }
-    var rails by remember { mutableStateOf<List<MdRail>>(emptyList()) }
+    // Seed from repository cache so returning to this screen paints
+    // instantly with the last content, no shimmer. Only a cold first
+    // open (or a fresh install) shows the skeleton.
+    var heroItems by remember { mutableStateOf(repository.cachedMdHomeHero) }
+    var rails by remember { mutableStateOf(repository.cachedMdHomeRails) }
+    var isLoading by remember {
+        mutableStateOf(heroItems.isEmpty() && rails.isEmpty())
+    }
 
     LaunchedEffect(countryFilter) {
-        isLoading = true
-        coroutineScope {
-            val popularDeferred = async {
-                runCatching { repository.moviesDemoApi.browse(country = countryFilter, sort = "Hottest", limit = 15) }.getOrNull()
-            }
-            val latestDeferred = async {
-                runCatching { repository.moviesDemoApi.browse(country = countryFilter, sort = "Latest", limit = 15) }.getOrNull()
-            }
-            val filtersDeferred = async {
-                runCatching { repository.moviesDemoApi.browseFilters() }.getOrNull()
-            }
+        // If we already have cached content, keep showing it while we
+        // refresh in the background. Shimmer only if we're empty.
+        if (heroItems.isEmpty() && rails.isEmpty()) isLoading = true
 
-            val popularResp = popularDeferred.await()
-            val popular = (if (popularResp?.isSuccessful == true) popularResp.body()?.effectiveItems else null)
-                ?.cleanedForFeed(countryFilter) ?: emptyList()
-            val latestResp = latestDeferred.await()
-            val latest = (if (latestResp?.isSuccessful == true) latestResp.body()?.effectiveItems else null)
-                ?.cleanedForFeed(countryFilter) ?: emptyList()
-            val filtersResp = filtersDeferred.await()
-            val allGenres = (if (filtersResp?.isSuccessful == true) filtersResp.body()?.genres else null) ?: emptyList()
-
-            heroItems = (popular.ifEmpty { latest }).take(6)
-
-            val topGenres = allGenres.take(6)
-            val genreDeferreds = topGenres.map { g ->
-                async {
-                    g to runCatching {
-                        repository.moviesDemoApi.browse(country = countryFilter, genre = g, limit = 15)
-                    }.getOrNull()
+        try {
+            coroutineScope {
+                val popularDeferred = async {
+                    repository.moviesDemoRepository.browse(
+                        country = countryFilter, sort = "Hottest", limit = 15
+                    )
                 }
-            }
-            val genreResults = genreDeferreds.awaitAll()
+                val latestDeferred = async {
+                    repository.moviesDemoRepository.browse(
+                        country = countryFilter, sort = "Latest", limit = 15
+                    )
+                }
+                val filtersDeferred = async {
+                    repository.moviesDemoRepository.browseFilters()
+                }
 
-            val builtRails = mutableListOf<MdRail>()
-            if (popular.isNotEmpty()) builtRails.add(MdRail("Popular", genre = null, sort = "Hottest", items = popular))
-            if (latest.isNotEmpty()) builtRails.add(MdRail("Latest", genre = null, sort = "Latest", items = latest))
-            genreResults.forEach { (genre, response) ->
-                val genreItems = (if (response?.isSuccessful == true) response.body()?.effectiveItems else null)?.cleanedForFeed(countryFilter) ?: emptyList()
-                if (genreItems.isNotEmpty()) builtRails.add(MdRail(genre, genre = genre, sort = null, items = genreItems))
+                val popularBody = popularDeferred.await()
+                val popular = (popularBody?.effectiveItems ?: emptyList())
+                    .cleanedForFeed(countryFilter)
+                val latestBody = latestDeferred.await()
+                val latest = (latestBody?.effectiveItems ?: emptyList())
+                    .cleanedForFeed(countryFilter)
+                val filtersBody = filtersDeferred.await()
+                val allGenres = filtersBody?.genres ?: emptyList()
+
+                val newHero = (popular.ifEmpty { latest }).take(6)
+
+                val topGenres = allGenres.take(6)
+                val genreDeferreds = topGenres.map { g ->
+                    async {
+                        g to repository.moviesDemoRepository.browse(
+                            country = countryFilter, genre = g, limit = 15
+                        )
+                    }
+                }
+                val genreResults = genreDeferreds.awaitAll()
+
+                val builtRails = mutableListOf<MdHomeRail>()
+                if (popular.isNotEmpty()) {
+                    builtRails.add(MdHomeRail("Popular", null, "Hottest", popular))
+                }
+                if (latest.isNotEmpty()) {
+                    builtRails.add(MdHomeRail("Latest", null, "Latest", latest))
+                }
+                genreResults.forEach { (genre, response) ->
+                    val genreItems = (response?.effectiveItems ?: emptyList())
+                        .cleanedForFeed(countryFilter)
+                    if (genreItems.isNotEmpty()) {
+                        builtRails.add(MdHomeRail(genre, genre, null, genreItems))
+                    }
+                }
+
+                // Publish to repository cache + local state
+                heroItems = newHero
+                rails = builtRails
+                repository.cachedMdHomeHero = newHero
+                repository.cachedMdHomeRails = builtRails
+                repository.cachedMdHomeFilters = filtersBody
+                repository.markMdHomeCacheFresh()
             }
-            rails = builtRails
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
             isLoading = false
         }
     }
@@ -155,7 +185,7 @@ fun MoviesDemoHomeScreen(
             }
         }
 
-        if (isLoading) {
+        if (isLoading && heroItems.isEmpty() && rails.isEmpty()) {
             Column {
                 MovieRailSkeleton()
                 MovieRailSkeleton()
@@ -265,7 +295,7 @@ private fun MdHeroPager(items: List<MdSubject>, onItemClick: (String) -> Unit) {
 }
 
 @Composable
-private fun MdRailSection(rail: MdRail, onItemClick: (String) -> Unit, onViewAllClick: () -> Unit) {
+private fun MdRailSection(rail: MdHomeRail, onItemClick: (String) -> Unit, onViewAllClick: () -> Unit) {
     Column {
         Row(
             modifier = Modifier

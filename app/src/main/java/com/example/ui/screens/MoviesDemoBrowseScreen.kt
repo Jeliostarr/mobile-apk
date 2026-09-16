@@ -65,7 +65,7 @@ fun MoviesDemoBrowseScreen(
     onBackClick: () -> Unit,
     onItemClick: (String) -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: All, 1: Movies, 2: TV
+    var selectedTab by remember { mutableStateOf(0) }
     var items by remember { mutableStateOf<List<MdSubject>>(emptyList()) }
     var page by remember { mutableStateOf(1) }
     var isLoading by remember { mutableStateOf(true) }
@@ -75,40 +75,35 @@ fun MoviesDemoBrowseScreen(
 
     val scope = rememberCoroutineScope()
 
-    // A 401/403/429 here (e.g. the key isn't enabled) is already surfaced
-    // by the app's shared ApiIssueReporter/MoviesDemoAccessDialog via the
-    // same OkHttp client every other repository call uses — this screen
-    // doesn't need its own copy of that handling, just an empty state for
-    // when there's genuinely nothing to show.
-    suspend fun load(targetPage: Int, append: Boolean) {
+    suspend fun load(targetPage: Int, append: Boolean, forceRefresh: Boolean = false) {
         val typeParam = when (selectedTab) {
             1 -> "movie"
             2 -> "tv"
             else -> null
         }
-        val response = if (!searchQuery.isNullOrBlank()) {
-            repository.moviesDemoApi.search(query = searchQuery, limit = 24)
+        val results = if (!searchQuery.isNullOrBlank()) {
+            val body = repository.moviesDemoRepository.search(query = searchQuery, limit = 24)
+            (body?.effectiveItems ?: emptyList()).cleanedForFeed(countryFilter)
         } else {
-            repository.moviesDemoApi.browse(
+            val body = repository.moviesDemoRepository.browse(
                 type = typeParam,
                 genre = initialGenre,
                 country = countryFilter,
                 sort = initialSort,
                 page = targetPage,
-                limit = 24
+                limit = 24,
+                forceRefresh = forceRefresh,
             )
+            (body?.effectiveItems ?: emptyList()).cleanedForFeed(countryFilter)
         }
-        val body = if (response.isSuccessful) response.body() else null
-        val results = (body?.effectiveItems ?: emptyList()).cleanedForFeed(countryFilter)
         items = if (append) items + results else results
-        // Search is a single page (the API doesn't paginate it), so never
-        // show Load More there regardless of result count.
         hasMore = searchQuery.isNullOrBlank() && results.size >= 24
-        loadFailed = body == null
+        loadFailed = results.isEmpty() && items.isEmpty()
     }
 
     LaunchedEffect(selectedTab, countryFilter, initialGenre, initialSort, searchQuery) {
-        isLoading = true
+        // Only show shimmer if we have nothing to display yet.
+        if (items.isEmpty()) isLoading = true
         page = 1
         scope.launch {
             load(targetPage = 1, append = false)
@@ -176,13 +171,10 @@ fun MoviesDemoBrowseScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        if (isLoading) {
+        if (isLoading && items.isEmpty()) {
             MovieGridSkeleton(columns = 3, itemCount = 12)
         } else if (items.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Default.MovieFilter,
