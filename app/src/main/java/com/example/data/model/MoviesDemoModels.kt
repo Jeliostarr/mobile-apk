@@ -61,7 +61,26 @@ data class MdSubject(
     val isPlayableTitle: Boolean get() = (type == "movie" || type == "tv") && hasResource != false
 
     val primaryGenre: String? get() = genre?.split(",")?.firstOrNull()?.trim()?.ifBlank { null }
-    val formattedDuration: String? get() = duration?.takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m" }
+
+    /**
+     * The movies-demo API returns duration in SECONDS (e.g. Moana = 6900
+     * → 1h 55m, The Whisper Man = 6660 → 1h 51m). Treating the value as
+     * minutes is what produced "111h" on the poster meta line.
+     */
+    val formattedDuration: String?
+        get() {
+            val d = duration ?: return null
+            if (d <= 0) return null
+            val totalSeconds = d.toLong()
+            val hours = totalSeconds / 3600
+            val minutes = (totalSeconds % 3600) / 60
+            return when {
+                hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+                hours > 0                -> "${hours}h"
+                minutes > 0              -> "${minutes}m"
+                else                     -> null
+            }
+        }
 }
 
 /** True for content that actually belongs in a movies-demo feed — filters out non-movie/series scrape noise (wrestling, live events, anything type=="other"). When browsing the general non-translated catalog (countryFilter == null), also keeps Nigerian titles out since they have their own dedicated screen; when browsing a specific country, keeps only titles actually matching it. */
