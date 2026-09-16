@@ -310,7 +310,7 @@ class PlayerManager(
         scope.launch {
             val uri = Uri.parse(url)
             val isHls = url.contains(".m3u8", ignoreCase = true)
-            val factory = httpFactory(forApiHost = false)
+            val factory = httpFactory(url)
             val itemBuilder = MediaItem.Builder()
                 .setUri(uri)
                 .setMimeType(if (isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4)
@@ -396,13 +396,24 @@ class PlayerManager(
         return builder.build()
     }
 
+    /**
+     * True when the URL points at one of our own backends — translated
+     * (api.yocinema.dpdns.org) or movies-demo (movie-bo-api.vercel.app).
+     * Both endpoints require X-API-Key on every request, including the
+     * /api/stream proxy that the movies-demo backend uses for Enacdn
+     * content.
+     */
+    private fun isOwnApiHost(url: String): Boolean =
+        url.startsWith(com.example.data.model.BASE_URL) ||
+        url.startsWith(com.example.data.model.MOVIES_DEMO_BASE_URL)
+
     private suspend fun resolveFinalUrl(url: String): String = withContext(Dispatchers.IO) {
         var current = url
         try {
             repeat(5) {
                 val builder = Request.Builder().url(current).head()
                     .header("User-Agent", STREAM_USER_AGENT)
-                if (current.startsWith(com.example.data.model.BASE_URL)) {
+                if (isOwnApiHost(current)) {
                     repository.tokenManager.getApiKey()?.takeIf { it.isNotBlank() }?.let { key ->
                         builder.header("X-API-Key", key)
                     }
@@ -423,9 +434,9 @@ class PlayerManager(
         current
     }
 
-    private fun httpFactory(forApiHost: Boolean): DataSource.Factory {
+    private fun httpFactory(playUrl: String): DataSource.Factory {
         val headers = mutableMapOf("User-Agent" to STREAM_USER_AGENT)
-        if (forApiHost) {
+        if (isOwnApiHost(playUrl)) {
             repository.tokenManager.getApiKey()?.takeIf { it.isNotBlank() }?.let { key ->
                 headers["X-API-Key"] = key
             }
@@ -484,8 +495,7 @@ class PlayerManager(
 
                     val uri = Uri.parse(playUrl)
                     val isHls = playUrl.contains(".m3u8", ignoreCase = true)
-                    val onApiHost = playUrl.startsWith(com.example.data.model.BASE_URL)
-                    val factory = httpFactory(onApiHost)
+                    val factory = httpFactory(playUrl)
 
                     val itemBuilder = MediaItem.Builder()
                         .setUri(uri)
@@ -579,7 +589,7 @@ class PlayerManager(
     }
 }
 
-// ─── Top-level types (outside PlayerManager, so the whole app can use them) ───
+// ─── Top-level types (shared with UnifiedPlayerScreen) ───
 
 /** A selectable video quality for the current content. */
 data class PlayerQuality(
