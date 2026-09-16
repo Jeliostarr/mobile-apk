@@ -50,7 +50,9 @@ data class MdSubject(
     val releaseDate: String? = null,
     val duration: Int? = null,
     val cover: String? = null,
-    val hasResource: Boolean? = null
+    val hasResource: Boolean? = null,
+    /** Review teaser headline attached to trending/home items ("Enjoyed It!", "Over-hyped Netflix Production", "Amazing"). Nullable because /browse and /search don't emit it — only /trending and /home do. */
+    val postTitle: String? = null
 ) {
     /** country/countryName is populated inconsistently depending on which endpoint the item came from — this is the one field every screen should actually read. */
     val effectiveCountry: String? get() = country?.ifBlank { null } ?: countryName?.ifBlank { null }
