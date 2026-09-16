@@ -6,6 +6,7 @@ import com.example.data.model.MdBrowseResponse
 import com.example.data.model.MdCaptionsResponse
 import com.example.data.model.MdDetails
 import com.example.data.model.MdFiltersResponse
+import com.example.data.model.MdHomeResponse
 import com.example.data.model.MdSeasonsResponse
 import com.example.data.model.MdStreamResponse
 
@@ -20,12 +21,29 @@ import com.example.data.model.MdStreamResponse
  *   - Stream URLs: 60 seconds — the URL is signed with a long expiry,
  *     so re-fetching every time is pure waste. 60s is generous
  *     headroom for the user opening a title twice in quick succession.
+ *   - Home feed: 5 min — the upstream home rarely changes more often
+ *     than that, and it's the single most expensive call on this repo.
  *   - Search: NOT cached — user typed it, they expect live results.
  */
 class MoviesDemoRepository(
     private val api: MoviesDemoApi,
     private val cache: ApiCache = ApiCache(),
 ) {
+
+    // ─── Home ───
+
+    /**
+     * Full home feed — banners + every ordered section in one request.
+     * Replaces the previous client-side fan-out of many browse() calls
+     * to assemble rails for MoviesDemoHomeScreen.
+     */
+    suspend fun home(
+        forceRefresh: Boolean = false,
+    ): MdHomeResponse? {
+        return cache.get("md.home", 300, forceRefresh) {
+            runCatching { api.home().body() }.getOrNull()
+        }
+    }
 
     // ─── Browse ───
     suspend fun browse(
