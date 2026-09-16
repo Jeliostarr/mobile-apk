@@ -1,17 +1,25 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,10 +38,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.MdSubject
@@ -41,7 +52,9 @@ import com.example.data.model.cleanedForFeed
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.MdPosterCard
 import com.example.ui.theme.YoBaseBackground
+import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
@@ -53,7 +66,7 @@ fun MoviesDemoSearchScreen(
     countryFilter: String?,
     repository: YocinemaRepository,
     onBackClick: () -> Unit,
-    onItemClick: (String) -> Unit
+    onItemClick: (String) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MdSubject>>(emptyList()) }
@@ -64,9 +77,6 @@ fun MoviesDemoSearchScreen(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    // Debounced search. Search itself is NOT cached (user typed it,
-    // they expect live results), but we still route through the
-    // repository so all movies-demo calls come from one place.
     LaunchedEffect(query) {
         if (query.isBlank()) {
             results = emptyList()
@@ -90,7 +100,7 @@ fun MoviesDemoSearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBackClick) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = YoTextPrimary)
@@ -111,9 +121,49 @@ fun MoviesDemoSearchScreen(
                     unfocusedBorderColor = YoSurfaceVariant,
                     focusedTextColor = YoTextPrimary,
                     unfocusedTextColor = YoTextPrimary,
-                    cursorColor = YoPrimaryViolet
-                )
+                    cursorColor = YoPrimaryViolet,
+                ),
             )
+        }
+
+        // ── Suggestion strip ──
+        // Built from the top of the current result set, so no extra
+        // request. Tapping a chip goes straight to that title.
+        if (results.isNotEmpty() && !isLoading) {
+            val suggestions = results.take(8)
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
+            ) {
+                items(suggestions) { subject ->
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(YoSurface)
+                            .border(1.dp, YoBorder, RoundedCornerShape(50))
+                            .clickable { subject.detailPath?.let(onItemClick) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = YoPrimaryViolet,
+                            modifier = Modifier.width(12.dp).height(12.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = subject.title ?: "",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = YoTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
         }
 
         when {
@@ -138,7 +188,7 @@ fun MoviesDemoSearchScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     items(results) { subject ->
                         MdPosterCard(subject = subject, onClick = { subject.detailPath?.let(onItemClick) })

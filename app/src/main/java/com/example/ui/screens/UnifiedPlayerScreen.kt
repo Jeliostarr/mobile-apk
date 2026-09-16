@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -60,6 +61,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -111,7 +113,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "UnifiedPlayer"
 
-/** A single episode entry for series content. */
 data class PlayerEpisode(
     val season: Int?,
     val episode: Int?,
@@ -120,7 +121,6 @@ data class PlayerEpisode(
     val streamUrl: String,
 )
 
-/** Everything the unified player needs to render + drive playback. */
 data class UnifiedPlayerSpec(
     val mediaId: String,
     val title: String,
@@ -193,6 +193,10 @@ fun UnifiedPlayerScreen(
     val selectedQuality by playerManager.selectedQuality.collectAsState()
     val selectedCaptionLang by playerManager.selectedCaptionLang.collectAsState()
 
+    // Subtitle-related state: user-set delay and current cue text.
+    val subtitleDelayMs by playerManager.subtitleDelayMs.collectAsState()
+    val activeCues by playerManager.activeCues.collectAsState()
+
     fun applyBrightness(value: Float) {
         val win = activity?.window ?: return
         val params = win.attributes
@@ -231,8 +235,6 @@ fun UnifiedPlayerScreen(
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    // Hand quality/caption lists to the manager BEFORE playMedia runs so
-    // the first MediaItem already has subtitle configs attached.
     LaunchedEffect(spec.mediaId, streamUrl) {
         loadError = null
         try {
@@ -264,6 +266,12 @@ fun UnifiedPlayerScreen(
         }
     }
 
+    // Subtitle overlay bottom padding — smooth shift as controls show/hide.
+    val subtitleBottomPadding by animateDpAsState(
+        targetValue = if (isControlsVisible) 130.dp else 60.dp,
+        label = "subtitleBottomPadding",
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -277,6 +285,10 @@ fun UnifiedPlayerScreen(
                             player = playerManager.exoPlayer
                             useController = false
                             this.resizeMode = resizeMode
+                            // Disable the default subtitle rendering — the
+                            // delay offset wouldn't apply otherwise. We
+                            // render cues ourselves below.
+                            subtitleView = null
                         }
                     } catch (e: Throwable) {
                         Log.e(TAG, "PlayerView failed", e)
@@ -285,12 +297,17 @@ fun UnifiedPlayerScreen(
                         }
                     }
                 },
-                update = { view -> if (view is PlayerView) view.resizeMode = resizeMode },
+                update = { view ->
+                    if (view is PlayerView) {
+                        view.resizeMode = resizeMode
+                        view.subtitleView = null
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        // Gesture zones
+        // ─── Gesture zones (unchanged) ───
         if (loadError == null) {
             fun revertFastForwardIfNeeded() {
                 if (isFastForwarding) {
@@ -452,6 +469,37 @@ fun UnifiedPlayerScreen(
             }
         }
 
+        // ─── Custom subtitle overlay ───
+        // Rendered whenever ExoPlayer has cues for the current playback
+        // position and the user has a caption language selected. The
+        // delay offset is already baked into when these become visible.
+        if (loadError == null && activeCues.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        start = 24.dp,
+                        end = 24.dp,
+                        bottom = subtitleBottomPadding,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = activeCues.joinToString("\n"),
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                )
+            }
+        }
+
         if (loadError != null) {
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)),
@@ -595,14 +643,57 @@ fun UnifiedPlayerScreen(
                                     onClick = { showCaptionMenu = true }
                                 )
                                 DropdownMenu(expanded = showCaptionMenu, onDismissRequest = { showCaptionMenu = false }) {
+                                    // ─── Subtitle delay controls ───
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    ) {
+                                        Text(
+                                            text = "Subtitle delay: ${"%.1f".format(subtitleDelayMs / 1000.0)}s",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            DelayPill(
+                                                label = "−0.5s",
+                                                enabled = subtitleDelayMs > 0L,
+                                            ) {
+                                                playerManager.setSubtitleDelay(subtitleDelayMs - 500L)
+                                            }
+                                            DelayPill(
+                                                label = "+0.5s",
+                                                enabled = subtitleDelayMs < 15_000L,
+                                            ) {
+                                                playerManager.setSubtitleDelay(subtitleDelayMs + 500L)
+                                            }
+                                            if (subtitleDelayMs != 0L) {
+                                                DelayPill(label = "Reset", enabled = true) {
+                                                    playerManager.setSubtitleDelay(0L)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
+
                                     DropdownMenuItem(
-                                        text = { Text("Off", color = if (selectedCaptionLang == "off") YoPrimaryViolet else Color.White) },
+                                        text = {
+                                            Text(
+                                                "Off",
+                                                color = if (selectedCaptionLang == "off") YoPrimaryViolet else Color.White
+                                            )
+                                        },
                                         onClick = { playerManager.switchCaption("off"); showCaptionMenu = false }
                                     )
                                     captions.forEach { cap ->
                                         val lang = cap.language ?: return@forEach
                                         DropdownMenuItem(
-                                            text = { Text(cap.displayName ?: lang, color = if (selectedCaptionLang == lang) YoPrimaryViolet else Color.White) },
+                                            text = {
+                                                Text(
+                                                    cap.displayName ?: lang,
+                                                    color = if (selectedCaptionLang == lang) YoPrimaryViolet else Color.White
+                                                )
+                                            },
                                             onClick = { playerManager.switchCaption(lang); showCaptionMenu = false }
                                         )
                                     }
@@ -840,6 +931,35 @@ private fun ControlIconButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(imageVector = icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(size * 0.5f))
+    }
+}
+
+/**
+ * Compact pill button used for the -0.5s / +0.5s / Reset controls in
+ * the caption dropdown. Greyed out and non-clickable when disabled.
+ */
+@Composable
+private fun DelayPill(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (enabled) Color.White.copy(alpha = 0.14f)
+                else Color.White.copy(alpha = 0.05f)
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

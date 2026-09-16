@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import com.example.data.model.MdFiltersResponse
 import com.example.data.model.MdSubject
 import com.example.data.model.cleanedForFeed
 import com.example.repository.MdHomeRail
@@ -72,20 +73,18 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import java.util.Calendar
 
 /**
- * Movies-demo home — standalone mirror of the translated HomeScreen.
+ * Movies-demo home.
  *
- * Layout: top bar → search bar → hero carousel → rails.
+ * Layout: top bar → search bar → hero carousel → year chips → rails.
  *
- * Rails:
- *   1. "Trending Now"  ← /api/trending (real popularity signal)
- *   2. One rail per genre ← /api/browse?genre=X&sort=Hottest,
- *      fetched in parallel batches of 4
- *
- * No "Latest Releases" rail — trending replaces it.
- * No chip row, no CTA buttons on the hero. Genre browsing happens by
- * scrolling.
+ * Year chips re-filter every rail below them. Default is the newest
+ * year the backend advertises (normally the current calendar year).
+ * Every rail uses sort=Hottest so the content is always trending-
+ * sorted for the chosen year instead of a "latest" sort that mixes
+ * years unpredictably.
  */
 @Composable
 fun MoviesDemoHomeScreen(
@@ -98,48 +97,68 @@ fun MoviesDemoHomeScreen(
     onViewAllClick: (railTitle: String, genre: String?, sort: String?) -> Unit,
 ) {
     var rails by remember { mutableStateOf(repository.cachedMdHomeRails) }
+    var filters by remember { mutableStateOf(repository.cachedMdHomeFilters) }
+    var availableYears by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedYear by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(rails.isEmpty()) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var reloadTick by remember { mutableStateOf(0) }
 
+    // Effect 1 — filters + year list. Runs on entry and on manual reload.
     LaunchedEffect(countryFilter, reloadTick) {
+        loadError = null
+        try {
+            val filtersBody = repository.moviesDemoRepository.browseFilters()
+            filters = filtersBody
+            availableYears = computeYears(filtersBody)
+            if (selectedYear == null) {
+                selectedYear = availableYears.firstOrNull()
+            }
+        } catch (e: Exception) {
+            loadError = e.message ?: "Network error"
+        }
+    }
+
+    // Effect 2 — rails for the currently-selected year. Re-runs whenever
+    // the user taps a different year chip.
+    LaunchedEffect(countryFilter, selectedYear) {
+        val year = selectedYear ?: return@LaunchedEffect
         if (rails.isEmpty()) isLoading = true
         loadError = null
         try {
+            val builtRails = mutableListOf<MdHomeRail>()
+
             coroutineScope {
-                // Genres drive the rail count.
-                val filtersBody = repository.moviesDemoRepository.browseFilters()
-                val genres = filtersBody?.genres.orEmpty()
+                // Trending-in-year rail.
+                val trendingDeferred = async {
+                    repository.moviesDemoRepository.browse(
+                        country = countryFilter,
+                        year = year,
+                        sort = "Hottest",
+                        limit = 30,
+                    )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
+                }
+                val trending = trendingDeferred.await()
+                if (trending.isNotEmpty()) {
+                    builtRails.add(MdHomeRail("Trending in $year", null, "Hottest", trending))
+                }
+
+                // Genre rails for the same year.
+                val genres = filters?.genres.orEmpty()
                     .map { it.trim() }
                     .filter { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
                     .distinct()
+                    .take(20)
 
-                // Rail #1: trending. This is the popularity signal we
-                // also feed into the hero carousel below.
-                val trendingDeferred = async {
-                    repository.moviesDemoRepository.trending(limit = 30)
-                        ?.effectiveItems
-                        ?.cleanedForFeed(countryFilter)
-                        .orEmpty()
-                }
-                val trending = trendingDeferred.await()
-
-                val builtRails = mutableListOf<MdHomeRail>()
-                if (trending.isNotEmpty()) {
-                    builtRails.add(MdHomeRail("Trending Now", null, "Hottest", trending))
-                }
-
-                // Genre rails — same popularity ordering, fetched in
-                // parallel batches of 4 to keep concurrency tame.
-                val topGenres = genres.take(20)
-                topGenres.chunked(4).forEach { chunk ->
+                genres.chunked(4).forEach { chunk ->
                     val chunkResults = coroutineScope {
                         chunk.map { genre ->
                             async {
                                 val body = repository.moviesDemoRepository.browse(
                                     country = countryFilter,
                                     genre = genre,
-                                    sort = "Hottest",   // popularity, not Latest
+                                    year = year,
+                                    sort = "Hottest",
                                     limit = 30,
                                 )
                                 genre to (body?.effectiveItems ?: emptyList())
@@ -153,19 +172,38 @@ fun MoviesDemoHomeScreen(
                         }
                     }
                 }
+            }
 
-                rails = builtRails
-                if (builtRails.isNotEmpty()) {
-                    repository.cachedMdHomeRails = builtRails
-                    repository.cachedMdHomeFilters = filtersBody
-                    repository.markMdHomeCacheFresh()
-                }
+            if (builtRails.isEmpty()) {
+                loadError = "No content for $year."
+            }
+
+            rails = builtRails
+            if (builtRails.isNotEmpty()) {
+                repository.cachedMdHomeRails = builtRails
+                repository.markMdHomeCacheFresh()
             }
         } catch (e: Exception) {
             loadError = e.message ?: "Network error"
         } finally {
             isLoading = false
         }
+    }
+
+    // Hero pool — dedup across every rail, take the first six unique
+    // titles.
+    val heroItems = remember(rails) {
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<MdSubject>()
+        for (rail in rails) {
+            for (item in rail.items) {
+                val key = item.subjectId ?: item.detailPath ?: continue
+                if (seen.add(key)) out.add(item)
+                if (out.size >= 6) break
+            }
+            if (out.size >= 6) break
+        }
+        out
     }
 
     Column(
@@ -195,32 +233,27 @@ fun MoviesDemoHomeScreen(
             }
 
             loadError != null && rails.isEmpty() -> {
-                MdErrorState(
-                    message = loadError!!,
-                    onRetry = { reloadTick++ },
-                )
-            }
-
-            rails.isEmpty() -> {
-                MdErrorState(
-                    message = "No content available right now.",
-                    onRetry = { reloadTick++ },
-                )
+                MdErrorState(message = loadError!!, onRetry = { reloadTick++ })
             }
 
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    // Hero — first rail's items (i.e. trending). Same
-                    // items appear again as the top rail right below.
-                    val heroItems = rails.firstOrNull()?.items.orEmpty().take(6)
                     if (heroItems.isNotEmpty()) {
+                        item { MdHeroCarousel(items = heroItems, onItemClick = onItemClick) }
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                    }
+
+                    // Year chips — always shown, sits between the hero
+                    // and the rails.
+                    if (availableYears.isNotEmpty()) {
                         item {
-                            MdHeroCarousel(
-                                items = heroItems,
-                                onItemClick = onItemClick,
+                            MdYearChips(
+                                years = availableYears,
+                                selectedYear = selectedYear,
+                                onYearSelected = { y -> selectedYear = y },
                             )
                         }
-                        item { Spacer(modifier = Modifier.height(22.dp)) }
+                        item { Spacer(modifier = Modifier.height(18.dp)) }
                     }
 
                     items(rails) { rail ->
@@ -241,9 +274,21 @@ fun MoviesDemoHomeScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Header
-// ─────────────────────────────────────────────────────────────────
+/**
+ * Years come from the backend filters when present. If the list is
+ * empty we fall back to the last 16 calendar years so the UI is never
+ * bare.
+ */
+private fun computeYears(filters: MdFiltersResponse?): List<String> {
+    val fromApi = filters?.years.orEmpty()
+        .map { it.trim() }
+        .filter { it.length == 4 && it.all { c -> c.isDigit() } }
+        .distinct()
+        .sortedDescending()
+    if (fromApi.isNotEmpty()) return fromApi
+    val current = Calendar.getInstance().get(Calendar.YEAR)
+    return (current downTo current - 15).map { it.toString() }
+}
 
 @Composable
 private fun MdTopBar(
@@ -317,9 +362,53 @@ private fun MdSearchBar(onClick: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Hero carousel — image + info only, no CTA buttons
-// ─────────────────────────────────────────────────────────────────
+@Composable
+private fun MdYearChips(
+    years: List<String>,
+    selectedYear: String?,
+    onYearSelected: (String) -> Unit,
+) {
+    // "All" first, then descending years.
+    val chipYears = remember(years) { listOf("All") + years }
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(chipYears) { year ->
+            val isAll = year == "All"
+            val isSelected = if (isAll) selectedYear == null else selectedYear == year
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isSelected) YoPrimaryViolet else YoSurfaceVariant)
+                    .border(
+                        width = 1.dp,
+                        color = if (isSelected) Color.Transparent else YoBorder,
+                        shape = RoundedCornerShape(50),
+                    )
+                    .clickable(enabled = !isSelected) {
+                        if (isAll) {
+                            // "All" isn't wired yet — the caller controls
+                            // the fetch path, and we don't have a
+                            // no-year mode here. Disable for now.
+                        } else {
+                            onYearSelected(year)
+                        }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = if (isAll) "All Years" else year,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isSelected) YoBaseBackground else YoTextPrimary,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun MdHeroCarousel(
@@ -327,7 +416,6 @@ private fun MdHeroCarousel(
     onItemClick: (String) -> Unit,
 ) {
     if (items.isEmpty()) return
-
     val pagerState = rememberPagerState(pageCount = { items.size })
 
     LaunchedEffect(items) {
@@ -350,10 +438,7 @@ private fun MdHeroCarousel(
                 .height(320.dp)
         ) { page ->
             val item = items[page]
-            MdHeroCard(
-                item = item,
-                onClick = { item.detailPath?.let(onItemClick) },
-            )
+            MdHeroCard(item = item, onClick = { item.detailPath?.let(onItemClick) })
         }
 
         if (items.size > 1) {
@@ -371,11 +456,8 @@ private fun MdHeroCarousel(
                             .size(if (isSelected) 9.dp else 7.dp)
                             .clip(CircleShape)
                             .background(
-                                brush = if (isSelected) {
-                                    Brush.linearGradient(YoGlowGradient)
-                                } else {
-                                    SolidColor(YoBorder)
-                                }
+                                brush = if (isSelected) Brush.linearGradient(YoGlowGradient)
+                                        else SolidColor(YoBorder)
                             )
                     )
                 }
@@ -385,10 +467,7 @@ private fun MdHeroCarousel(
 }
 
 @Composable
-private fun MdHeroCard(
-    item: MdSubject,
-    onClick: () -> Unit,
-) {
+private fun MdHeroCard(item: MdSubject, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -407,7 +486,6 @@ private fun MdHeroCard(
             error = { YoCinemaLogoPlaceholder() }
         )
 
-        // Gradient so title/meta stay legible over any poster.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -474,7 +552,6 @@ private fun MdHeroCard(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(
                 text = item.title ?: "",
                 fontSize = 22.sp,
@@ -498,10 +575,6 @@ private fun MdHeroCard(
         }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Rails
-// ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun MdRailSection(
@@ -559,16 +632,9 @@ private fun MdRailSection(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Error state
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 private fun MdErrorState(message: String, onRetry: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp),

@@ -1,7 +1,10 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
@@ -54,20 +58,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.MdCastMember
 import com.example.data.model.MdDetails
+import com.example.data.model.MdDub
 import com.example.data.model.MdQuality
+import com.example.data.model.MdSubject
+import com.example.data.model.cleanedForFeed
 import com.example.data.model.moviesDemoDownloadFilename
 import com.example.data.model.moviesDemoDownloadUrl
 import com.example.data.model.moviesDemoStreamUrl
 import com.example.repository.YocinemaRepository
+import com.example.ui.components.MdPosterCard
 import com.example.ui.components.ModernLoader
 import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
+import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoGlowGradient
 import com.example.ui.theme.YoPrimaryViolet
 import com.example.ui.theme.YoRatingGold
@@ -78,13 +88,16 @@ import com.example.ui.theme.YoTextPrimary
 import com.example.ui.util.MoviesDemoDownloader
 import kotlinx.coroutines.launch
 
-@OptIn(androidx.media3.common.util.UnstableApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(
+    androidx.media3.common.util.UnstableApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+)
 @Composable
 fun MoviesDemoDetailScreen(
     detailPath: String,
     repository: YocinemaRepository,
     onBackClick: () -> Unit,
-    onPlayClick: (detailPath: String, title: String, seasonNum: Int?, epNum: Int?) -> Unit
+    onPlayClick: (detailPath: String, title: String, seasonNum: Int?, epNum: Int?) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -98,6 +111,8 @@ fun MoviesDemoDetailScreen(
     var downloadQualities by remember { mutableStateOf<List<MdQuality>>(emptyList()) }
     var loadingQualities by remember { mutableStateOf(false) }
     var seasonsInfo by remember { mutableStateOf<com.example.data.model.MdSeasonsResponse?>(null) }
+    var selectedDub by remember { mutableStateOf<MdDub?>(null) }
+    var relatedItems by remember { mutableStateOf<List<MdSubject>>(emptyList()) }
 
     LaunchedEffect(detailPath) {
         isLoading = true
@@ -109,6 +124,20 @@ fun MoviesDemoDetailScreen(
             val seasonsRes = repository.moviesDemoApi.seasons(detailPath)
             seasonsInfo = if (seasonsRes.isSuccessful) seasonsRes.body() else null
         }
+        // Related rail — reuse browse(genre) as a proxy for "More Like
+        // This". Filter out the currently-open title.
+        val primaryGenre = d?.genre?.split(",")?.firstOrNull()?.trim()?.ifBlank { null }
+        if (primaryGenre != null) {
+            val browse = repository.moviesDemoRepository.browse(
+                genre = primaryGenre,
+                sort = "Hottest",
+                limit = 20,
+            )
+            relatedItems = (browse?.effectiveItems ?: emptyList())
+                .cleanedForFeed(null)
+                .filter { it.detailPath != detailPath }
+                .take(15)
+        }
     }
 
     fun openDownloadSheet() {
@@ -116,10 +145,11 @@ fun MoviesDemoDetailScreen(
         scope.launch {
             loadingQualities = true
             showDownloadSheet = true
+            val activePath = selectedDub?.detailPath ?: detailPath
             val response = if (d.type == "tv") {
-                repository.moviesDemoApi.tvStream(detailPath, season, episode)
+                repository.moviesDemoApi.tvStream(activePath, season, episode)
             } else {
-                repository.moviesDemoApi.movieStream(detailPath)
+                repository.moviesDemoApi.movieStream(activePath)
             }
             downloadQualities = if (response.isSuccessful) response.body()?.freeQualities ?: emptyList() else emptyList()
             loadingQualities = false
@@ -135,7 +165,7 @@ fun MoviesDemoDetailScreen(
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
             ) {
                 Text("Couldn't load this title", color = YoTextMuted, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(12.dp))
@@ -200,18 +230,64 @@ fun MoviesDemoDetailScreen(
                             d.imdbRatingValue?.takeIf { it.isNotBlank() },
                             d.releaseDate?.take(4)?.takeIf { it.length == 4 },
                             d.countryName?.takeIf { it.isNotBlank() },
-                            d.durationText ?: (d.duration?.let { "${it / 60}h ${it % 60}m" })
+                            d.durationText ?: (d.duration?.let { secs ->
+                                val h = secs / 3600; val m = (secs % 3600) / 60
+                                when {
+                                    h > 0 && m > 0 -> "${h}h ${m}m"
+                                    h > 0 -> "${h}h"
+                                    m > 0 -> "${m}m"
+                                    else -> null
+                                }
+                            })
                         )
                         if (metaParts.isNotEmpty()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (!d.imdbRatingValue.isNullOrBlank()) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = YoRatingGold, modifier = Modifier.size(14.dp))
+                                    Icon(
+                                        Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = YoRatingGold,
+                                        modifier = Modifier.size(14.dp),
+                                    )
                                     Spacer(modifier = Modifier.width(4.dp))
                                 }
                                 Text(
                                     text = metaParts.joinToString("  •  "),
                                     fontSize = 12.sp,
-                                    color = YoTextMuted
+                                    color = YoTextMuted,
+                                )
+                            }
+                        }
+
+                        // Review teaser — only present when opened from
+                        // a rail. Detail endpoint doesn't carry it, so
+                        // this is a best-effort note when the caller
+                        // passed a matching subject.
+                        val teaser = remember(detailPath) {
+                            repository.cachedMdHomeRails
+                                .asSequence()
+                                .flatMap { it.items.asSequence() }
+                                .firstOrNull { it.detailPath == detailPath }
+                                ?.postTitle
+                        }
+                        if (!teaser.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(YoSurfaceVariant)
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text("💬", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = teaser,
+                                    fontSize = 12.sp,
+                                    color = YoTextPrimary,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -239,12 +315,95 @@ fun MoviesDemoDetailScreen(
                                 text = d.description,
                                 fontSize = 13.sp,
                                 color = YoTextMuted,
-                                lineHeight = 19.sp
+                                lineHeight = 19.sp,
+                            )
+                        }
+
+                        // ── Subtitle language chips ──
+                        if (!d.subtitles.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                "Subtitles",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YoTextMuted,
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            val subs = d.subtitles.split(",").map { it.trim() }.filter { it.isNotBlank() }.take(14)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(subs) { lang ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(YoSurfaceVariant)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(text = lang, fontSize = 10.sp, color = YoTextPrimary)
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Dub / audio-track picker ──
+                        val dubs = d.dubs.orEmpty().filter { !it.detailPath.isNullOrBlank() && it.type == 0 }
+                        if (dubs.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                "Audio / Dub",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YoTextMuted,
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                item {
+                                    MdSelectableChip(
+                                        label = "Original",
+                                        selected = selectedDub == null,
+                                        onClick = { selectedDub = null },
+                                    )
+                                }
+                                items(dubs) { dub ->
+                                    MdSelectableChip(
+                                        label = dub.lanName ?: dub.lanCode ?: "Dub",
+                                        selected = selectedDub?.detailPath == dub.detailPath,
+                                        onClick = { selectedDub = dub },
+                                    )
+                                }
+                            }
+                        }
+
+                        // ── Watch on Web ──
+                        Spacer(modifier = Modifier.height(14.dp))
+                        val webUrl = "https://netnaija.film/videoPlayPage/$detailPath?type=/movie/detail"
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(YoSurfaceVariant)
+                                .clickable {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)))
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                tint = YoPrimaryViolet,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Watch on the web",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = YoTextPrimary,
                             )
                         }
                     }
                 }
 
+                // ── Trailer with duration badge ──
                 if (!d.trailer?.url.isNullOrBlank()) {
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -283,8 +442,28 @@ fun MoviesDemoDetailScreen(
                                         imageVector = Icons.Default.PlayCircle,
                                         contentDescription = "Play trailer",
                                         tint = Color.White,
-                                        modifier = Modifier.align(Alignment.Center).size(56.dp)
+                                        modifier = Modifier.align(Alignment.Center).size(56.dp),
                                     )
+                                    val trailerDuration = d.trailer?.duration ?: 0
+                                    if (trailerDuration > 0) {
+                                        val mins = trailerDuration / 60
+                                        val secs = trailerDuration % 60
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(10.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.Black.copy(alpha = 0.75f))
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "%d:%02d".format(mins, secs),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -299,12 +478,12 @@ fun MoviesDemoDetailScreen(
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = YoTextPrimary,
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = 16.dp),
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 items(d.cast) { member -> MdCastChip(member) }
                             }
@@ -312,6 +491,7 @@ fun MoviesDemoDetailScreen(
                     }
                 }
 
+                // ── Per-season resolution chips ──
                 if (d.type == "tv") {
                     item {
                         val info = seasonsInfo
@@ -325,19 +505,46 @@ fun MoviesDemoDetailScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = YoTextMuted,
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = 16.dp),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 items((1..seasonCount).toList()) { s ->
                                     MdSelectableChip(
                                         label = "S$s",
                                         selected = s == season,
-                                        onClick = { season = s; episode = 1 }
+                                        onClick = { season = s; episode = 1 },
                                     )
+                                }
+                            }
+
+                            // Resolution chips for the selected season.
+                            val availableRes = currentSeasonData?.availableResolutions
+                                ?: currentSeasonData?.resolutions?.mapNotNull { it.resolution }?.distinct()?.sortedDescending()
+                            if (!availableRes.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    items(availableRes) { res ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(YoSurfaceVariant)
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "${res}P",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = YoPrimaryViolet,
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -347,20 +554,47 @@ fun MoviesDemoDetailScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = YoTextMuted,
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = 16.dp),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 items((1..episodeCount).toList()) { e ->
                                     MdSelectableChip(
                                         label = "$e",
                                         selected = e == episode,
-                                        onClick = { episode = e }
+                                        onClick = { episode = e },
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // ── Related rail ──
+                if (relatedItems.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "More Like This",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = YoTextPrimary,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            items(relatedItems) { subject ->
+                                MdPosterCard(
+                                    subject = subject,
+                                    onClick = { subject.detailPath?.let { onPlayClick(it, subject.title ?: "", null, null) } },
+                                    modifier = Modifier.width(120.dp),
+                                )
                             }
                         }
                     }
@@ -377,21 +611,25 @@ fun MoviesDemoDetailScreen(
                     .fillMaxWidth()
                     .background(YoBaseBackground)
                     .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Button(
                     onClick = {
                         val d = details!!
+                        val activePath = selectedDub?.detailPath ?: detailPath
                         onPlayClick(
-                            detailPath,
+                            activePath,
                             d.title ?: "Untitled",
                             if (d.type == "tv") season else null,
-                            if (d.type == "tv") episode else null
+                            if (d.type == "tv") episode else null,
                         )
                     },
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = YoPrimaryViolet, contentColor = YoBaseBackground)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YoPrimaryViolet,
+                        contentColor = YoBaseBackground,
+                    ),
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
@@ -401,7 +639,7 @@ fun MoviesDemoDetailScreen(
                 OutlinedButton(
                     onClick = { openDownloadSheet() },
                     modifier = Modifier.height(50.dp),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
                 ) {
                     Icon(Icons.Default.Download, contentDescription = "Download", tint = YoPrimaryViolet)
                 }
@@ -414,7 +652,10 @@ fun MoviesDemoDetailScreen(
                     Text("Choose quality", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = YoTextPrimary)
                     Spacer(modifier = Modifier.height(12.dp))
                     if (loadingQualities) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             ModernLoader()
                         }
                     } else if (downloadQualities.isEmpty()) {
@@ -432,28 +673,43 @@ fun MoviesDemoDetailScreen(
                                             title = d?.title ?: "video",
                                             resolution = q.resolution ?: 0,
                                             season = if (d?.type == "tv") season else null,
-                                            episode = if (d?.type == "tv") episode else null
+                                            episode = if (d?.type == "tv") episode else null,
                                         )
                                         val apiKey = repository.tokenManager.getApiKey()
                                         MoviesDemoDownloader.startDownload(
                                             context,
                                             moviesDemoDownloadUrl(url, filename),
                                             filename,
-                                            apiKey
+                                            apiKey,
                                         )
                                         Toast.makeText(context, "Download started", Toast.LENGTH_SHORT).show()
                                         showDownloadSheet = false
                                     }
                                     .padding(vertical = 12.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("${q.resolution ?: "?"}P", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YoTextPrimary)
-                                val sizeText = q.size_mb?.let { "%.0f MB".format(it) }
-                                if (sizeText != null) {
-                                    Text(sizeText, fontSize = 12.sp, color = YoTextMuted)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${q.resolution ?: "?"}P",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = YoTextPrimary,
+                                    )
+                                    val sub = listOfNotNull(
+                                        q.size_mb?.let { "%.0f MB".format(it) },
+                                        q.codec?.takeIf { it.isNotBlank() },
+                                    ).joinToString(" · ")
+                                    if (sub.isNotBlank()) {
+                                        Text(sub, fontSize = 11.sp, color = YoTextMuted)
+                                    }
                                 }
-                                Icon(Icons.Default.Download, contentDescription = null, tint = YoPrimaryViolet, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = YoPrimaryViolet,
+                                    modifier = Modifier.size(18.dp),
+                                )
                             }
                         }
                     }
@@ -467,7 +723,7 @@ fun MoviesDemoDetailScreen(
 private fun MdCastChip(member: MdCastMember) {
     Column(
         modifier = Modifier.width(72.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         SubcomposeAsyncImage(
             model = member.avatarUrl,
@@ -478,7 +734,7 @@ private fun MdCastChip(member: MdCastMember) {
                 .background(YoSurfaceVariant),
             contentScale = ContentScale.Crop,
             loading = { YoCinemaLogoPlaceholder() },
-            error = { YoCinemaLogoPlaceholder() }
+            error = { YoCinemaLogoPlaceholder() },
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
@@ -487,8 +743,8 @@ private fun MdCastChip(member: MdCastMember) {
             fontWeight = FontWeight.Bold,
             color = YoTextPrimary,
             maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         if (!member.character.isNullOrBlank()) {
             Text(
@@ -496,8 +752,8 @@ private fun MdCastChip(member: MdCastMember) {
                 fontSize = 10.sp,
                 color = YoTextMuted,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
     }
@@ -513,13 +769,13 @@ private fun MdSelectableChip(label: String, selected: Boolean, onClick: () -> Un
                 else Brush.linearGradient(listOf(YoSurfaceVariant, YoSurfaceVariant))
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Text(
             text = label,
             color = if (selected) YoBaseBackground else YoTextPrimary,
             fontWeight = FontWeight.Bold,
-            fontSize = 13.sp
+            fontSize = 13.sp,
         )
     }
 }
@@ -558,7 +814,7 @@ private fun InlineTrailerPlayer(trailerUrl: String, apiKey: String?) {
                     resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }
