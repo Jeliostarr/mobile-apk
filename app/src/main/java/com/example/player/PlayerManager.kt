@@ -11,6 +11,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -83,7 +84,7 @@ class PlayerManager(
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering
 
-    // ─── Quality + caption state (non-translated, sports) ───
+    // ─── Quality + caption state ───
 
     private val _qualities = MutableStateFlow<List<PlayerQuality>>(emptyList())
     val qualities: StateFlow<List<PlayerQuality>> = _qualities
@@ -96,6 +97,21 @@ class PlayerManager(
 
     private val _selectedCaptionLang = MutableStateFlow(CAPTIONS_OFF)
     val selectedCaptionLang: StateFlow<String> = _selectedCaptionLang
+
+    // ─── Subtitle delay + live cue stream ───
+    //
+    // The player renders cues itself via Player.Listener.onCues, so the
+    // PlayerView's own subtitle view must be disabled by the caller
+    // (UnifiedPlayerScreen sets `subtitleView = null`). We re-emit the
+    // cue text on a StateFlow, shifted forward by _subtitleDelayMs.
+    //
+    // Positive-only: onCues fires with whatever's happening at the
+    // current playback position, so we can delay but never pre-empt.
+    private val _subtitleDelayMs = MutableStateFlow(0L)
+    val subtitleDelayMs: StateFlow<Long> = _subtitleDelayMs
+
+    private val _activeCues = MutableStateFlow<List<String>>(emptyList())
+    val activeCues: StateFlow<List<String>> = _activeCues
 
     // ─── Playback bookkeeping ───
 
@@ -116,6 +132,7 @@ class PlayerManager(
     private var stallCheckJob: Job? = null
     private var posJob: Job? = null
     private var progressPingJob: Job? = null
+    private var pendingCueJob: Job? = null
 
     private var softRetries: Int = 0
     private var hardRetries: Int = 0
@@ -135,6 +152,38 @@ class PlayerManager(
                     softRetries = 0
                     hardRetries = 0
                     _durationMs.value = exoPlayer.duration.coerceAtLeast(0L)
+                }
+            }
+
+            /**
+             * Cue delivery for the custom subtitle overlay. Empty cue
+             * groups mean "nothing should be visible right now" — we
+             * clear immediately. Non-empty groups are buffered by the
+             * current user-set delay before becoming visible.
+             */
+            override fun onCues(cueGroup: CueGroup) {
+                val texts = cueGroup.cues.mapNotNull { cue ->
+                    cue.text?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                }
+
+                // Always cancel any pending display — a new cue group
+                // supersedes whatever was queued.
+                pendingCueJob?.cancel()
+                pendingCueJob = null
+
+                if (texts.isEmpty()) {
+                    _activeCues.value = emptyList()
+                    return
+                }
+
+                val delayMs = _subtitleDelayMs.value
+                if (delayMs <= 0L) {
+                    _activeCues.value = texts
+                } else {
+                    pendingCueJob = scope.launch {
+                        delay(delayMs)
+                        _activeCues.value = texts
+                    }
                 }
             }
 
@@ -302,6 +351,15 @@ class PlayerManager(
         applyCaptionSelection()
     }
 
+    /**
+     * User-controlled subtitle offset. Positive values push subtitles
+     * LATER (the common "subs are ahead of the audio" case). Negative
+     * values are clamped to 0 — see the class-level note on `onCues`.
+     */
+    fun setSubtitleDelay(ms: Long) {
+        _subtitleDelayMs.value = ms.coerceIn(0L, 15_000L)
+    }
+
     fun switchQuality(quality: PlayerQuality) {
         val currentPos = exoPlayer.currentPosition
         val wasPlaying = exoPlayer.isPlaying
@@ -396,13 +454,6 @@ class PlayerManager(
         return builder.build()
     }
 
-    /**
-     * True when the URL points at one of our own backends — translated
-     * (api.yocinema.dpdns.org) or movies-demo (movie-bo-api.vercel.app).
-     * Both endpoints require X-API-Key on every request, including the
-     * /api/stream proxy that the movies-demo backend uses for Enacdn
-     * content.
-     */
     private fun isOwnApiHost(url: String): Boolean =
         url.startsWith(com.example.data.model.BASE_URL) ||
         url.startsWith(com.example.data.model.MOVIES_DEMO_BASE_URL)
@@ -571,6 +622,8 @@ class PlayerManager(
 
     fun release() {
         stopPositionUpdates()
+        pendingCueJob?.cancel()
+        _activeCues.value = emptyList()
         mediaSession?.let { session ->
             com.example.player.PlaybackService.setActiveSession(null)
             session.release()
@@ -591,14 +644,12 @@ class PlayerManager(
 
 // ─── Top-level types (shared with UnifiedPlayerScreen) ───
 
-/** A selectable video quality for the current content. */
 data class PlayerQuality(
     val label: String,
     val url: String,
     val resolution: Int? = null,
 )
 
-/** A subtitle track. */
 data class PlayerCaption(
     val language: String?,
     val displayName: String?,
