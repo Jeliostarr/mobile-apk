@@ -204,15 +204,23 @@ class YocinemaRepository(context: Context) {
         }
     }
 
-    suspend fun getAccountMe(): AccountUser? = try {
-        val response = api.getAccountMe()
-        if (response.isSuccessful) response.body()?.actualUser else null
-    } catch (e: Exception) { null }
+    suspend fun getAccountMe(): AccountUser? {
+        return try {
+            val response = api.getAccountMe()
+            if (response.isSuccessful) response.body()?.actualUser else null
+        } catch (e: Exception) {
+            null
+        }
+    }
 
-    suspend fun checkAppVersion(): AppVersionResponse? = try {
-        val response = api.getAppVersion()
-        if (response.isSuccessful) response.body() else null
-    } catch (e: Exception) { null }
+    suspend fun checkAppVersion(): AppVersionResponse? {
+        return try {
+            val response = api.getAppVersion()
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     fun classifyAppUpdate(currentVersionCode: Int, response: AppVersionResponse): AppUpdateState {
         val latest = response.actualLatestVersionCode
@@ -257,15 +265,23 @@ class YocinemaRepository(context: Context) {
         accountCacheTimestamp = 0L
     }
 
-    suspend fun getKeys(): List<KeyInfo> = try {
-        val response = api.getKeys()
-        if (response.isSuccessful) response.body()?.actualKeys ?: emptyList() else emptyList()
-    } catch (e: Exception) { emptyList() }
+    suspend fun getKeys(): List<KeyInfo> {
+        return try {
+            val response = api.getKeys()
+            if (response.isSuccessful) response.body()?.actualKeys ?: emptyList() else emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
-    suspend fun getUsage(days: Int = 7): UsageResponse? = try {
-        val response = api.getUsage(days)
-        if (response.isSuccessful) response.body() else null
-    } catch (e: Exception) { null }
+    suspend fun getUsage(days: Int = 7): UsageResponse? {
+        return try {
+            val response = api.getUsage(days)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     fun switchActiveKey(newKey: String) {
         tokenManager.saveApiKey(newKey)
@@ -314,7 +330,9 @@ class YocinemaRepository(context: Context) {
             val response = api.getMovies(type, sort, genre, vj, country, year, search, limit, page)
             val movies = if (response.isSuccessful && response.body() != null) {
                 ResponseEnvelopeExtractor.extractMovieList(response.body()!!.string())
-            } else emptyList()
+            } else {
+                emptyList()
+            }
 
             if (movies.isNotEmpty()) {
                 memoryMovieCache[cacheKey] = movies
@@ -331,120 +349,181 @@ class YocinemaRepository(context: Context) {
                     val pubResponse = api.getPublicMovies(limit = limit, page = page)
                     if (pubResponse.isSuccessful && pubResponse.body() != null) {
                         ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
-                    } else loadCachedMoviesFallback()
-                } else emptyList()
+                    } else {
+                        loadCachedMoviesFallback()
+                    }
+                } else {
+                    emptyList()
+                }
             }
         } catch (e: Exception) {
             if (search.isNullOrBlank() && genre.isNullOrBlank() && vj.isNullOrBlank()) {
                 val pubResponse = try { api.getPublicMovies(limit = limit, page = page) } catch (ex: Exception) { null }
                 if (pubResponse?.isSuccessful == true && pubResponse.body() != null) {
                     ResponseEnvelopeExtractor.extractMovieList(pubResponse.body()!!.string())
-                } else loadCachedMoviesFallback()
-            } else emptyList()
+                } else {
+                    loadCachedMoviesFallback()
+                }
+            } else {
+                emptyList()
+            }
         }
     }
 
-    private suspend fun loadCachedMoviesFallback(): List<Movie> = try {
-        val cachedEntities = movieCacheDao.getAllCachedMovies()
-        val adapter = moshi.adapter(Movie::class.java)
-        cachedEntities.mapNotNull { entity -> adapter.fromJson(entity.jsonContent) }
-    } catch (e: Exception) { emptyList() }
+    private suspend fun loadCachedMoviesFallback(): List<Movie> {
+        return try {
+            val cachedEntities = movieCacheDao.getAllCachedMovies()
+            val adapter = moshi.adapter(Movie::class.java)
+            cachedEntities.mapNotNull { entity -> adapter.fromJson(entity.jsonContent) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
-    suspend fun getMovieDetail(movieId: String): Movie? = try {
-        val response = api.getMovieDetail(movieId)
-        if (response.isSuccessful && response.body() != null) {
-            val jsonStr = response.body()!!.string()
-            val movie = ResponseEnvelopeExtractor.extractSingleMovie(jsonStr)
-            if (movie != null && movie.id.isNotBlank()) {
-                movieCacheDao.cacheMovie(
-                    MovieCacheEntity(movieId = movie.id, jsonContent = moshi.adapter(Movie::class.java).toJson(movie))
-                )
+    suspend fun getMovieDetail(movieId: String): Movie? {
+        return try {
+            val response = api.getMovieDetail(movieId)
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val movie = ResponseEnvelopeExtractor.extractSingleMovie(jsonStr)
+                if (movie != null && movie.id.isNotBlank()) {
+                    movieCacheDao.cacheMovie(
+                        MovieCacheEntity(movieId = movie.id, jsonContent = moshi.adapter(Movie::class.java).toJson(movie))
+                    )
+                }
+                movie ?: getCachedMovie(movieId)
+            } else {
+                getCachedMovie(movieId)
             }
-            movie ?: getCachedMovie(movieId)
-        } else getCachedMovie(movieId)
-    } catch (e: Exception) { getCachedMovie(movieId) }
+        } catch (e: Exception) {
+            getCachedMovie(movieId)
+        }
+    }
 
     suspend fun getCachedMovieDetail(movieId: String): Movie? = getCachedMovie(movieId)
 
-    private suspend fun getCachedMovie(movieId: String): Movie? = try {
-        val entity = movieCacheDao.getCachedMovie(movieId) ?: return null
-        moshi.adapter(Movie::class.java).fromJson(entity.jsonContent)
-    } catch (e: Exception) { null }
+    private suspend fun getCachedMovie(movieId: String): Movie? {
+        return try {
+            val entity = movieCacheDao.getCachedMovie(movieId) ?: return null
+            moshi.adapter(Movie::class.java).fromJson(entity.jsonContent)
+        } catch (e: Exception) {
+            null
+        }
+    }
 
-    suspend fun getMovieEpisodes(movieId: String): List<Episode> = try {
-        val response = api.getMovieEpisodes(movieId)
-        if (response.isSuccessful && response.body() != null) {
-            val jsonStr = response.body()!!.string()
-            val genericAdapter = moshi.adapter(Any::class.java)
-            val jsonObj = genericAdapter.fromJson(jsonStr)
-            if (jsonObj is Map<*, *>) {
-                val epData = jsonObj["episodes"] ?: jsonObj["data"]
-                if (epData is List<*>) {
-                    val epJson = genericAdapter.toJson(epData)
+    suspend fun getMovieEpisodes(movieId: String): List<Episode> {
+        return try {
+            val response = api.getMovieEpisodes(movieId)
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val genericAdapter = moshi.adapter(Any::class.java)
+                val jsonObj = genericAdapter.fromJson(jsonStr)
+                if (jsonObj is Map<*, *>) {
+                    val epData = jsonObj["episodes"] ?: jsonObj["data"]
+                    if (epData is List<*>) {
+                        val epJson = genericAdapter.toJson(epData)
+                        val epAdapter = moshi.adapter<List<Episode>>(
+                            com.squareup.moshi.Types.newParameterizedType(List::class.java, Episode::class.java)
+                        )
+                        epAdapter.fromJson(epJson) ?: emptyList()
+                    } else {
+                        emptyList()
+                    }
+                } else if (jsonObj is List<*>) {
                     val epAdapter = moshi.adapter<List<Episode>>(
                         com.squareup.moshi.Types.newParameterizedType(List::class.java, Episode::class.java)
                     )
-                    return epAdapter.fromJson(epJson) ?: emptyList()
-                }
-            } else if (jsonObj is List<*>) {
-                val epAdapter = moshi.adapter<List<Episode>>(
-                    com.squareup.moshi.Types.newParameterizedType(List::class.java, Episode::class.java)
-                )
-                return epAdapter.fromJson(jsonStr) ?: emptyList()
-            }
-        }
-        emptyList()
-    } catch (e: Exception) { emptyList() }
-
-    suspend fun getRelatedMovies(movieId: String): List<Movie> = try {
-        val response = api.getRelatedMovies(movieId)
-        if (response.isSuccessful && response.body() != null) {
-            ResponseEnvelopeExtractor.extractMovieList(response.body()!!.string())
-        } else emptyList()
-    } catch (e: Exception) { emptyList() }
-
-    suspend fun getFacets(): FacetsResponse = try {
-        val response = api.getFacets()
-        if (response.isSuccessful && response.body() != null) {
-            val jsonStr = response.body()!!.string()
-            val genericAdapter = moshi.adapter(Any::class.java)
-            val jsonObj = genericAdapter.fromJson(jsonStr)
-            if (jsonObj is Map<*, *>) {
-                val dataObj = jsonObj["data"]
-                if (dataObj is Map<*, *>) {
-                    val dataJson = genericAdapter.toJson(dataObj)
-                    moshi.adapter(FacetsResponse::class.java).fromJson(dataJson) ?: FacetsResponse()
-                } else if (jsonObj.containsKey("genres") || jsonObj.containsKey("vjs")) {
-                    moshi.adapter(FacetsResponse::class.java).fromJson(jsonStr) ?: FacetsResponse()
-                } else FacetsResponse()
-            } else FacetsResponse()
-        } else FacetsResponse()
-    } catch (e: Exception) { FacetsResponse() }
-
-    suspend fun getCastDetail(castId: String): CastDetail? = try {
-        val response = api.getCastDetail(castId)
-        if (response.isSuccessful && response.body() != null) {
-            val jsonStr = response.body()!!.string()
-            val genericAdapter = moshi.adapter(Any::class.java)
-            val jsonObj = genericAdapter.fromJson(jsonStr)
-            if (jsonObj is Map<*, *>) {
-                if (jsonObj.containsKey("name") || jsonObj.containsKey("filmography")) {
-                    moshi.adapter(CastDetail::class.java).fromJson(jsonStr)
+                    epAdapter.fromJson(jsonStr) ?: emptyList()
                 } else {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getRelatedMovies(movieId: String): List<Movie> {
+        return try {
+            val response = api.getRelatedMovies(movieId)
+            if (response.isSuccessful && response.body() != null) {
+                ResponseEnvelopeExtractor.extractMovieList(response.body()!!.string())
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getFacets(): FacetsResponse {
+        return try {
+            val response = api.getFacets()
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val genericAdapter = moshi.adapter(Any::class.java)
+                val jsonObj = genericAdapter.fromJson(jsonStr)
+                if (jsonObj is Map<*, *>) {
                     val dataObj = jsonObj["data"]
                     if (dataObj is Map<*, *>) {
-                        moshi.adapter(CastDetail::class.java).fromJson(genericAdapter.toJson(dataObj))
-                    } else null
+                        val dataJson = genericAdapter.toJson(dataObj)
+                        moshi.adapter(FacetsResponse::class.java).fromJson(dataJson) ?: FacetsResponse()
+                    } else if (jsonObj.containsKey("genres") || jsonObj.containsKey("vjs")) {
+                        moshi.adapter(FacetsResponse::class.java).fromJson(jsonStr) ?: FacetsResponse()
+                    } else {
+                        FacetsResponse()
+                    }
+                } else {
+                    FacetsResponse()
                 }
-            } else null
-        } else null
-    } catch (e: Exception) { null }
+            } else {
+                FacetsResponse()
+            }
+        } catch (e: Exception) {
+            FacetsResponse()
+        }
+    }
 
-    suspend fun reportMovie(movieId: String, reason: String): Result<Unit> = try {
-        val response = api.reportMovie(movieId, mapOf("reason" to reason))
-        if (response.isSuccessful) Result.success(Unit)
-        else Result.failure(Exception("Failed to send report"))
-    } catch (e: Exception) { Result.failure(e) }
+    suspend fun getCastDetail(castId: String): CastDetail? {
+        return try {
+            val response = api.getCastDetail(castId)
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val genericAdapter = moshi.adapter(Any::class.java)
+                val jsonObj = genericAdapter.fromJson(jsonStr)
+                if (jsonObj is Map<*, *>) {
+                    if (jsonObj.containsKey("name") || jsonObj.containsKey("filmography")) {
+                        moshi.adapter(CastDetail::class.java).fromJson(jsonStr)
+                    } else {
+                        val dataObj = jsonObj["data"]
+                        if (dataObj is Map<*, *>) {
+                            moshi.adapter(CastDetail::class.java).fromJson(genericAdapter.toJson(dataObj))
+                        } else {
+                            null
+                        }
+                    }
+                } else {
+                    null
+                }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun reportMovie(movieId: String, reason: String): Result<Unit> {
+        return try {
+            val response = api.reportMovie(movieId, mapOf("reason" to reason))
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to send report"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     suspend fun requestCastMovie(
         castId: String,
@@ -452,17 +531,21 @@ class YocinemaRepository(context: Context) {
         mediaType: String,
         title: String,
         poster: String? = null
-    ): Result<Unit> = try {
-        val body = mapOf(
-            "tmdbId" to tmdbId,
-            "mediaType" to mediaType,
-            "title" to title,
-            "poster" to (poster ?: "")
-        )
-        val response = api.requestCastMovie(castId, body)
-        if (response.isSuccessful) Result.success(Unit)
-        else Result.failure(Exception("Request failed"))
-    } catch (e: Exception) { Result.failure(e) }
+    ): Result<Unit> {
+        return try {
+            val body = mapOf(
+                "tmdbId" to tmdbId,
+                "mediaType" to mediaType,
+                "title" to title,
+                "poster" to (poster ?: "")
+            )
+            val response = api.requestCastMovie(castId, body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Request failed"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     suspend fun getPlayUrl(movie: Movie, seasonNum: Int? = null, epNum: Int? = null, type: String = "translated"): String {
         val rawUrl = if (movie.isSeries && seasonNum != null && epNum != null) {
@@ -538,7 +621,9 @@ class YocinemaRepository(context: Context) {
                     updatedAt = System.currentTimeMillis()
                 )
             )
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // ─── Downloads ───
@@ -550,8 +635,12 @@ class YocinemaRepository(context: Context) {
         downloadDao.deleteDownload(downloadId)
     }
 
-    suspend fun reportViewProgress(movieId: String, viewerId: String, watchedSeconds: Long): Boolean = try {
-        val response = api.postViewProgress(movieId, com.example.data.model.ViewProgressRequest(viewerId, watchedSeconds))
-        response.isSuccessful
-    } catch (e: Exception) { false }
+    suspend fun reportViewProgress(movieId: String, viewerId: String, watchedSeconds: Long): Boolean {
+        return try {
+            val response = api.postViewProgress(movieId, com.example.data.model.ViewProgressRequest(viewerId, watchedSeconds))
+            response.isSuccessful
+        } catch (e: Exception) {
+            false
+        }
+    }
 }
