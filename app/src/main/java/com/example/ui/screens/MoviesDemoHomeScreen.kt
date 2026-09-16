@@ -74,18 +74,18 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
 /**
- * Movies-demo home — standalone version of the translated HomeScreen.
+ * Movies-demo home — standalone mirror of the translated HomeScreen.
  *
- * Layout: top bar → search bar → hero carousel → many rails.
+ * Layout: top bar → search bar → hero carousel → rails.
  *
- * Rails are built from TWO sources so the screen is never sparse:
- *   1. Popular / Latest base rails (always fetched)
- *   2. One rail per genre returned by /api/browse?filters=true —
- *      Action, Animation, Comedy, Drama, etc. — fetched in parallel
- *      batches of 4 to keep request concurrency sane.
+ * Rails:
+ *   1. "Trending Now"  ← /api/trending (real popularity signal)
+ *   2. One rail per genre ← /api/browse?genre=X&sort=Hottest,
+ *      fetched in parallel batches of 4
  *
+ * No "Latest Releases" rail — trending replaces it.
  * No chip row, no CTA buttons on the hero. Genre browsing happens by
- * scrolling, exactly like the translated home.
+ * scrolling.
  */
 @Composable
 fun MoviesDemoHomeScreen(
@@ -107,40 +107,30 @@ fun MoviesDemoHomeScreen(
         loadError = null
         try {
             coroutineScope {
-                // Genres drive the rail count — the more genres the
-                // backend returns, the more rails we render.
+                // Genres drive the rail count.
                 val filtersBody = repository.moviesDemoRepository.browseFilters()
                 val genres = filtersBody?.genres.orEmpty()
                     .map { it.trim() }
                     .filter { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
                     .distinct()
 
-                // Base rails first — these anchor the top of the screen.
-                val popularDeferred = async {
-                    repository.moviesDemoRepository.browse(
-                        country = countryFilter, sort = "Hottest", limit = 30
-                    )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
+                // Rail #1: trending. This is the popularity signal we
+                // also feed into the hero carousel below.
+                val trendingDeferred = async {
+                    repository.moviesDemoRepository.trending(limit = 30)
+                        ?.effectiveItems
+                        ?.cleanedForFeed(countryFilter)
+                        .orEmpty()
                 }
-                val latestDeferred = async {
-                    repository.moviesDemoRepository.browse(
-                        country = countryFilter, sort = "Latest", limit = 30
-                    )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
-                }
-
-                val popular = popularDeferred.await()
-                val latest = latestDeferred.await()
+                val trending = trendingDeferred.await()
 
                 val builtRails = mutableListOf<MdHomeRail>()
-                if (popular.isNotEmpty()) {
-                    builtRails.add(MdHomeRail("Popular Now", null, "Hottest", popular))
-                }
-                if (latest.isNotEmpty()) {
-                    builtRails.add(MdHomeRail("Latest Releases", null, "Latest", latest))
+                if (trending.isNotEmpty()) {
+                    builtRails.add(MdHomeRail("Trending Now", null, "Hottest", trending))
                 }
 
-                // Genre rails — fetch top 20 genres in parallel batches
-                // of 4. Batching keeps concurrency tame while still
-                // cutting total wall time to a few seconds.
+                // Genre rails — same popularity ordering, fetched in
+                // parallel batches of 4 to keep concurrency tame.
                 val topGenres = genres.take(20)
                 topGenres.chunked(4).forEach { chunk ->
                     val chunkResults = coroutineScope {
@@ -149,6 +139,7 @@ fun MoviesDemoHomeScreen(
                                 val body = repository.moviesDemoRepository.browse(
                                     country = countryFilter,
                                     genre = genre,
+                                    sort = "Hottest",   // popularity, not Latest
                                     limit = 30,
                                 )
                                 genre to (body?.effectiveItems ?: emptyList())
@@ -158,7 +149,7 @@ fun MoviesDemoHomeScreen(
                     }
                     chunkResults.forEach { (genre, items) ->
                         if (items.isNotEmpty()) {
-                            builtRails.add(MdHomeRail(genre, genre, null, items))
+                            builtRails.add(MdHomeRail(genre, genre, "Hottest", items))
                         }
                     }
                 }
@@ -219,7 +210,8 @@ fun MoviesDemoHomeScreen(
 
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    // Hero — first rail's items, shown big above the fold.
+                    // Hero — first rail's items (i.e. trending). Same
+                    // items appear again as the top rail right below.
                     val heroItems = rails.firstOrNull()?.items.orEmpty().take(6)
                     if (heroItems.isNotEmpty()) {
                         item {
