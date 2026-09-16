@@ -18,11 +18,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -35,36 +41,51 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.MdSubject
 import com.example.data.model.cleanedForFeed
 import com.example.repository.MdHomeRail
 import com.example.repository.YocinemaRepository
 import com.example.ui.components.MdPosterCard
 import com.example.ui.components.MovieRailSkeleton
+import com.example.ui.components.YoCinemaLogoPlaceholder
 import com.example.ui.theme.YoBaseBackground
 import com.example.ui.theme.YoBorder
 import com.example.ui.theme.YoGlowGradient
 import com.example.ui.theme.YoPrimaryViolet
+import com.example.ui.theme.YoRatingGold
+import com.example.ui.theme.YoSurface
 import com.example.ui.theme.YoSurfaceVariant
 import com.example.ui.theme.YoTextMuted
 import com.example.ui.theme.YoTextPrimary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 
 /**
- * Movies-demo home.
+ * Movies-demo home — standalone version of the translated HomeScreen.
  *
- * Data path: one call to /api/home (which proxies the upstream app's
- * home feed), which already gives us ordered sections. Everything the
- * backend emits becomes a rail — no per-genre fan-out on the client.
+ * Layout: top bar → search bar → hero carousel → many rails.
  *
- * Header layout is the MovieBox pattern: sticky top bar with back /
- * title / search, then a horizontally-scrolling chip row for jumping
- * into a genre, then rails.
+ * Rails are built from TWO sources so the screen is never sparse:
+ *   1. Popular / Latest base rails (always fetched)
+ *   2. One rail per genre returned by /api/browse?filters=true —
+ *      Action, Animation, Comedy, Drama, etc. — fetched in parallel
+ *      batches of 4 to keep request concurrency sane.
+ *
+ * No chip row, no CTA buttons on the hero. Genre browsing happens by
+ * scrolling, exactly like the translated home.
  */
 @Composable
 fun MoviesDemoHomeScreen(
@@ -77,53 +98,80 @@ fun MoviesDemoHomeScreen(
     onViewAllClick: (railTitle: String, genre: String?, sort: String?) -> Unit,
 ) {
     var rails by remember { mutableStateOf(repository.cachedMdHomeRails) }
-    var filters by remember { mutableStateOf(repository.cachedMdHomeFilters) }
     var isLoading by remember { mutableStateOf(rails.isEmpty()) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var reloadTick by remember { mutableStateOf(0) }
 
-    LaunchedEffect(countryFilter) {
+    LaunchedEffect(countryFilter, reloadTick) {
         if (rails.isEmpty()) isLoading = true
+        loadError = null
         try {
-            // Prefer the /api/home feed — one request, ordered sections.
-            val home = repository.moviesDemoRepository.home()
+            coroutineScope {
+                // Genres drive the rail count — the more genres the
+                // backend returns, the more rails we render.
+                val filtersBody = repository.moviesDemoRepository.browseFilters()
+                val genres = filtersBody?.genres.orEmpty()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
+                    .distinct()
 
-            val builtRails = mutableListOf<MdHomeRail>()
-            if (home != null) {
-                home.sections.forEach { section ->
-                    val items = section.items
-                        .cleanedForFeed(countryFilter)
-                        .filter { !it.detailPath.isNullOrBlank() }
-                    if (items.isNotEmpty()) {
-                        // Sections come pre-ordered from the backend — pass
-                        // genre=null / sort=null so "View All" simply opens
-                        // a browse screen for that title's items.
-                        builtRails.add(MdHomeRail(section.title, null, null, items))
+                // Base rails first — these anchor the top of the screen.
+                val popularDeferred = async {
+                    repository.moviesDemoRepository.browse(
+                        country = countryFilter, sort = "Hottest", limit = 30
+                    )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
+                }
+                val latestDeferred = async {
+                    repository.moviesDemoRepository.browse(
+                        country = countryFilter, sort = "Latest", limit = 30
+                    )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
+                }
+
+                val popular = popularDeferred.await()
+                val latest = latestDeferred.await()
+
+                val builtRails = mutableListOf<MdHomeRail>()
+                if (popular.isNotEmpty()) {
+                    builtRails.add(MdHomeRail("Popular Now", null, "Hottest", popular))
+                }
+                if (latest.isNotEmpty()) {
+                    builtRails.add(MdHomeRail("Latest Releases", null, "Latest", latest))
+                }
+
+                // Genre rails — fetch top 20 genres in parallel batches
+                // of 4. Batching keeps concurrency tame while still
+                // cutting total wall time to a few seconds.
+                val topGenres = genres.take(20)
+                topGenres.chunked(4).forEach { chunk ->
+                    val chunkResults = coroutineScope {
+                        chunk.map { genre ->
+                            async {
+                                val body = repository.moviesDemoRepository.browse(
+                                    country = countryFilter,
+                                    genre = genre,
+                                    limit = 30,
+                                )
+                                genre to (body?.effectiveItems ?: emptyList())
+                                    .cleanedForFeed(countryFilter)
+                            }
+                        }.awaitAll()
+                    }
+                    chunkResults.forEach { (genre, items) ->
+                        if (items.isNotEmpty()) {
+                            builtRails.add(MdHomeRail(genre, genre, null, items))
+                        }
                     }
                 }
+
+                rails = builtRails
+                if (builtRails.isNotEmpty()) {
+                    repository.cachedMdHomeRails = builtRails
+                    repository.cachedMdHomeFilters = filtersBody
+                    repository.markMdHomeCacheFresh()
+                }
             }
-
-            // Fallback: if /api/home came back empty (network hiccup,
-            // backend not deployed yet) keep the old behaviour so the
-            // screen is never blank.
-            if (builtRails.isEmpty()) {
-                val popular = repository.moviesDemoRepository.browse(
-                    country = countryFilter, sort = "Hottest", limit = 40
-                )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
-                val latest = repository.moviesDemoRepository.browse(
-                    country = countryFilter, sort = "Latest", limit = 40
-                )?.effectiveItems?.cleanedForFeed(countryFilter).orEmpty()
-                if (popular.isNotEmpty()) builtRails.add(MdHomeRail("Popular Now", null, "Hottest", popular))
-                if (latest.isNotEmpty())  builtRails.add(MdHomeRail("Latest Releases", null, "Latest", latest))
-            }
-
-            val filtersBody = repository.moviesDemoRepository.browseFilters()
-
-            rails = builtRails
-            filters = filtersBody
-            repository.cachedMdHomeRails = builtRails
-            repository.cachedMdHomeFilters = filtersBody
-            repository.markMdHomeCacheFresh()
         } catch (e: Exception) {
-            e.printStackTrace()
+            loadError = e.message ?: "Network error"
         } finally {
             isLoading = false
         }
@@ -140,15 +188,9 @@ fun MoviesDemoHomeScreen(
             onSearchClick = onSearchClick,
         )
 
-        MdCategoryChips(
-            genres = filters?.genres.orEmpty(),
-            onCategoryClick = { genre ->
-                if (genre == null) onViewAllClick("All Titles", null, "Hottest")
-                else               onViewAllClick(genre, genre, null)
-            },
-        )
+        MdSearchBar(onClick = onSearchClick)
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         when {
             isLoading && rails.isEmpty() -> {
@@ -161,14 +203,34 @@ fun MoviesDemoHomeScreen(
                 }
             }
 
+            loadError != null && rails.isEmpty() -> {
+                MdErrorState(
+                    message = loadError!!,
+                    onRetry = { reloadTick++ },
+                )
+            }
+
             rails.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nothing here yet", color = YoTextMuted, fontSize = 14.sp)
-                }
+                MdErrorState(
+                    message = "No content available right now.",
+                    onRetry = { reloadTick++ },
+                )
             }
 
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    // Hero — first rail's items, shown big above the fold.
+                    val heroItems = rails.firstOrNull()?.items.orEmpty().take(6)
+                    if (heroItems.isNotEmpty()) {
+                        item {
+                            MdHeroCarousel(
+                                items = heroItems,
+                                onItemClick = onItemClick,
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(22.dp)) }
+                    }
+
                     items(rails) { rail ->
                         MdRailSection(
                             rail = rail,
@@ -179,6 +241,7 @@ fun MoviesDemoHomeScreen(
                         )
                         Spacer(modifier = Modifier.height(22.dp))
                     }
+
                     item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
             }
@@ -199,7 +262,7 @@ private fun MdTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBackClick) {
@@ -229,67 +292,223 @@ private fun MdTopBar(
 }
 
 @Composable
-private fun MdCategoryChips(
-    genres: List<String>,
-    onCategoryClick: (String?) -> Unit,
+private fun MdSearchBar(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(4.dp, RoundedCornerShape(20.dp), clip = false)
+            .clip(RoundedCornerShape(20.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = YoPrimaryViolet,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Search movies, series, genres…",
+                fontSize = 14.sp,
+                color = YoTextMuted,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Hero carousel — image + info only, no CTA buttons
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun MdHeroCarousel(
+    items: List<MdSubject>,
+    onItemClick: (String) -> Unit,
 ) {
-    val categories = remember(genres) {
-        buildList {
-            add("For You")
-            genres.forEach { g -> if (g.isNotBlank()) add(g) }
+    if (items.isEmpty()) return
+
+    val pagerState = rememberPagerState(pageCount = { items.size })
+
+    LaunchedEffect(items) {
+        if (items.size > 1) {
+            while (true) {
+                delay(4500)
+                val next = (pagerState.currentPage + 1) % items.size
+                pagerState.animateScrollToPage(next)
+            }
         }
     }
 
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(bottom = 4.dp),
-    ) {
-        items(categories) { cat ->
-            val isPrimary = cat == "For You"
-            MdCategoryChip(
-                label = cat,
-                isPrimary = isPrimary,
-                onClick = {
-                    if (cat == "For You") onCategoryClick(null)
-                    else                 onCategoryClick(cat)
-                },
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            pageSpacing = 12.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(320.dp)
+        ) { page ->
+            val item = items[page]
+            MdHeroCard(
+                item = item,
+                onClick = { item.detailPath?.let(onItemClick) },
             )
+        }
+
+        if (items.size > 1) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(items.size) { index ->
+                    val isSelected = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .padding(2.dp)
+                            .size(if (isSelected) 9.dp else 7.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = if (isSelected) {
+                                    Brush.linearGradient(YoGlowGradient)
+                                } else {
+                                    SolidColor(YoBorder)
+                                }
+                            )
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun MdCategoryChip(
-    label: String,
-    isPrimary: Boolean,
+private fun MdHeroCard(
+    item: MdSubject,
     onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (isPrimary) YoPrimaryViolet else YoSurfaceVariant)
-            .border(
-                width = 1.dp,
-                color = if (isPrimary) Color.Transparent else YoBorder,
-                shape = RoundedCornerShape(50),
-            )
+            .fillMaxSize()
+            .shadow(10.dp, RoundedCornerShape(22.dp), clip = false)
+            .clip(RoundedCornerShape(22.dp))
+            .background(YoSurface)
+            .border(1.dp, YoBorder, RoundedCornerShape(22.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isPrimary) YoBaseBackground else YoTextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        SubcomposeAsyncImage(
+            model = item.cover,
+            contentDescription = item.title,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            loading = { YoCinemaLogoPlaceholder() },
+            error = { YoCinemaLogoPlaceholder() }
         )
+
+        // Gradient so title/meta stay legible over any poster.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.92f),
+                        )
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Bottom
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val rating = item.effectiveRating
+                if (!rating.isNullOrBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = YoRatingGold,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = rating,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
+                }
+
+                val meta = listOfNotNull(
+                    item.primaryGenre ?: item.effectiveCountry,
+                    item.formattedDuration,
+                ).joinToString(" • ")
+                if (meta.isNotBlank()) {
+                    Text(
+                        text = meta,
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = item.title ?: "",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (!item.description.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = item.description,
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp,
+                )
+            }
+        }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Rail
+// Rails
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
@@ -343,6 +562,53 @@ private fun MdRailSection(
                     onClick = { subject.detailPath?.let(onItemClick) },
                     modifier = Modifier.width(120.dp),
                 )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Error state
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun MdErrorState(message: String, onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp),
+        ) {
+            Text(
+                text = "Couldn't load content",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = YoTextPrimary,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = message,
+                fontSize = 13.sp,
+                color = YoTextMuted,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = YoPrimaryViolet,
+                    contentColor = YoBaseBackground,
+                ),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Retry", fontWeight = FontWeight.Bold)
             }
         }
     }
