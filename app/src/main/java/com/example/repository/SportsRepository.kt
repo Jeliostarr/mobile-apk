@@ -21,6 +21,16 @@ class SportsRepository(
     private val cache: ApiCache = ApiCache(),
 ) {
 
+    /**
+     * Result of a single page fetch. `items` is the current page;
+     * `hasMore`/`nextCursor` tell the caller whether to loop.
+     */
+    data class LivePage(
+        val items: List<Match>,
+        val hasMore: Boolean,
+        val nextCursor: String?,
+    )
+
     suspend fun getLeagues(forceRefresh: Boolean = false): List<SportsLeagueDto> =
         cache.get("sports.leagues", 3600, forceRefresh) {
             runCatching {
@@ -41,6 +51,55 @@ class SportsRepository(
                 else emptyList()
             }.getOrDefault(emptyList())
         }
+
+    /**
+     * Single-page fetch that preserves pagination metadata. Does NOT go
+     * through the 20s cache — paging loops need fresh cursors and mixing
+     * cached and fresh pages produces confusing duplicates. Callers that
+     * want caching should use getLive().
+     */
+    suspend fun getLivePage(
+        limit: Int = 50,
+        cursor: String? = null,
+        leagueId: String? = null,
+    ): LivePage = runCatching {
+        val res = api.getLive(limit = limit, cursor = cursor, leagueId = leagueId)
+        if (!res.isSuccessful) return@runCatching LivePage(emptyList(), false, null)
+        val body = res.body() ?: return@runCatching LivePage(emptyList(), false, null)
+        LivePage(
+            items = body.items.map { it.toDomain() },
+            hasMore = body.hasMore,
+            nextCursor = body.nextCursor,
+        )
+    }.getOrDefault(LivePage(emptyList(), false, null))
+
+    /**
+     * Fetches every live-match page up to a hard cap. Use when the UI
+     * wants the complete live list rather than the first page.
+     *
+     * Safety: caps at `maxPages` iterations so a server bug that keeps
+     * returning the same cursor can't loop forever.
+     */
+    suspend fun getAllLive(
+        leagueId: String? = null,
+        pageLimit: Int = 50,
+        maxPages: Int = 20,
+    ): List<Match> {
+        val all = mutableListOf<Match>()
+        val seen = HashSet<String>()
+        var cursor: String? = null
+        var pages = 0
+        while (pages < maxPages) {
+            val page = getLivePage(limit = pageLimit, cursor = cursor, leagueId = leagueId)
+            for (m in page.items) {
+                if (seen.add(m.id)) all += m
+            }
+            if (!page.hasMore || page.nextCursor.isNullOrBlank()) break
+            cursor = page.nextCursor
+            pages++
+        }
+        return all
+    }
 
     suspend fun getSchedule(
         limit: Int = 30,
