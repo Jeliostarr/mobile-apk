@@ -542,11 +542,16 @@ class PlayerManager(
                         .setHttpMethod(DataSpec.HTTP_METHOD_HEAD)
                         .build()
                     dataSource.open(spec)
-                    val contentType = dataSource.responseHeaders.entries
-                        .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
-                        ?.value
+                    val headers: Map<String, List<String>> = dataSource.responseHeaders
+                    var contentType: String? = null
+                    for ((k, v) in headers) {
+                        if (k.equals("Content-Type", ignoreCase = true) && v.isNotEmpty()) {
+                            contentType = v[0]
+                            break
+                        }
+                    }
                     if (contentType != null) {
-                        val lower = contentType.lowercase()
+                        val lower: String = contentType.lowercase()
                         return@withContext lower.contains("mpegurl") ||
                             lower.contains("m3u8")
                     }
