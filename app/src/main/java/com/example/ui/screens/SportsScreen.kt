@@ -88,8 +88,12 @@ fun SportsScreen(
     LaunchedEffect(selectedLeagueId, refreshTick) {
         isLoading = true
         coroutineScope {
-            val liveDeferred = async { sportsRepository.getLive(limit = 30, leagueId = selectedLeagueId) }
-            val schedDeferred = async { sportsRepository.getSchedule(limit = 40, leagueId = selectedLeagueId) }
+            // getAllLive walks every page until hasMore is false, so the
+            // Live tab shows the full live list rather than the first 20.
+            val liveDeferred = async { sportsRepository.getAllLive(leagueId = selectedLeagueId) }
+            val schedDeferred = async {
+                sportsRepository.getSchedule(limit = 40, leagueId = selectedLeagueId)
+            }
             liveMatches = liveDeferred.await()
             scheduleMatches = schedDeferred.await()
         }
@@ -290,7 +294,6 @@ private fun ScheduleList(matches: List<Match>, onMatchClick: (String) -> Unit) {
         )
         return
     }
-    // Group by date for sticky-feeling headers.
     val grouped = matches.groupBy { m ->
         val ms = m.startTime?.toEpochMilli()
         if (ms == null) "Unknown" else SportsTimeUtils.formatDay(m.startTime.toString())

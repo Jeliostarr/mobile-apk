@@ -132,6 +132,7 @@ data class UnifiedPlayerSpec(
     val currentSeason: Int? = null,
     val currentEpisode: Int? = null,
     val onEpisodeSelected: ((PlayerEpisode) -> Unit)? = null,
+    val isSportsLive: Boolean = false,
 )
 
 @OptIn(UnstableApi::class)
@@ -193,7 +194,6 @@ fun UnifiedPlayerScreen(
     val selectedQuality by playerManager.selectedQuality.collectAsState()
     val selectedCaptionLang by playerManager.selectedCaptionLang.collectAsState()
 
-    // Subtitle-related state: user-set delay and current cue text.
     val subtitleDelayMs by playerManager.subtitleDelayMs.collectAsState()
     val activeCues by playerManager.activeCues.collectAsState()
 
@@ -252,6 +252,7 @@ fun UnifiedPlayerScreen(
                 initialPositionMs = 0L,
                 title = spec.title,
                 posterUrl = spec.posterUrl,
+                isSportsLive = spec.isSportsLive,
             )
         } catch (e: Throwable) {
             Log.e(TAG, "load failed", e)
@@ -266,7 +267,6 @@ fun UnifiedPlayerScreen(
         }
     }
 
-    // Subtitle overlay bottom padding — smooth shift as controls show/hide.
     val subtitleBottomPadding by animateDpAsState(
         targetValue = if (isControlsVisible) 130.dp else 60.dp,
         label = "subtitleBottomPadding",
@@ -277,7 +277,7 @@ fun UnifiedPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-                if (loadError == null) {
+        if (loadError == null) {
             AndroidView(
                 factory = { ctx ->
                     try {
@@ -285,14 +285,6 @@ fun UnifiedPlayerScreen(
                             player = playerManager.exoPlayer
                             useController = false
                             this.resizeMode = resizeMode
-                            // Keep PlayerView's own subtitle renderer
-                            // invisible. The Media3 API here only exposes
-                            // a getter for subtitleView (no setter), so
-                            // we can't null it — alpha = 0 sticks
-                            // regardless of the visibility flips
-                            // PlayerView does internally when cues
-                            // arrive. We render cues ourselves below so
-                            // the user-set delay offset applies.
                             subtitleView?.let { it.alpha = 0f }
                         }
                     } catch (e: Throwable) {
@@ -305,9 +297,6 @@ fun UnifiedPlayerScreen(
                 update = { view ->
                     if (view is PlayerView) {
                         view.resizeMode = resizeMode
-                        // Re-assert on every update pass — cheap, and
-                        // protects against PlayerView resetting alpha
-                        // between frames.
                         view.subtitleView?.let { it.alpha = 0f }
                     }
                 },
@@ -315,7 +304,6 @@ fun UnifiedPlayerScreen(
             )
         }
 
-        // ─── Gesture zones (unchanged) ───
         if (loadError == null) {
             fun revertFastForwardIfNeeded() {
                 if (isFastForwarding) {
@@ -477,10 +465,6 @@ fun UnifiedPlayerScreen(
             }
         }
 
-        // ─── Custom subtitle overlay ───
-        // Rendered whenever ExoPlayer has cues for the current playback
-        // position and the user has a caption language selected. The
-        // delay offset is already baked into when these become visible.
         if (loadError == null && activeCues.isNotEmpty()) {
             Box(
                 modifier = Modifier
@@ -651,7 +635,6 @@ fun UnifiedPlayerScreen(
                                     onClick = { showCaptionMenu = true }
                                 )
                                 DropdownMenu(expanded = showCaptionMenu, onDismissRequest = { showCaptionMenu = false }) {
-                                    // ─── Subtitle delay controls ───
                                     Column(
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                     ) {
@@ -942,10 +925,6 @@ private fun ControlIconButton(
     }
 }
 
-/**
- * Compact pill button used for the -0.5s / +0.5s / Reset controls in
- * the caption dropdown. Greyed out and non-clickable when disabled.
- */
 @Composable
 private fun DelayPill(
     label: String,

@@ -14,6 +14,10 @@ import com.example.repository.YocinemaRepository
  * Sports wrapper around UnifiedPlayerScreen. Sports content never has
  * quality variants or captions — the API gives one worker URL. So the
  * spec has empty lists and the unified player naturally hides those menus.
+ *
+ * isSportsLive = true tells PlayerManager to skip history/bookmark saving
+ * (live has no meaningful resume position) and to handle reconnects by
+ * re-playing the same URL rather than looking up a Movie detail.
  */
 @Composable
 fun SportsPlayerScreen(
@@ -39,6 +43,7 @@ fun SportsPlayerScreen(
             qualities = emptyList(),
             captions = emptyList(),
             episodes = emptyList(),
+            isSportsLive = true,
         )
     }
 
