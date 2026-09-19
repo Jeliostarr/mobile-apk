@@ -14,11 +14,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultAllocator
@@ -99,14 +101,7 @@ class PlayerManager(
     val selectedCaptionLang: StateFlow<String> = _selectedCaptionLang
 
     // ─── Subtitle delay + live cue stream ───
-    //
-    // The player renders cues itself via Player.Listener.onCues, so the
-    // PlayerView's own subtitle view must be disabled by the caller
-    // (UnifiedPlayerScreen sets `subtitleView = null`). We re-emit the
-    // cue text on a StateFlow, shifted forward by _subtitleDelayMs.
-    //
-    // Positive-only: onCues fires with whatever's happening at the
-    // current playback position, so we can delay but never pre-empt.
+
     private val _subtitleDelayMs = MutableStateFlow(0L)
     val subtitleDelayMs: StateFlow<Long> = _subtitleDelayMs
 
@@ -121,6 +116,7 @@ class PlayerManager(
     private var currentEpNum: Int? = null
     private var currentMediaUrl: String = ""
     private var resolvedMediaUrl: String? = null
+    private var resolvedIsHls: Boolean? = null
 
     private var currentMovieForHistory: Movie? = null
     private var lastHistorySaveAt: Long = 0L
@@ -136,6 +132,13 @@ class PlayerManager(
 
     private var softRetries: Int = 0
     private var hardRetries: Int = 0
+
+    // True when the current playback is a sports live stream rather than
+    // a movie/series/replay. Controls whether attemptReconnect() tries to
+    // re-fetch a movie detail or just re-plays the same streamUrl with a
+    // fresh HEAD (live tokens change sign on each manifest fetch, so the
+    // existing URL often still works; if it fails, that's a separate path).
+    private var currentIsSportsLive: Boolean = false
 
     init {
         exoPlayer.addListener(object : Player.Listener {
@@ -155,27 +158,16 @@ class PlayerManager(
                 }
             }
 
-            /**
-             * Cue delivery for the custom subtitle overlay. Empty cue
-             * groups mean "nothing should be visible right now" — we
-             * clear immediately. Non-empty groups are buffered by the
-             * current user-set delay before becoming visible.
-             */
             override fun onCues(cueGroup: CueGroup) {
                 val texts = cueGroup.cues.mapNotNull { cue ->
                     cue.text?.toString()?.trim()?.takeIf { it.isNotBlank() }
                 }
-
-                // Always cancel any pending display — a new cue group
-                // supersedes whatever was queued.
                 pendingCueJob?.cancel()
                 pendingCueJob = null
-
                 if (texts.isEmpty()) {
                     _activeCues.value = emptyList()
                     return
                 }
-
                 val delayMs = _subtitleDelayMs.value
                 if (delayMs <= 0L) {
                     _activeCues.value = texts
@@ -263,7 +255,7 @@ class PlayerManager(
             while (true) {
                 delay(30_000)
                 try {
-                    if (exoPlayer.isPlaying && currentMovieId.isNotBlank()) {
+                    if (exoPlayer.isPlaying && currentMovieId.isNotBlank() && !currentIsSportsLive) {
                         val viewerId = repository.tokenManager.getOrCreateViewerId()
                         val seconds = exoPlayer.currentPosition / 1000
                         if (seconds > 0) {
@@ -284,6 +276,7 @@ class PlayerManager(
     }
 
     private fun saveHistoryPosition(pos: Long, dur: Long) {
+        if (currentIsSportsLive) return
         scope.launch(Dispatchers.IO) {
             try {
                 val movie = currentMovieForHistory
@@ -313,6 +306,15 @@ class PlayerManager(
 
     // ─── Public API ───
 
+    /**
+     * Start playback.
+     *
+     * @param isSportsLive set true for live sports streams. Disables
+     *        history saving (there's no meaningful resume position for
+     *        live) and makes attemptReconnect() replay the same URL
+     *        instead of trying to look up a Movie detail that doesn't
+     *        exist for sports IDs.
+     */
     fun playMedia(
         movieId: String,
         mediaUrl: String,
@@ -320,7 +322,8 @@ class PlayerManager(
         epNum: Int? = null,
         initialPositionMs: Long = 0L,
         title: String? = null,
-        posterUrl: String? = null
+        posterUrl: String? = null,
+        isSportsLive: Boolean = false
     ) {
         currentMovieId = movieId
         currentSeasonNum = seasonNum
@@ -330,11 +333,13 @@ class PlayerManager(
         lastHistorySaveAt = 0L
         currentMediaUrl = mediaUrl
         resolvedMediaUrl = null
+        resolvedIsHls = null
         softRetries = 0
         hardRetries = 0
         currentTitle = title
         currentPosterUrl = posterUrl
         lastRecordedPos = initialPositionMs
+        currentIsSportsLive = isSportsLive
 
         ensureMediaSession()
         loadAndPlaySource(mediaUrl, initialPositionMs)
@@ -351,11 +356,6 @@ class PlayerManager(
         applyCaptionSelection()
     }
 
-    /**
-     * User-controlled subtitle offset. Positive values push subtitles
-     * LATER (the common "subs are ahead of the audio" case). Negative
-     * values are clamped to 0 — see the class-level note on `onCues`.
-     */
     fun setSubtitleDelay(ms: Long) {
         _subtitleDelayMs.value = ms.coerceIn(0L, 15_000L)
     }
@@ -367,8 +367,8 @@ class PlayerManager(
 
         scope.launch {
             val uri = Uri.parse(url)
-            val isHls = url.contains(".m3u8", ignoreCase = true)
             val factory = httpFactory(url)
+            val isHls = detectIsHls(url, factory)
             val itemBuilder = MediaItem.Builder()
                 .setUri(uri)
                 .setMimeType(if (isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4)
@@ -515,6 +515,51 @@ class PlayerManager(
         }
     }
 
+    /**
+     * Determine whether a stream URL is HLS.
+     *
+     * Fast path: `.m3u8` in the URL → true; `.mp4` → false.
+     *
+     * Slow path (any URL that doesn't have those hints, i.e. every
+     * cdn.yocinema.dpdns.org/m/<token> URL): a HEAD request, read
+     * Content-Type. The Worker serves both monolithic MP4s (movies,
+     * replays) and HLS manifests (sports live) through the same /m/
+     * scheme, so the URL alone can't distinguish them.
+     *
+     * Fallback on any error: assume MP4. That's the previous behavior;
+     * if we're wrong, HlsMediaSource would have been needed but
+     * ProgressiveMediaSource fails fast and the retry loop kicks in.
+     */
+    private suspend fun detectIsHls(url: String, factory: DataSource.Factory): Boolean =
+        withContext(Dispatchers.IO) {
+            if (url.contains(".m3u8", ignoreCase = true)) return@withContext true
+            if (url.contains(".mp4", ignoreCase = true)) return@withContext false
+            try {
+                val dataSource = factory.createDataSource()
+                try {
+                    val spec = DataSpec.Builder()
+                        .setUri(Uri.parse(url))
+                        .setHttpMethod(DataSpec.HTTP_METHOD_HEAD)
+                        .build()
+                    dataSource.open(spec)
+                    val contentType = dataSource.responseHeaders.entries
+                        .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+                        ?.value
+                    if (contentType != null) {
+                        val lower = contentType.lowercase()
+                        return@withContext lower.contains("mpegurl") ||
+                            lower.contains("m3u8")
+                    }
+                    false
+                } finally {
+                    try { dataSource.close() } catch (_: Exception) {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+
     private fun loadAndPlaySource(
         url: String,
         seekPosMs: Long,
@@ -537,7 +582,7 @@ class PlayerManager(
                         .setUri(fileUri)
                         .setMediaMetadata(metadata)
                         .build()
-                    androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
+                    DefaultMediaSourceFactory(context)
                         .createMediaSource(localItem)
                 } else {
                     val playUrl = (if (reuseResolved) resolvedMediaUrl else null)
@@ -545,9 +590,12 @@ class PlayerManager(
                     _isReconnecting.value = false
 
                     val uri = Uri.parse(playUrl)
-                    val isHls = playUrl.contains(".m3u8", ignoreCase = true)
                     val factory = httpFactory(playUrl)
-
+                    val isHls = if (reuseResolved && resolvedIsHls != null) {
+                        resolvedIsHls!!
+                    } else {
+                        detectIsHls(playUrl, factory).also { resolvedIsHls = it }
+                    }
                     val itemBuilder = MediaItem.Builder()
                         .setUri(uri)
                         .setMimeType(if (isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4)
@@ -592,6 +640,21 @@ class PlayerManager(
         }
         hardRetries++
         _isReconnecting.value = true
+
+        // Sports live streams don't have a Movie detail to look up — just
+        // re-issue the same URL. The token may still be valid; if it's
+        // not, the caller has to re-fetch /api/sports/live and pass a new
+        // URL through playMedia().
+        if (currentIsSportsLive) {
+            scope.launch(Dispatchers.Main) {
+                resolvedMediaUrl = null
+                resolvedIsHls = null
+                softRetries = 0
+                loadAndPlaySource(currentMediaUrl, lastRecordedPos)
+            }
+            return
+        }
+
         scope.launch(Dispatchers.IO) {
             try {
                 repository.streamTokenManager.invalidateToken(currentMovieId)
@@ -600,6 +663,7 @@ class PlayerManager(
                     val freshUrl = repository.getPlayUrl(movie, currentSeasonNum, currentEpNum)
                     currentMediaUrl = freshUrl
                     resolvedMediaUrl = null
+                    resolvedIsHls = null
                     softRetries = 0
                     withContext(Dispatchers.Main) {
                         loadAndPlaySource(freshUrl, lastRecordedPos)
